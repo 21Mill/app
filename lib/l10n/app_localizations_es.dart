@@ -4604,8 +4604,8 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String reputationFigures(int reviews, String rating, int days) {
-    final intl.NumberFormat reviewsNumberFormat = intl
-        .NumberFormat.decimalPattern(localeName);
+    final intl.NumberFormat reviewsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
     final String reviewsString = reviewsNumberFormat.format(reviews);
     final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
       localeName,
@@ -4646,4 +4646,46 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get reputationIdentityChanged =>
       'Tu identidad cambió. Comprueba la clave pública que se muestra aquí antes de volver a intentarlo.';
+
+  @override
+  String get reputationSettingTitle => 'Reputación';
+
+  @override
+  String get reputationImportCardBody =>
+      'Trae a este Mostro la reputación que ganaste en lnp2pBot o en otro Mostro.';
+
+  @override
+  String get reputationExportTitle => 'Exportar mi reputación';
+
+  @override
+  String get reputationExportCardBody =>
+      'Obtén una copia firmada de la reputación que ganaste en este Mostro para importarla en otro.';
+
+  @override
+  String get reputationExportConfirmTitle => '¿Exportar a esta identidad?';
+
+  @override
+  String reputationExportConfirmBody(String npub) {
+    return 'Tu reputación en este Mostro se exportará para esta identidad:\n\n$npub\n\nUna vez exportada queda ligada a ella: exportarla después para otra identidad requiere una autorización firmada con esta.';
+  }
+
+  @override
+  String get reputationExportConfirmButton => 'Exportar';
+
+  @override
+  String get reputationExported =>
+      'Tu reputación está lista. Cambia al Mostro donde la quieres e impórtala; es válida durante 7 días.';
+
+  @override
+  String get reputationRebindBody =>
+      '¿Te mudas a una identidad nueva? Firma aquí, con la identidad a la que está ligada tu reputación ahora, una autorización para la nueva y luego úsala desde la nueva identidad.';
+
+  @override
+  String get reputationNewIdentityHint => 'Identidad nueva (npub)';
+
+  @override
+  String get reputationRebindSign => 'Firmar autorización';
+
+  @override
+  String get reputationInvalidIdentity => 'Ese no es un npub válido.';
 }

@@ -252,13 +252,13 @@ pub async fn get_pending_reputation_attestation() -> Result<Option<ReputationAtt
 }
 
 /// Sign, with the identity the reputation at `issuer` is bound to now, the
-/// authorisation to move that binding to `new_identity` (hex). Pass it as
+/// authorisation to move that binding to `new_identity` (npub or hex). Pass it as
 /// `rebind` to [`export_reputation`] from the new identity, or paste it into
 /// lnp2pBot. Valid for an hour.
 pub async fn sign_reputation_rebind(issuer: String, new_identity: String) -> Result<String> {
     let bound = identity_keys().await?;
     let issuer = pubkey(&issuer)?;
-    let new_identity = pubkey(&new_identity)?;
+    let new_identity = identity_pubkey(&new_identity)?;
     let event = ReputationRebind::build(
         &bound,
         &issuer,
@@ -305,6 +305,11 @@ async fn while_still_current(
 /// A hex public key from user input, or the `InvalidPubkey` marker.
 fn pubkey(hex: &str) -> Result<PublicKey> {
     PublicKey::from_hex(hex.trim()).map_err(|_| anyhow::anyhow!("InvalidPubkey: {}", hex.trim()))
+}
+
+/// An identity the user typed, as npub or hex.
+fn identity_pubkey(input: &str) -> Result<PublicKey> {
+    PublicKey::parse(input.trim()).map_err(|_| anyhow::anyhow!("InvalidPubkey: {}", input.trim()))
 }
 
 /// The id of the event in `json`, whatever its formatting.
