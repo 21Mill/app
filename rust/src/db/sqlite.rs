@@ -2735,6 +2735,7 @@ mod tests {
             settings_keys::BOND_CLAIM_RETAINED_NODES.to_string(),
             settings_keys::RESTORE_SNAPSHOT.to_string(),
             settings_keys::MY_REPUTATION.to_string(),
+            settings_keys::PENDING_REPUTATION_ATTESTATION.to_string(),
         ] {
             storage.set_setting(&key, "1").await.unwrap();
         }
@@ -2769,6 +2770,7 @@ mod tests {
             settings_keys::BOND_CLAIM_RETAINED_NODES.to_string(),
             settings_keys::RESTORE_SNAPSHOT.to_string(),
             settings_keys::MY_REPUTATION.to_string(),
+            settings_keys::PENDING_REPUTATION_ATTESTATION.to_string(),
         ] {
             assert_eq!(
                 storage.get_setting(&key).await.unwrap(),

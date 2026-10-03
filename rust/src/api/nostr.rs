@@ -1002,6 +1002,8 @@ fn apply_node_capabilities(node: &str, fetched: Result<Option<Vec<Vec<String>>>>
             // which `fetch_mostro_instance_tags` recorded: the label needs
             // the revision's date and id, not only its tags. See
             // mostro::serbero.
+            // A missing tag retracts an older reputation capability.
+            crate::mostro::reputation_support::set_from_tags(&mostro_pubkey_hex, &tags);
             // The service fee. Only Cashu mode needs it client-side — there the
             // seller funds the whole fee as its own token — but it rides in the
             // same event, so reading it here costs nothing.
@@ -1021,6 +1023,7 @@ fn apply_node_capabilities(node: &str, fetched: Result<Option<Vec<Vec<String>>>>
             // Lightning, and leave Cashu closed.
             escrow_mode::clear();
             crate::mostro::bond_policy::clear();
+            crate::mostro::reputation_support::set_from_tags(&mostro_pubkey_hex, &[]);
             // The Serbero announcement is left alone: no relay answering in
             // time is not the node taking it back (mostro::serbero).
         }
@@ -1036,6 +1039,8 @@ fn apply_node_capabilities(node: &str, fetched: Result<Option<Vec<Vec<String>>>>
             // Same reasoning: a stale bond policy would pre-warn (or fail to
             // pre-warn) for the wrong node.
             crate::mostro::bond_policy::clear();
+            // Nor send reputation requests the node may not understand.
+            crate::mostro::reputation_support::set_from_tags(&mostro_pubkey_hex, &[]);
         }
     }
 }

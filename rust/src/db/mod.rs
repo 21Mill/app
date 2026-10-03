@@ -46,6 +46,12 @@ pub mod settings_keys {
     /// asked. Identity-scoped: it is that identity's reputation.
     pub const MY_REPUTATION: &str = "my_reputation";
 
+    /// A reputation attestation the identity exported and has not imported
+    /// yet, as the event JSON it came in (`api::reputation_transfer`).
+    /// Identity-scoped: it names the identity that requested it, and is of
+    /// no use to the next one.
+    pub const PENDING_REPUTATION_ATTESTATION: &str = "pending_reputation_attestation";
+
     // ── Push notifications (docs/PUSH_NOTIFICATIONS.md §7.1, §8.1) ──────────
 
     /// The master toggle, `"true"` / `"false"`; absent reads as enabled.
@@ -279,8 +285,12 @@ pub mod settings_keys {
     /// The single keys that describe the identity, not the device, dropped
     /// with [`IDENTITY_SCOPED_PREFIXES`] by
     /// [`super::Storage::clear_identity_data`].
-    pub const IDENTITY_SCOPED_KEYS: [&str; 3] =
-        [BOND_CLAIM_RETAINED_NODES, RESTORE_SNAPSHOT, MY_REPUTATION];
+    pub const IDENTITY_SCOPED_KEYS: [&str; 4] = [
+        BOND_CLAIM_RETAINED_NODES,
+        RESTORE_SNAPSHOT,
+        MY_REPUTATION,
+        PENDING_REPUTATION_ATTESTATION,
+    ];
 
     /// Build the settings key marking `order_id`'s trade row as wiped.
     pub fn trade_wiped(order_id: &str) -> String {
