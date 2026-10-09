@@ -1401,6 +1401,7 @@
   "reputationCheck": "Comprobar",
   "reputationImported": "Tu reputación se importó.",
   "reputationImportConfirm": "Importar en este Mostro",
-  "reputationFigures": "{reviews} calificaciones recibidas, {rating} de promedio, operando desde hace {days} días",
-  "reputationFiguresNote": "La reputación importada se suma a la que tienes aquí; tus contrapartes las ven juntas."
+  "reputationFigures": "{reviews, plural, =1{1 calificación recibida} other{{reviews} calificaciones recibidas}}, {rating} de promedio, {days, plural, =1{operando desde hace 1 día} other{operando desde hace {days} días}}",
+  "reputationFiguresNote": "La reputación importada se suma a la que tienes aquí; tus contrapartes las ven juntas.",
+  "reputationOpenLnp2pbotFailed": "No se pudo abrir Telegram. Abre lnp2pBot en Telegram por tu cuenta y pega aquí lo que te envíe."
 }

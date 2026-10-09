@@ -1401,6 +1401,7 @@
   "reputationCheck": "Controleren",
   "reputationImported": "Je reputatie is geïmporteerd.",
   "reputationImportConfirm": "Importeren in deze Mostro",
-  "reputationFigures": "{reviews} ontvangen beoordelingen, gemiddeld {rating}, handelt al {days} dagen",
-  "reputationFiguresNote": "Geïmporteerde reputatie wordt opgeteld bij die van hier; je tegenpartijen zien ze samen."
+  "reputationFigures": "{reviews, plural, =1{1 ontvangen beoordeling} other{{reviews} ontvangen beoordelingen}}, gemiddeld {rating}, {days, plural, =1{handelt al 1 dag} other{handelt al {days} dagen}}",
+  "reputationFiguresNote": "Geïmporteerde reputatie wordt opgeteld bij die van hier; je tegenpartijen zien ze samen.",
+  "reputationOpenLnp2pbotFailed": "Telegram kon niet worden geopend. Open lnp2pBot zelf in Telegram en plak hier wat hij je stuurt."
 }
