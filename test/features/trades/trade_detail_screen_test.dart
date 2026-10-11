@@ -1586,6 +1586,39 @@ void main() {
       }
     }
 
+    // DS-A11Y-4: payout pending gained the buyer's Add invoice, a full-width
+    // secondary action that must stay on screen and tappable.
+    testWidgets('the payout-pending bar in German, 320dp, 2x text', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 760);
+      tester.view.devicePixelRatio = 1.0;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await _pumpTradeDetail(
+        tester,
+        orderId: 'order-de-payout',
+        isBuyer: true,
+        status: OrderStatus.settledHoldInvoice,
+        locale: const Locale('de'),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find
+            .text(
+              lookupAppLocalizations(
+                const Locale('de'),
+              ).addLightningInvoiceButton,
+            )
+            .hitTestable(),
+        findsOneWidget,
+      );
+    });
+
     // DS-A11Y-4: the disputed bar gained the buyer's Cancel; the seller's
     // carries Release and Cancel side by side under View dispute.
     for (final isBuyer in [true, false]) {
