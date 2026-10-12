@@ -2189,7 +2189,8 @@ fn trade_row_from_small_order(
         cooperative_cancel_state: None,
         timeout_at: None,
         // The list dates a trade by this: a replayed row is as old as its
-        // order, not as the replay that rebuilt it.
+        // order, not as the replay that rebuilt it. Right for a maker; the DM
+        // rebuild re-dates its taker rows (#592), the restore's do not yet (#591).
         started_at: order.created_at.filter(|&t| t > 0).unwrap_or(now),
         completed_at: None,
         outcome: None,
@@ -2424,7 +2425,20 @@ async fn rebuild_trade_from_dm(
             kind.action,
             mostro_core::message::Action::AdminSettled | mostro_core::message::Action::AdminCanceled
         );
+    // A taker's trade began at the take, not when the order was published:
+    // an order that sat in the book would make a trade just taken look old
+    // enough for the stale sweep to wipe it (#592). So a taker row is dated
+    // by the message that rebuilt it — for a row the sweep examines, that is
+    // the waiting step's own message — clamped to the local clock. A maker's
+    // trade did begin with its order; its gap in the sweep's age gate is a
+    // different one (#628).
+    let started_at = if is_mine {
+        trade.started_at
+    } else {
+        occurred_at.min(crate::rt::unix_now())
+    };
     let trade = crate::api::types::TradeInfo {
+        started_at,
         completed_at: completed.then(|| occurred_at.min(crate::rt::unix_now())),
         ..trade
     };
@@ -13082,10 +13096,12 @@ mod tests {
         }
     }
 
-    /// A rebuilt row is dated by its order, not by the moment of the replay
-    /// that rebuilt it: the trade list shows `started_at`.
+    /// The shared builder dates a row by its order, not by the moment of the
+    /// message that built it: the trade list shows `started_at`, and a
+    /// maker's trade began with its order. The DM rebuild re-dates its taker
+    /// rows (#592), the restore's do not yet (#591).
     #[test]
-    fn a_rebuilt_row_starts_when_its_order_was_created() {
+    fn the_shared_builder_dates_a_row_by_its_order() {
         let mut order = mostro_core::order::SmallOrder::default();
         order.kind = Some(mostro_core::order::Kind::Sell);
         order.fiat_code = "ARS".into();
