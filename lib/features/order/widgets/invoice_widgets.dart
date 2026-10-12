@@ -458,8 +458,9 @@ class InvoiceSecondaryButton extends StatelessWidget {
     final exceeds = whole.didExceedMaxLines;
     whole.dispose();
     if (exceeds) return false;
-    for (final word in label.split(' ')) {
-      final one = painter(word)..layout();
+    // Words as `breaksAWord` (test/support/text_scale.dart) reads them.
+    for (final word in RegExp(r'\S+').allMatches(label)) {
+      final one = painter(word[0]!)..layout();
       final wide = one.width > room;
       one.dispose();
       if (wide) return false;

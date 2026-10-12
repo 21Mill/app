@@ -409,8 +409,8 @@ class _PayBondInvoiceScreenState extends ConsumerState<PayBondInvoiceScreen>
       appBar: appBar,
       body: ValueListenableBuilder<Duration?>(
         valueListenable: invoiceRemaining,
-        // Built once per invoice, not on every tick of the countdown: the
-        // same instance is not rebuilt, and a QR is costly to encode.
+        // Built outside the countdown's builder, so a tick does not
+        // re-encode it: a QR is costly to encode.
         child: _identifiedQr(l10n, invoice),
         builder:
             (context, remaining, qr) =>

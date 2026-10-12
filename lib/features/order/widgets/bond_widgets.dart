@@ -218,11 +218,11 @@ class BondExplainerBody extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           // A link the reader taps: announced as a button (DS-A11Y-1) and
-          // a 48 dp target (DS-CMP-6).
+          // a 48 dp target (DS-CMP-6). The Text and the InkWell supply the
+          // label and the tap action.
           Semantics(
             button: true,
-            label: linkLabel,
-            excludeSemantics: true,
+            enabled: true,
             child: InkWell(
               onTap: onLink,
               borderRadius: BorderRadius.circular(8),
