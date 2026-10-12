@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `current_bip39_seed`, `delete_identity_inner`, `derive_trade_key_with`, `ensure_trade_key_index_at_least_with`, `ensure_trade_key_index_at_least`, `forget_identity_state`, `get_active_keys`, `get_active_trade_keys_up_to`, `get_active_trade_keys`, `get_transport_identity_keys`, `identity_generation`, `identity_lock`, `publish_index`, `reconcile_and_publish_to`, `reconcile_trade_key_index`, `require_durable_storage`, `trade_key_index_tx`, `while_identity_current`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `IdentityState`, `RecoveryProgress`
+// These functions are ignored because they are not marked as `pub`: `create_in`, `current_bip39_seed`, `delete_identity_inner`, `delete_in`, `derive_trade_key_with`, `ensure_trade_key_index_at_least_with`, `ensure_trade_key_index_at_least`, `forget_identity_state`, `get_active_keys`, `get_active_trade_keys_up_to`, `get_active_trade_keys`, `get_transport_identity_keys`, `identity_generation`, `identity_lock`, `identity_slot`, `import_nsec_in`, `load_in`, `publish_index`, `reconcile_and_publish_to`, `reconcile_trade_key_index`, `require_durable_storage`, `trade_key_index_tx`, `while_identity_current`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RecoveryProgress`
 
 /// Subscribe to consumed trade-key indices. Flutter calls this once at startup
 /// and writes every value it receives to secure storage.

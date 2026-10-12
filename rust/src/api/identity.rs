@@ -21,32 +21,28 @@ use tokio::sync::RwLock;
 use crate::api::types::{IdentityInfo, NymIdentity};
 use crate::crypto::{keys as key_ops, nym};
 use crate::db::Storage;
+use crate::identity_slot::{IdentitySlot, IdentityState};
 use crate::mostro::delete_effects::{DeleteEffects, RealDeleteEffects};
 
 // ── Global in-memory identity state ──────────────────────────────────────────
 
-struct IdentityState {
-    mnemonic_words: Vec<String>,
-    keys: Keys,
-    identity_info: IdentityInfo,
+/// The process's identity slot.
+fn identity_slot() -> &'static IdentitySlot {
+    static SLOT: IdentitySlot = IdentitySlot::new();
+    &SLOT
 }
 
 fn identity_lock() -> &'static RwLock<Option<IdentityState>> {
-    static IDENTITY: OnceLock<RwLock<Option<IdentityState>>> = OnceLock::new();
-    IDENTITY.get_or_init(|| RwLock::new(None))
+    &identity_slot().state
 }
-
-/// Bumped by every identity deletion, under the write lock: it tells work
-/// that started under one identity apart from the next — even when the same
-/// mnemonic is imported again, which a pubkey comparison would not.
-static IDENTITY_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// The generation of the active identity, or `None` without one.
 pub(crate) async fn identity_generation() -> Option<u64> {
-    let guard = identity_lock().read().await;
+    let slot = identity_slot();
+    let guard = slot.state.read().await;
     guard
         .as_ref()
-        .map(|_| IDENTITY_GENERATION.load(std::sync::atomic::Ordering::SeqCst))
+        .map(|_| slot.generation.load(std::sync::atomic::Ordering::SeqCst))
 }
 
 /// Run `write` only while the identity of `generation` is still the active
@@ -61,9 +57,10 @@ pub(crate) async fn while_identity_current<T>(
     generation: u64,
     write: impl std::future::Future<Output = T>,
 ) -> Option<T> {
-    let guard = identity_lock().read().await;
-    let current = guard.is_some()
-        && IDENTITY_GENERATION.load(std::sync::atomic::Ordering::SeqCst) == generation;
+    let slot = identity_slot();
+    let guard = slot.state.read().await;
+    let current =
+        guard.is_some() && slot.generation.load(std::sync::atomic::Ordering::SeqCst) == generation;
     if !current {
         return None;
     }
@@ -162,7 +159,12 @@ pub struct RecoveryProgress {
 ///
 /// Returns `Err("AlreadyExists")` if an identity is already loaded.
 pub async fn create_identity() -> Result<IdentityCreationResult> {
-    let mut guard = identity_lock().write().await;
+    create_in(identity_slot()).await
+}
+
+/// [`create_identity`] on `slot`.
+async fn create_in(slot: &IdentitySlot) -> Result<IdentityCreationResult> {
+    let mut guard = slot.state.write().await;
     if guard.is_some() {
         bail!("AlreadyExists");
     }
@@ -204,6 +206,29 @@ pub async fn load_identity_from_mnemonic(
     privacy_mode: bool,
     created_at: Option<i64>,
 ) -> Result<IdentityInfo> {
+    load_in(
+        identity_slot(),
+        crate::db::app_db::db(),
+        trade_key_index_tx(),
+        words,
+        trade_key_index,
+        privacy_mode,
+        created_at,
+    )
+    .await
+}
+
+/// [`load_identity_from_mnemonic`] on `slot`, against `db`, publishing the
+/// reconciled trade-key counter to `tx`.
+async fn load_in<S: Storage>(
+    slot: &IdentitySlot,
+    db: Option<&S>,
+    tx: &broadcast::Sender<u32>,
+    words: Vec<String>,
+    trade_key_index: u32,
+    privacy_mode: bool,
+    created_at: Option<i64>,
+) -> Result<IdentityInfo> {
     // Deriving is the validation: it parses the phrase and fails on a bad word
     // or checksum with the same `invalid mnemonic` error the explicit check
     // used to produce.
@@ -218,7 +243,7 @@ pub async fn load_identity_from_mnemonic(
     // load: identity loading must survive a corrupt store, and the fallback
     // is safe — any subsequent derivation either persists (repairing the
     // store) or fails before handing out a key.
-    let stored = match crate::db::app_db::db() {
+    let stored = match db {
         Some(db) => match db.get_identity().await {
             Ok(v) => v,
             Err(e) => {
@@ -231,12 +256,8 @@ pub async fn load_identity_from_mnemonic(
         },
         None => None,
     };
-    let trade_key_index = reconcile_and_publish_to(
-        trade_key_index_tx(),
-        trade_key_index,
-        stored.as_ref(),
-        &public_key,
-    );
+    let trade_key_index =
+        reconcile_and_publish_to(tx, trade_key_index, stored.as_ref(), &public_key);
 
     let created_at = match created_at {
         Some(ts) if ts > 0 => ts,
@@ -251,7 +272,7 @@ pub async fn load_identity_from_mnemonic(
     };
 
     {
-        let mut guard = identity_lock().write().await;
+        let mut guard = slot.state.write().await;
         *guard = Some(IdentityState {
             mnemonic_words: words,
             keys,
@@ -300,6 +321,11 @@ pub async fn import_from_mnemonic(words: Vec<String>, recover: bool) -> Result<I
 /// Import identity from an nsec (bech32-encoded Nostr secret key).
 /// Note: nsec import produces a single key with no BIP-39 mnemonic backup.
 pub async fn import_from_nsec(nsec: String) -> Result<IdentityInfo> {
+    import_nsec_in(identity_slot(), nsec).await
+}
+
+/// [`import_from_nsec`] on `slot`.
+async fn import_nsec_in(slot: &IdentitySlot, nsec: String) -> Result<IdentityInfo> {
     let keys =
         Keys::parse(&nsec).map_err(|e| anyhow!("InvalidKey: {e}"))?;
     let public_key = keys.public_key().to_hex();
@@ -313,7 +339,7 @@ pub async fn import_from_nsec(nsec: String) -> Result<IdentityInfo> {
         created_at: now,
     };
 
-    let mut guard = identity_lock().write().await;
+    let mut guard = slot.state.write().await;
     *guard = Some(IdentityState {
         mnemonic_words: vec![], // no mnemonic for nsec imports
         keys,
@@ -380,21 +406,31 @@ pub async fn delete_identity() -> Result<()> {
 /// review). The binding of the real store and effects is held by
 /// `deleting_the_identity_binds_the_real_store_and_effects`.
 async fn delete_identity_inner<S: Storage, W: DeleteEffects>(db: Option<&S>, fx: &W) -> Result<()> {
-    if identity_lock().read().await.is_none() {
+    delete_in(identity_slot(), db, fx).await
+}
+
+/// [`delete_identity_inner`] on `slot`.
+async fn delete_in<S: Storage, W: DeleteEffects>(
+    slot: &IdentitySlot,
+    db: Option<&S>,
+    fx: &W,
+) -> Result<()> {
+    if slot.state.read().await.is_none() {
         bail!("NoIdentity");
     }
     // While the identity still exists: its relay subscriptions are given
     // back first, so nothing of the old user's keeps arriving afterwards.
     fx.release_identity_subscriptions().await;
 
-    let mut guard = identity_lock().write().await;
+    let mut guard = slot.state.write().await;
     if guard.is_none() {
         bail!("NoIdentity");
     }
     *guard = None;
     // Under the same lock, so no `while_identity_current` write can start
     // between the two.
-    IDENTITY_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    slot.generation
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     drop(guard);
 
     // The push server must stop waking this device for keys the user no
@@ -849,12 +885,19 @@ mod tests {
     use crate::source_guard::{expect_body, mutant, production_code};
 
     /// The public deletion hands `delete_identity_inner` the application's
-    /// store and the real effects, and nothing else (PR #565 review).
+    /// store and the real effects, and nothing else (PR #565 review), and
+    /// that runs the deletion on the process's own slot.
     fn check_deletion_binding(source: &str) -> Result<(), String> {
+        let code = production_code(source);
         expect_body(
-            &production_code(source),
+            &code,
             "pub async fn delete_identity() -> Result<()>",
             "delete_identity_inner(crate::db::app_db::db(), &RealDeleteEffects).await",
+        )?;
+        expect_body(
+            &code,
+            "async fn delete_identity_inner<S: Storage, W: DeleteEffects>(db: Option<&S>, fx: &W) -> Result<()>",
+            "delete_in(identity_slot(), db, fx).await",
         )
     }
 
@@ -944,7 +987,17 @@ mod tests {
                 ),
             ),
             // The store handed over, but never present.
-            mutant(identity, "app_db::db(),", "app_db::db().filter(|_| false),"),
+            mutant(
+                identity,
+                "delete_identity_inner(crate::db::app_db::db(),",
+                "delete_identity_inner(crate::db::app_db::db().filter(|_| false),",
+            ),
+            // The deletion run on a slot nobody reads.
+            mutant(
+                identity,
+                "delete_in(identity_slot(), db, fx)",
+                "delete_in(&IdentitySlot::new(), db, fx)",
+            ),
         ] {
             assert!(check_deletion_binding(&broken).is_err());
         }
