@@ -76,12 +76,50 @@ void main() {
               );
               expect(paragraph.didExceedMaxLines, isFalse, reason: label);
               expect(breaksAWord(paragraph), isFalse, reason: label);
+              // Painted at full size: a label takes a second line, it is
+              // never scaled down to fit. Painted width against laid-out
+              // width: `getMaxScaleOnAxis` also counts z, which a 2D scale
+              // leaves at 1, so it reads 1.0 for any shrink.
+              expect(
+                tester.getRect(find.text(label)).width,
+                moreOrLessEquals(paragraph.size.width),
+                reason: label,
+              );
             }
           },
         );
       }
     }
   }
+
+  testWidgets('the secondaries are buttons a screen reader can activate', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(
+      tester,
+      locale: const Locale('en'),
+      textScale: 1,
+      copyLeads: false,
+    );
+
+    for (final label in ['Copy', 'Share']) {
+      expect(
+        tester.getSemantics(find.widgetWithText(InvoiceSecondaryButton, label)),
+        matchesSemantics(
+          label: label,
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          hasTapAction: true,
+          isFocusable: true,
+          hasFocusAction: true,
+        ),
+        reason: label,
+      );
+    }
+    semantics.dispose();
+  });
 
   testWidgets('the secondaries share a row while both labels fit', (
     tester,

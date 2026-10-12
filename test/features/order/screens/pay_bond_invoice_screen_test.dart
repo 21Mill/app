@@ -234,6 +234,27 @@ void main() {
     expect(find.text('Read the documentation'), findsOneWidget);
   });
 
+  testWidgets('the docs link is a button a screen reader can activate', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, trade: fakeTrade(bond: _bond()), explainerOpen: true);
+
+    expect(
+      tester.getSemantics(find.text('Read the documentation')),
+      matchesSemantics(
+        label: 'Read the documentation',
+        isButton: true,
+        hasEnabledState: true,
+        isEnabled: true,
+        hasTapAction: true,
+        isFocusable: true,
+        hasFocusAction: true,
+      ),
+    );
+    semantics.dispose();
+  });
+
   testWidgets('the deposit context reads as data rows (DS-CMP-24)', (
     tester,
   ) async {
