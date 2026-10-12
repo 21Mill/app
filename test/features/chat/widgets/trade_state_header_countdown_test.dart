@@ -6,6 +6,7 @@ import 'package:mostro/core/app_theme.dart';
 import 'package:mostro/core/trade_palette.dart';
 import 'package:mostro/features/chat/widgets/trade_state_header.dart';
 import 'package:mostro/features/order/providers/trade_state_provider.dart';
+import 'package:mostro/features/trades/providers/escrow_deadline_provider.dart';
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/src/rust/api/types.dart' show OrderStatus;
 
@@ -14,16 +15,25 @@ import '../../../support/provider_harness.dart';
 
 const _orderId = 'order-header-countdown';
 
-Future<void> _pump(WidgetTester tester, {required Duration expiresIn}) async {
+/// Pumps the header of an `active` trade whose deadline is [expiresIn] away
+/// (null: unknown). The order itself carries the 38383 retention, ~15 days
+/// out, which the header must never count down to.
+Future<void> _pump(WidgetTester tester, {required Duration? expiresIn}) async {
   final order = fakeOrder(
     id: _orderId,
     paymentMethod: 'Mercado Pago',
     status: OrderStatus.active,
-    expiresAt: kFakeNow.add(expiresIn),
+    expiresAt: kFakeNow.add(const Duration(days: 15)),
   );
   final container = createContainer(
     overrides: [
       chatTradeOrderProvider.overrideWith((ref, id) async => order),
+      tradeDeadlineProvider.overrideWith(
+        (ref, id) async =>
+            expiresIn == null
+                ? null
+                : kFakeNow.add(expiresIn).millisecondsSinceEpoch ~/ 1000,
+      ),
       tradeStatusProvider.overrideWith(
         (ref, id) => Stream.value(OrderStatus.active),
       ),
@@ -55,6 +65,30 @@ void main() {
 
       expect(find.text('2 h 05 left'), findsOneWidget);
       expect(find.textContaining('2:05:00'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  });
+
+  testWidgets('counts to the trade deadline, not to the order retention', (
+    tester,
+  ) async {
+    await withClock(Clock.fixed(kFakeNow), () async {
+      await _pump(tester, expiresIn: const Duration(hours: 19, minutes: 47));
+
+      expect(find.text('19 h 47 left'), findsOneWidget);
+      expect(find.textContaining('359 h'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  });
+
+  testWidgets('shows no countdown without a known deadline', (tester) async {
+    await withClock(Clock.fixed(kFakeNow), () async {
+      await _pump(tester, expiresIn: null);
+
+      expect(find.byIcon(Icons.schedule), findsNothing);
+      expect(find.textContaining(' left'), findsNothing);
 
       await tester.pumpWidget(const SizedBox.shrink());
     });
