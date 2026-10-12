@@ -1505,24 +1505,40 @@ mod tests {
     }
 
     /// Ordered record of the deletion's non-store effects, each with whether
-    /// an identity was still loaded when it ran, so the lifecycle test can
-    /// assert the wiring of `delete_identity_inner` (#553).
-    #[derive(Default)]
-    struct CallLog(std::sync::Mutex<Vec<(&'static str, bool)>>);
+    /// an identity was still loaded on `slot` when it ran, so the lifecycle
+    /// test can assert the wiring of `delete_identity_inner` (#553). The
+    /// default reads the process's slot; a test deleting on a slot of its own
+    /// logs [`CallLog::on`] it.
+    struct CallLog<'s> {
+        calls: std::sync::Mutex<Vec<(&'static str, bool)>>,
+        slot: &'s IdentitySlot,
+    }
 
-    impl CallLog {
+    impl Default for CallLog<'static> {
+        fn default() -> Self {
+            Self::on(identity_slot())
+        }
+    }
+
+    impl<'s> CallLog<'s> {
+        fn on(slot: &'s IdentitySlot) -> Self {
+            Self {
+                calls: std::sync::Mutex::default(),
+                slot,
+            }
+        }
         async fn push(&self, call: &'static str) {
-            let loaded = identity_generation().await.is_some();
-            self.0.lock().unwrap().push((call, loaded));
+            let loaded = self.slot.state.read().await.is_some();
+            self.calls.lock().unwrap().push((call, loaded));
         }
         fn calls(&self) -> Vec<(&'static str, bool)> {
-            self.0.lock().unwrap().clone()
+            self.calls.lock().unwrap().clone()
         }
     }
 
     /// A `DeleteEffects` that records instead of touching the process-wide
     /// subscriptions, push registrations and in-memory stores.
-    struct SpyEffects<'a>(&'a CallLog);
+    struct SpyEffects<'a>(&'a CallLog<'a>);
 
     impl DeleteEffects for SpyEffects<'_> {
         async fn release_identity_subscriptions(&self) {
@@ -1597,7 +1613,7 @@ mod tests {
         .await
         .unwrap();
 
-        let effects = CallLog::default();
+        let effects = CallLog::on(&slot);
         delete_in(&slot, Some(&db), &SpyEffects(&effects))
             .await
             .expect("a failed cleanup is reported, never a failed deletion");
@@ -1994,7 +2010,7 @@ mod tests {
         store.fail_wipe().await;
         let slot = IdentitySlot::new();
         let (_, owner) = install(&slot).await;
-        delete_in(&slot, Some(&store.db), &SpyEffects(&CallLog::default()))
+        delete_in(&slot, Some(&store.db), &SpyEffects(&CallLog::on(&slot)))
             .await
             .expect("a failed cleanup is reported, never a failed deletion");
         (store, slot, owner)
@@ -2085,7 +2101,7 @@ mod tests {
         store.fail_marker_write().await;
         let slot = IdentitySlot::new();
         let (_, owner) = install(&slot).await;
-        let effects = CallLog::default();
+        let effects = CallLog::on(&slot);
 
         let err = delete_in(&slot, Some(&store.db), &SpyEffects(&effects))
             .await
@@ -2106,7 +2122,7 @@ mod tests {
         store.hide_settings().await;
         let slot = IdentitySlot::new();
         let (_, owner) = install(&slot).await;
-        let effects = CallLog::default();
+        let effects = CallLog::on(&slot);
 
         let err = delete_in(&slot, Some(&store.db), &SpyEffects(&effects))
             .await
@@ -2133,7 +2149,7 @@ mod tests {
     async fn a_deletion_without_a_database_is_refused() {
         let slot = IdentitySlot::new();
         let (_, owner) = install(&slot).await;
-        let effects = CallLog::default();
+        let effects = CallLog::on(&slot);
 
         let err = delete_in(
             &slot,
@@ -2161,7 +2177,7 @@ mod tests {
         store.fail_wipe().await;
         let slot = IdentitySlot::new();
         let (words, owner) = install(&slot).await;
-        delete_in(&slot, Some(&store.db), &SpyEffects(&CallLog::default()))
+        delete_in(&slot, Some(&store.db), &SpyEffects(&CallLog::on(&slot)))
             .await
             .unwrap();
         assert_eq!(store.marker().await, Some(owner));
@@ -2198,14 +2214,14 @@ mod tests {
         store.fail_wipe().await;
         let slot = IdentitySlot::new();
         install(&slot).await;
-        delete_in(&slot, Some(&store.db), &SpyEffects(&CallLog::default()))
+        delete_in(&slot, Some(&store.db), &SpyEffects(&CallLog::on(&slot)))
             .await
             .unwrap();
         assert_eq!(store.marker().await.as_deref(), Some("earlier"));
 
         store.heal_wipe().await;
         install(&slot).await;
-        delete_in(&slot, Some(&store.db), &SpyEffects(&CallLog::default()))
+        delete_in(&slot, Some(&store.db), &SpyEffects(&CallLog::on(&slot)))
             .await
             .unwrap();
         assert_eq!(store.marker().await, None);
@@ -2303,5 +2319,173 @@ mod tests {
         assert_ne!(err.to_string(), "PendingWipeFailed");
         assert!(store.rows_kept().await, "nothing was wiped");
         assert_eq!(store.marker().await, Some(owner));
+    }
+
+    // ── One transition at a time (review round 4 of #573) ───────────────────
+
+    /// Where a gated deletion stops, and the signal that lets it go on.
+    #[derive(Default)]
+    struct Gate {
+        reached: tokio::sync::Notify,
+        open: tokio::sync::Notify,
+    }
+
+    /// A `DeleteEffects` that does nothing, except stop at `at` until the
+    /// test opens its gate — the awaits where the deletion holds no lock of
+    /// the slot's own.
+    struct GatedEffects<'a> {
+        at: &'static str,
+        gate: &'a Gate,
+    }
+
+    impl GatedEffects<'_> {
+        async fn hook(&self, name: &'static str) {
+            if name == self.at {
+                self.gate.reached.notify_one();
+                self.gate.open.notified().await;
+            }
+        }
+    }
+
+    impl DeleteEffects for GatedEffects<'_> {
+        async fn release_identity_subscriptions(&self) {
+            self.hook("release_identity_subscriptions").await;
+        }
+        async fn unregister_push(&self) {
+            self.hook("unregister_push").await;
+        }
+        async fn forget_identity_state(&self) {
+            self.hook("forget_identity_state").await;
+        }
+    }
+
+    /// How long a competing transition is given while a deletion is held. A
+    /// transition that runs alongside the deletion finishes in milliseconds;
+    /// one that waits for it does not finish at all, so the test then pays
+    /// this once.
+    const HELD: std::time::Duration = std::time::Duration::from_secs(1);
+
+    /// Run `deletion` until it stops at its gate, give `meanwhile` its
+    /// chance while the deletion is held, then open the gate and let both
+    /// finish. Real time, not a paused clock: the store's queries complete on
+    /// SQLite's own threads, and a paused clock would advance past them.
+    async fn while_held<T>(
+        gate: &Gate,
+        deletion: impl std::future::Future<Output = Result<()>>,
+        meanwhile: impl std::future::Future<Output = T>,
+    ) -> (Result<()>, T) {
+        let driver = async {
+            gate.reached.notified().await;
+            let mut meanwhile = std::pin::pin!(meanwhile);
+            let early = tokio::time::timeout(HELD, meanwhile.as_mut()).await.ok();
+            gate.open.notify_one();
+            match early {
+                Some(out) => out,
+                None => meanwhile.await,
+            }
+        };
+        tokio::join!(deletion, driver)
+    }
+
+    /// A second deletion while the first awaits the relays used to retire
+    /// the identity, and the first then retired the replacement installed
+    /// after it. The second waits instead, finds nothing to delete, and the
+    /// replacement stays.
+    #[tokio::test]
+    async fn a_deletion_held_at_the_relays_keeps_the_slot_until_it_is_done() {
+        let store = WipeStore::new("concurrent_delete").await;
+        let slot = IdentitySlot::new();
+        install(&slot).await;
+        let gate = Gate::default();
+        let held = GatedEffects {
+            at: "release_identity_subscriptions",
+            gate: &gate,
+        };
+
+        let (first, (second, created)) =
+            while_held(&gate, delete_in(&slot, Some(&store.db), &held), async {
+                let log = CallLog::on(&slot);
+                let second = delete_in(&slot, Some(&store.db), &SpyEffects(&log)).await;
+                let created = create_in(&slot, Some(&store.db)).await;
+                (second, created)
+            })
+            .await;
+
+        first.unwrap();
+        assert_eq!(second.unwrap_err().to_string(), "NoIdentity");
+        let created = created.unwrap().public_key;
+        assert_eq!(
+            loaded(&slot).await,
+            Some(created),
+            "the replacement survives the first deletion"
+        );
+    }
+
+    /// Reloading the identity being deleted, while its deletion awaits the
+    /// relays, used to release the deletion's marker as the reload's own,
+    /// and the deletion then retired the reloaded identity: no identity, the
+    /// rows on disk, no marker. The reload waits instead, and loads the
+    /// identity over its own rows once the deletion is done.
+    #[tokio::test]
+    async fn a_reload_waits_for_the_deletion_of_its_identity() {
+        let store = WipeStore::new("concurrent_reload").await;
+        store.fail_wipe().await;
+        let slot = IdentitySlot::new();
+        let (words, owner) = install(&slot).await;
+        let gate = Gate::default();
+        let held = GatedEffects {
+            at: "release_identity_subscriptions",
+            gate: &gate,
+        };
+        let (tx, _published) = private_channel();
+
+        let (deleted, reloaded) = while_held(
+            &gate,
+            delete_in(&slot, Some(&store.db), &held),
+            load_in(&slot, Some(&store.db), &tx, words, 0, false, None),
+        )
+        .await;
+
+        deleted.unwrap();
+        reloaded.unwrap();
+        assert_eq!(
+            loaded(&slot).await,
+            Some(owner),
+            "the reload is the last transition, and it stays"
+        );
+        assert!(store.rows_kept().await);
+        assert_eq!(store.marker().await, None, "the rows are the reload's own");
+    }
+
+    /// A creation while a deletion awaits the push server — its identity
+    /// already retired, its wipe still to run — used to install, and the
+    /// deletion's wipe then took the new identity's rows. The creation waits
+    /// instead, and its rows stay.
+    #[tokio::test]
+    async fn a_creation_waits_for_the_wipe_of_the_identity_before_it() {
+        let store = WipeStore::new("concurrent_create").await;
+        let slot = IdentitySlot::new();
+        install(&slot).await;
+        let gate = Gate::default();
+        let held = GatedEffects {
+            at: "unregister_push",
+            gate: &gate,
+        };
+
+        let (deleted, created) =
+            while_held(&gate, delete_in(&slot, Some(&store.db), &held), async {
+                let created = create_in(&slot, Some(&store.db)).await.unwrap();
+                store.db.save_trade_key("order-b", 1).await.unwrap();
+                created.public_key
+            })
+            .await;
+
+        deleted.unwrap();
+        assert_eq!(loaded(&slot).await, Some(created));
+        assert_eq!(
+            store.db.get_trade_key("order-b").await.unwrap(),
+            Some(1),
+            "the new identity's rows survive the previous one's wipe"
+        );
     }
 }
