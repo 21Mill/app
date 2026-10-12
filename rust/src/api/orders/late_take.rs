@@ -27,6 +27,23 @@ pub(super) enum LateTakeOutcome {
     Retry,
 }
 
+/// A take reply that outlived its waiter (#566), with what reconciling it —
+/// and retrying that — needs.
+pub(super) struct LateTake {
+    /// The take record the reply consumed.
+    pub(super) pending: PendingRequest,
+    /// The reply as it arrived, kept only for a retry the store may need.
+    pub(super) original: mostro_core::transport::UnwrappedMessage,
+    pub(super) order_id: String,
+    pub(super) trade_pubkey_hex: String,
+    pub(super) trade_index: u32,
+    pub(super) event_id: String,
+    pub(super) event_ts: i64,
+    /// The teardown epoch the dispatch began under
+    /// ([`late_take_retry_epoch`]).
+    pub(super) epoch: u64,
+}
+
 /// Lands a take whose reply outlived its 10 s waiter (#566) — or leaves
 /// everything as it was, never half of it.
 ///
@@ -50,40 +67,28 @@ pub(super) enum LateTakeOutcome {
 /// them again on a short backoff. For a reply with no order payload the
 /// record is the only source of the row there is. Nothing is announced and
 /// nothing is bound before the row is durable.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn reconcile_late_take(
-    pending: PendingRequest,
-    original: mostro_core::transport::UnwrappedMessage,
+    late: LateTake,
     kind: &mostro_core::message::MessageKind,
-    order_id: &str,
     row_state: &RowState,
-    trade_pubkey_hex: &str,
-    trade_index: u32,
-    event_id: &str,
-    event_ts: i64,
-    epoch: u64,
 ) -> LateTakeOutcome {
-    let retry = |pending: PendingRequest, why: &str| {
-        retry_late_take(
-            pending,
-            original.clone(),
-            trade_pubkey_hex,
-            trade_index,
-            order_id,
-            event_id,
-            why,
-            epoch,
-        );
+    let retry = |late: LateTake, why: &str| {
+        retry_late_take(late, why);
         LateTakeOutcome::Retry
     };
+    let order_id = late.order_id.as_str();
+    let trade_pubkey_hex = late.trade_pubkey_hex.as_str();
+    let (trade_index, event_ts) = (late.trade_index, late.event_ts);
     let earlier = match row_state {
         RowState::NeverWritten => None,
-        RowState::Exists(row) if row.trade_key_index < pending.trade_index => Some(row.as_ref()),
+        RowState::Exists(row) if row.trade_key_index < late.pending.trade_index => {
+            Some(row.as_ref())
+        }
         // This take's own row already stands, or the order was wiped on
         // purpose: the arms and their gates own the message.
         RowState::Exists(_) | RowState::Wiped => return LateTakeOutcome::Declined,
         // The store could not say what stands: nothing may be decided.
-        RowState::Unknown => return retry(pending, "store unavailable"),
+        RowState::Unknown => return retry(late, "store unavailable"),
     };
     // Admission. Over an earlier take's row only the ordering half of the
     // status gate speaks: the terminal half would read that row's status as
@@ -95,7 +100,7 @@ pub(super) async fn reconcile_late_take(
     let candidate = if blocked {
         None
     } else {
-        match take_snapshot_row(&pending, kind, order_id, event_ts) {
+        match take_snapshot_row(&late.pending, kind, order_id, event_ts) {
             Some(trade) => Some((trade, "take record", "#566")),
             None => dm_trade_row(kind, order_id, trade_pubkey_hex, trade_index, event_ts)
                 .map(|trade| (trade, "DM", "#394")),
@@ -109,7 +114,7 @@ pub(super) async fn reconcile_late_take(
                     "late take order={} at trade_index={} proves no row to replace the one of \
                      trade_index={} with — dropped, that row kept (#566)",
                     crate::api::logging::short_id(order_id),
-                    pending.trade_index,
+                    late.pending.trade_index,
                     row.trade_key_index,
                 ),
             );
@@ -118,7 +123,7 @@ pub(super) async fn reconcile_late_take(
         return LateTakeOutcome::Declined;
     };
     let Some(db) = crate::db::app_db::db() else {
-        return retry(pending, "store unavailable");
+        return retry(late, "store unavailable");
     };
     late_take_test_pause("before-write").await;
     let written = match earlier {
@@ -126,7 +131,7 @@ pub(super) async fn reconcile_late_take(
         None => save_late_take_row(db, &trade).await,
     };
     if let Err(e) = written {
-        return retry(pending, &format!("row not persisted ({e})"));
+        return retry(late, &format!("row not persisted ({e})"));
     }
     if let Some(row) = earlier {
         crate::api::logging::blog_info(
@@ -134,7 +139,7 @@ pub(super) async fn reconcile_late_take(
             format!(
                 "late take order={} at trade_index={} superseded the row of trade_index={} (#566)",
                 crate::api::logging::short_id(order_id),
-                pending.trade_index,
+                late.pending.trade_index,
                 row.trade_key_index,
             ),
         );
@@ -289,24 +294,24 @@ pub(super) fn settle_late_take_retry(event_id: &str) {
 /// proves. The attempt runs as an abortable task the identity teardown
 /// stops ([`forget_late_take_retries`]).
 ///
-/// `epoch` is the teardown epoch the dispatch that failed began under
+/// `late.epoch` is the teardown epoch the dispatch that failed began under
 /// ([`late_take_retry_epoch`]). A teardown since then means that dispatch
 /// was the forgotten identity's — not a retry task the teardown could stop,
 /// but a first attempt already running — so nothing is scheduled for it:
 /// no attempt, no record put back. The check, the count, the record and the
 /// task's registration are one critical section, which the teardown's own
 /// cannot interleave.
-#[allow(clippy::too_many_arguments)]
-fn retry_late_take(
-    pending: PendingRequest,
-    original: mostro_core::transport::UnwrappedMessage,
-    trade_pubkey_hex: &str,
-    trade_index: u32,
-    order_id: &str,
-    event_id: &str,
-    why: &str,
-    epoch: u64,
-) {
+fn retry_late_take(late: LateTake, why: &str) {
+    let LateTake {
+        pending,
+        original,
+        order_id,
+        trade_pubkey_hex,
+        trade_index,
+        event_id,
+        epoch,
+        ..
+    } = late;
     enum Scheduled {
         Attempt { attempt: usize, task_id: u64 },
         IdentityGone,
@@ -318,17 +323,17 @@ fn retry_late_take(
         if retries.epoch != epoch {
             return Scheduled::IdentityGone;
         }
-        let attempts = retries.attempts.entry(event_id.to_string()).or_insert(0);
+        let attempts = retries.attempts.entry(event_id.clone()).or_insert(0);
         let attempt = *attempts;
         *attempts += 1;
         if attempt >= LATE_TAKE_RETRY_DELAYS.len() {
-            retries.attempts.remove(event_id);
+            retries.attempts.remove(&event_id);
             return Scheduled::Exhausted {
                 attempts: attempt + 1,
             };
         }
         if let Ok(mut map) = pending_requests().lock() {
-            map.entry(trade_pubkey_hex.to_string()).or_insert(pending);
+            map.entry(trade_pubkey_hex.clone()).or_insert(pending);
         }
         let task_id = retries.next_task;
         retries.next_task += 1;
@@ -344,7 +349,7 @@ fn retry_late_take(
                 "orders",
                 format!(
                     "late take order={} not reconciled: {why} — its identity is gone, not retrying",
-                    crate::api::logging::short_id(order_id),
+                    crate::api::logging::short_id(&order_id),
                 ),
             );
             return;
@@ -354,7 +359,7 @@ fn retry_late_take(
                 "orders",
                 format!(
                     "late take order={} not reconciled: {why} — giving up after {attempts} attempts",
-                    crate::api::logging::short_id(order_id),
+                    crate::api::logging::short_id(&order_id),
                 ),
             );
             return;
@@ -365,12 +370,10 @@ fn retry_late_take(
         "orders",
         format!(
             "late take order={} not reconciled: {why} — retrying in {}ms",
-            crate::api::logging::short_id(order_id),
+            crate::api::logging::short_id(&order_id),
             delay.as_millis(),
         ),
     );
-    let (event_id, trade_pubkey_hex) = (event_id.to_string(), trade_pubkey_hex.to_string());
-    let order_id = order_id.to_string();
     let scheduled_attempts = attempt + 1;
     let attempt = async move {
         crate::rt::time::sleep(delay).await;

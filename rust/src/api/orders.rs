@@ -29,7 +29,7 @@ use crate::nostr::order_events::parse_order_event;
 mod late_take;
 use late_take::{
     forget_late_take_retries, late_take_retry_epoch, late_take_test_pause, reconcile_late_take,
-    settle_late_take_retry, LateTakeOutcome,
+    settle_late_take_retry, LateTake, LateTakeOutcome,
 };
 
 // ── Per-trade key index map ───────────────────────────────────────────────────
@@ -3687,28 +3687,23 @@ async fn dispatch_mostro_message(
     // the order left behind, and puts the reply back for another delivery
     // when the store fails (#566).
     if let (Some(pending), Some(order_id)) = (late_take.take(), &kind.id) {
-        let oid = order_id.to_string();
-        // The reply as it arrived, kept only for a retry the store may need.
-        let original = mostro_core::transport::UnwrappedMessage {
-            message: msg.clone(),
-            signature,
-            sender,
-            identity,
-            created_at: event_created_at,
-        };
-        let outcome = reconcile_late_take(
+        let late = LateTake {
             pending,
-            original,
-            kind,
-            &oid,
-            &row_state,
-            trade_pubkey_hex,
+            original: mostro_core::transport::UnwrappedMessage {
+                message: msg.clone(),
+                signature,
+                sender,
+                identity,
+                created_at: event_created_at,
+            },
+            order_id: order_id.to_string(),
+            trade_pubkey_hex: trade_pubkey_hex.to_string(),
             trade_index,
-            event_id,
+            event_id: event_id.to_string(),
             event_ts,
-            late_take_epoch,
-        )
-        .await;
+            epoch: late_take_epoch,
+        };
+        let outcome = reconcile_late_take(late, kind, &row_state).await;
         if !matches!(outcome, LateTakeOutcome::Retry) {
             settle_late_take_retry(event_id);
             late_take_test_pause("settled").await;
