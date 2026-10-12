@@ -87,8 +87,7 @@ class _Api implements RustLibApi {
     required bool enabled,
   }) async {}
 
-  // No `@override` yet: the bridge gains this call with the fix, and the
-  // test must compile without it.
+  @override
   Future<void> crateApiIdentityRestoreIdentitySession() async {
     if (!loaded) throw AnyhowException('NoIdentity');
     restores++;
@@ -199,6 +198,29 @@ void main() {
     expect(api.restores, 1, reason: 'Rust rebuilds what the deletion gave up');
   });
 
+  // Nothing to reload from: the refusal says so, still carrying its marker
+  // for the screen to match.
+  test(
+    'a refusal that cannot reload says the session has no identity',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      api.refuseImports = true;
+
+      await expectLater(
+        IdentityService.importAndStore(_new.split(' ')),
+        throwsA(
+          isA<PreviousIdentityNotReloaded>().having(
+            (e) => e.toString(),
+            'toString',
+            contains('PendingWipeFailed'),
+          ),
+        ),
+      );
+      expect(api.loaded, isFalse);
+      expect(api.restores, 0);
+    },
+  );
+
   test('a deletion that fails is not followed by a reload', () async {
     FlutterSecureStorage.setMockInitialValues({
       'mostro_identity_mnemonic': _old,
@@ -265,6 +287,7 @@ class _Delegate implements RustLibApi {
   Future<void> crateApiReputationSetPrivacyMode({required bool enabled}) =>
       _api().crateApiReputationSetPrivacyMode(enabled: enabled);
 
+  @override
   Future<void> crateApiIdentityRestoreIdentitySession() =>
       _api().crateApiIdentityRestoreIdentitySession();
 
