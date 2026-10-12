@@ -438,9 +438,9 @@ async fn save_late_take_row(db: &impl Storage, trade: &crate::api::types::TradeI
 }
 
 /// The late-take reconcile's replacement of an earlier take's rows: the
-/// same lift-save-touch as [`persist_trade_row`], with the delete and the
-/// save in one transaction. With a test seam for the failures it must
-/// survive.
+/// same steps as [`persist_trade_row`], with the delete and the save in one
+/// transaction ([`TradeWrite::ReplaceForOrder`]). With a test seam for the
+/// failures it must survive.
 async fn replace_with_late_take_row(
     db: &impl Storage,
     trade: &crate::api::types::TradeInfo,
@@ -448,20 +448,7 @@ async fn replace_with_late_take_row(
     if late_take_fault("replace") {
         return Err(anyhow::anyhow!("injected replace failure"));
     }
-    let key = crate::db::settings_keys::trade_wiped(&trade.order.id);
-    if let Err(e) = db.delete_setting(&key).await {
-        crate::api::logging::blog_warn(
-            "orders",
-            format!(
-                "failed to lift wipe tombstone for order={}: {e}",
-                trade.order.id
-            ),
-        );
-    }
-    db.replace_trades_for_order(&trade.order.id, trade).await?;
-    crate::api::trade_touch::touch_trade(&trade.order.id);
-    crate::api::push::request_reconcile();
-    Ok(())
+    persist_trade_row_in(db, trade, order_book(), TradeWrite::ReplaceForOrder).await
 }
 
 #[cfg(test)]

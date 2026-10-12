@@ -6871,16 +6871,31 @@ async fn wipe_trade_row(
 /// A direct `save_trade` for a *new* row would leave a stale tombstone
 /// swallowing the new trade's daemon messages (issue #394).
 async fn persist_trade_row(db: &impl Storage, trade: &crate::api::types::TradeInfo) -> Result<()> {
-    persist_trade_row_in(db, trade, order_book()).await
+    persist_trade_row_in(db, trade, order_book(), TradeWrite::Save).await
 }
 
-/// [`persist_trade_row`] against a given book, so a test can race it with an
-/// identity teardown without forgetting the process-wide book under every
-/// other test running in parallel.
+/// How [`persist_trade_row_in`] writes the row, between the claim and
+/// tombstone lift before it and the touch after it, which every write shares.
+#[derive(Clone, Copy)]
+enum TradeWrite {
+    /// [`Storage::save_trade`]: insert the row, or update it in place.
+    Save,
+    /// [`Storage::replace_trades_for_order`]: every row the order holds goes,
+    /// this one takes their place, in one transaction — a late take
+    /// superseding an earlier take's row (#566).
+    ReplaceForOrder,
+}
+
+/// [`persist_trade_row`] against a given book and with a given write, so a
+/// test can race it with an identity teardown without forgetting the
+/// process-wide book under every other test running in parallel, and the
+/// late-take reconcile can replace an earlier take's row through the same
+/// steps as a save.
 async fn persist_trade_row_in(
     db: &impl Storage,
     trade: &crate::api::types::TradeInfo,
     book: &OrderBook,
+    write: TradeWrite,
 ) -> Result<()> {
     // A maker row's book entry usually predates the row: the order's Kind
     // 38383 outruns the daemon confirmation that binds the UUID and persists
@@ -6911,7 +6926,10 @@ async fn persist_trade_row_in(
             ),
         );
     }
-    let saved = db.save_trade(trade).await;
+    let saved = match write {
+        TradeWrite::Save => db.save_trade(trade).await,
+        TradeWrite::ReplaceForOrder => db.replace_trades_for_order(&trade.order.id, trade).await,
+    };
     crate::api::trade_touch::touch_trade(&trade.order.id);
     crate::api::push::request_reconcile();
     saved
@@ -14458,7 +14476,10 @@ mod tests {
             book.forget_ownership().await;
             release.notify_one();
         };
-        let (saved, ()) = tokio::join!(persist_trade_row_in(&probe, &row, &book), teardown);
+        let (saved, ()) = tokio::join!(
+            persist_trade_row_in(&probe, &row, &book, TradeWrite::Save),
+            teardown
+        );
         saved.expect("the probe's paused save succeeds");
 
         assert!(
@@ -18988,20 +19009,34 @@ mod tests {
 
     #[test]
     fn production_code_saves_trades_only_through_persist_trade_row() {
-        let source = include_str!("orders.rs");
         // Cut at the test module, not at the first `#[cfg(test)]`: test-only
         // helpers such as `OrderBook::has_wire_note` sit earlier in the file,
         // and cutting there would leave `persist_trade_row` out of the count.
-        let production = source
-            .split("\n#[cfg(test)]\nmod tests {")
-            .next()
-            .expect("split always yields a first chunk");
+        let production = |source: &'static str| {
+            source
+                .split("\n#[cfg(test)]\nmod tests {")
+                .next()
+                .expect("split always yields a first chunk")
+        };
+        // The late-take module writes trade rows too (#566).
+        let code = [
+            production(include_str!("orders.rs")),
+            production(include_str!("orders/late_take.rs")),
+        ];
+        let calls = |needle: &str| code.iter().map(|c| c.matches(needle).count()).sum::<usize>();
         assert_eq!(
-            production.matches(".save_trade(").count(),
+            calls(".save_trade("),
             1,
             "expected exactly one .save_trade( call in production code — the \
              one inside persist_trade_row. Route new call sites through \
              persist_trade_row so the wipe tombstone is lifted (#394).",
+        );
+        assert_eq!(
+            calls(".replace_trades_for_order("),
+            1,
+            "expected exactly one .replace_trades_for_order( call in production \
+             code — the one inside persist_trade_row_in, so a replacement lifts \
+             the tombstone, claims and touches like a save (#566).",
         );
     }
 
