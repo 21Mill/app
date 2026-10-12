@@ -83,3 +83,9 @@ pub(crate) fn newest_in(
         (live, None) => live,
     }
 }
+
+/// `node`'s (hex) newest info event this app holds, from either source.
+pub(crate) async fn newest(node: &str) -> Option<CachedNodeInfo> {
+    let cached = crate::api::node_stats::cached_info().await;
+    newest_in(node, &live(), &cached)
+}
