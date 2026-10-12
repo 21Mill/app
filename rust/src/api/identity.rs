@@ -1105,9 +1105,6 @@ mod tests {
         async fn get_identity(&self) -> Result<Option<IdentityInfo>> {
             unimplemented!()
         }
-        async fn delete_identity(&self) -> Result<()> {
-            unimplemented!()
-        }
         async fn update_trade_peer_reputation(
             &self,
             _order_id: &str,
@@ -1204,9 +1201,6 @@ mod tests {
             unimplemented!()
         }
         async fn delete_trade_key(&self, _order_id: &str) -> Result<()> {
-            unimplemented!()
-        }
-        async fn clear_trade_keys(&self) -> Result<()> {
             unimplemented!()
         }
         async fn clear_identity_data(&self) -> Result<()> {

@@ -189,20 +189,6 @@ impl IndexedDbStorage {
         Ok(())
     }
 
-    /// Removes every entry of `store_name`.
-    async fn clear_store(&self, store_name: &str) -> Result<()> {
-        let db = self.open_db().await?;
-        let tx = db
-            .transaction_on_one_with_mode(store_name, IdbTransactionMode::Readwrite)
-            .map_err(|e| js_err("tx open", e))?;
-        let store = tx
-            .object_store(store_name)
-            .map_err(|e| js_err("store open", e))?;
-        store.clear().map_err(|e| js_err("clear", e))?;
-        tx.await.into_result().map_err(|e| js_err("tx commit", e))?;
-        Ok(())
-    }
-
     /// Every stored trade as a JSON document, newest `started_at` first.
     /// A document that no longer parses is skipped with a warning, as the
     /// SQLite backend does, rather than hiding every other trade.
@@ -414,9 +400,6 @@ impl Storage for IndexedDbStorage {
             .map(|json| serde_json::from_str(&json))
             .transpose()?)
     }
-    async fn delete_identity(&self) -> Result<()> {
-        self.clear_store(IDENTITY_STORE).await
-    }
     async fn save_queued_message(&self, msg: &QueuedMessage) -> Result<()> {
         let _section = self.exclusive(OUTBOX_LOCK).await;
         self.put_queued_message(msg).await
@@ -496,10 +479,6 @@ impl Storage for IndexedDbStorage {
 
     async fn delete_trade_key(&self, order_id: &str) -> Result<()> {
         self.delete_key(TRADE_KEYS_STORE, order_id).await
-    }
-
-    async fn clear_trade_keys(&self) -> Result<()> {
-        self.clear_store(TRADE_KEYS_STORE).await
     }
 
     async fn clear_identity_data(&self) -> Result<()> {
