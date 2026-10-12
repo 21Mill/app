@@ -536,6 +536,8 @@ impl Storage for SqliteStorage {
         // some of the old one's rows, which is the bug this exists to close.
         let mut tx = self.pool.begin().await?;
         for delete in [
+            "DELETE FROM identity",
+            "DELETE FROM trade_keys",
             "DELETE FROM trades",
             "DELETE FROM messages",
             "DELETE FROM bond_claims",
@@ -2591,6 +2593,17 @@ mod tests {
         ] {
             storage.set_setting(&key, "1").await.unwrap();
         }
+        storage
+            .save_identity(&IdentityInfo {
+                public_key: "abc123".to_string(),
+                display_name: None,
+                privacy_mode: false,
+                trade_key_index: 7,
+                created_at: 1_700_000_000,
+            })
+            .await
+            .unwrap();
+        storage.save_trade_key("order-a", 1).await.unwrap();
         // The device's own.
         storage
             .save_active_mostro_pubkey("node-pubkey")
@@ -2607,6 +2620,8 @@ mod tests {
 
         storage.clear_identity_data().await.unwrap();
 
+        assert!(storage.get_identity().await.unwrap().is_none());
+        assert_eq!(storage.get_trade_key("order-a").await.unwrap(), None);
         assert!(storage.list_trades().await.unwrap().is_empty());
         assert!(storage.list_orders().await.unwrap().is_empty());
         assert!(storage.list_messages("order-a").await.unwrap().is_empty());
@@ -2653,6 +2668,58 @@ mod tests {
 
         // Wiping an already empty database is a no-op, not an error.
         storage.clear_identity_data().await.unwrap();
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A wipe that fails part way is rolled back whole: the identity row and
+    /// its trade-key mappings stay with the trades they name (review of
+    /// #573). The failure is a trigger aborting the last delete the
+    /// transaction runs, so every earlier one has already happened in it.
+    #[tokio::test]
+    async fn a_failed_identity_wipe_rolls_back_whole() {
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+        storage
+            .save_identity(&IdentityInfo {
+                public_key: "abc123".to_string(),
+                display_name: None,
+                privacy_mode: false,
+                trade_key_index: 7,
+                created_at: 1_700_000_000,
+            })
+            .await
+            .unwrap();
+        storage.save_trade_key("order-a", 5).await.unwrap();
+        storage
+            .set_setting(settings_keys::MY_REPUTATION, "1")
+            .await
+            .unwrap();
+        sqlx::query(&format!(
+            "CREATE TRIGGER wipe_fails BEFORE DELETE ON settings \
+             WHEN old.key = '{}' BEGIN SELECT RAISE(ABORT, 'wipe fails'); END",
+            settings_keys::MY_REPUTATION
+        ))
+        .execute(&storage.pool)
+        .await
+        .unwrap();
+
+        assert!(storage.clear_identity_data().await.is_err());
+
+        assert_eq!(
+            storage.get_identity().await.unwrap().map(|i| i.public_key),
+            Some("abc123".to_string())
+        );
+        assert_eq!(storage.get_trade_key("order-a").await.unwrap(), Some(5));
+        assert_eq!(
+            storage
+                .get_setting(settings_keys::MY_REPUTATION)
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("1")
+        );
 
         drop(storage);
         let _ = std::fs::remove_file(&path);

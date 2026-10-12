@@ -370,14 +370,18 @@ pub trait Storage: Send + Sync {
     /// order→index mappings belong to the removed identity's derivation tree.
     async fn clear_trade_keys(&self) -> Result<()>;
 
-    /// Delete everything the current identity produced: trades, chat
-    /// messages and their cached attachments, payout claims, the outbound
-    /// queue, the cached order book
+    /// Delete the current identity and everything it produced: its row, its
+    /// trade-key mappings, trades, chat messages and their cached
+    /// attachments, payout claims, the outbound queue, the cached order book
     /// (its `is_mine` marks are the identity's) and the per-order settings
     /// ([`settings_keys::IDENTITY_SCOPED_PREFIXES`] and
-    /// [`settings_keys::IDENTITY_SCOPED_KEYS`]). Used on identity deletion, next to [`Self::clear_trade_keys`]:
+    /// [`settings_keys::IDENTITY_SCOPED_KEYS`]). Used on identity deletion:
     /// a new user must start as on a fresh install (issue #533). Relays,
     /// the node choice and preferences stay — they belong to the device.
+    ///
+    /// All of it or none of it: the identity row and the mappings go in the
+    /// same transaction as the rows, so a wipe that fails leaves the identity
+    /// able to act on the trades it kept (review of #573).
     async fn clear_identity_data(&self) -> Result<()>;
 
     // ── Settings / Mostro node ────────────────────────────────────────────────

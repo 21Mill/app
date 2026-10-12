@@ -539,7 +539,9 @@ impl Storage for IndexedDbStorage {
         // from a later task — so awaiting between requests would make the
         // next one hit an inactive transaction (see `patch_serial`). That is
         // also why the keys are read in a transaction of their own.
-        const WIPED: [&str; 7] = [
+        const WIPED: [&str; 9] = [
+            IDENTITY_STORE,
+            TRADE_KEYS_STORE,
             TRADES_STORE,
             MESSAGES_STORE,
             BOND_CLAIMS_STORE,

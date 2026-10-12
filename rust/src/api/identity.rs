@@ -437,23 +437,16 @@ async fn delete_in<S: Storage, W: DeleteEffects>(
     // longer holds; the registrations name pubkeys only, so no key is needed.
     fx.unregister_push().await;
 
-    // Clear the persisted trade key counter and per-order key mappings: both
-    // belong to the deleted identity's derivation tree, and a new mnemonic
-    // must start counting from zero instead of inheriting them. (If this
-    // cleanup fails, the pubkey guard in `reconcile_trade_key_index` still
-    // prevents the stale row from leaking into a different identity.)
+    // Everything the identity persisted — its row and trade-key counter, the
+    // per-order key mappings, trades, chats, payout claims, the outbound
+    // queue, per-order cursors (issue #533) — in one transaction. The next
+    // user must find the app as a fresh install would leave it, and a new
+    // mnemonic must start counting from zero. A wipe that fails keeps all of
+    // it, the mappings with the trades they name (review of #573); the
+    // identity is already gone, so the failure is reported, never turned
+    // into a failed deletion. (A stale identity row is still kept from a
+    // different identity by the pubkey guard in `reconcile_trade_key_index`.)
     if let Some(db) = db {
-        if let Err(e) = db.delete_identity().await {
-            log::warn!("[identity] failed to clear persisted identity: {e}");
-        }
-        if let Err(e) = db.clear_trade_keys().await {
-            log::warn!("[identity] failed to clear trade key mappings: {e}");
-        }
-        // Everything else the identity produced — trades, chats, payout
-        // claims, the outbound queue, per-order cursors (issue #533). The
-        // next user must find the app as a fresh install would leave it.
-        // Same handling as above: the identity is already gone, so a failed
-        // wipe is reported, never turned into a failed deletion.
         if let Err(e) = db.clear_identity_data().await {
             log::warn!("[identity] failed to wipe the identity's data: {e}");
         }
