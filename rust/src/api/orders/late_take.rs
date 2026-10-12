@@ -1730,6 +1730,104 @@ mod tests {
         assert!(db.get_trade_by_order_id(&order_id).await.expect("lookup").is_none());
     }
 
+    /// No key binding, no session and no update for `order_id`: what a late
+    /// take of a forgotten identity must not leave behind.
+    async fn assert_nothing_bound_announced_or_wired(
+        db: &impl crate::db::Storage,
+        order_id: &str,
+        rx: &mut tokio::sync::broadcast::Receiver<crate::api::types::TradeUpdate>,
+    ) {
+        assert_eq!(
+            db.get_trade_key(order_id).await.expect("lookup"),
+            None,
+            "no key binding"
+        );
+        assert!(
+            crate::mostro::session::session_manager()
+                .get_session(order_id)
+                .await
+                .is_none(),
+            "no session"
+        );
+        assert!(drain_updates(rx, order_id).is_empty(), "no update");
+    }
+
+    /// The teardown cannot stop a FIRST attempt — it is no retry task — so
+    /// the attempt checks the epoch itself (CodeRabbit on #570). Held right
+    /// before a write that would succeed while the identity goes, then let
+    /// go, it writes nothing: no row, no key binding, no session, no update.
+    #[tokio::test]
+    async fn a_first_attempt_the_teardown_overtook_before_its_write_lands_nothing() {
+        use mostro_core::message::Action;
+        let (db, order_uuid, order_id, book_order, now) = round4_setup("overtook-before").await;
+        let trade_pk = "ff00ffa1";
+        let request_id = 6_300_000_021u64;
+        register_timed_out_take(trade_pk, request_id, &book_order);
+
+        let mut rx = trade_updates_tx().subscribe();
+        let first = tokio::spawn(dispatch_mostro_message(
+            daemon_message_with_nonce(
+                order_uuid,
+                Action::WaitingSellerToPay,
+                None,
+                now as u64,
+                Some(request_id),
+            ),
+            "test-r9-before",
+            trade_pk,
+            98,
+        ));
+        let gate = pause_late_take_at("before-write").await;
+
+        forget_late_take_retries().await;
+        gate.notify_one();
+        first.await.expect("the first attempt ran to its end");
+
+        assert!(
+            db.get_trade_by_order_id(&order_id).await.expect("lookup").is_none(),
+            "no row of the old identity's"
+        );
+        assert_nothing_bound_announced_or_wired(db, &order_id, &mut rx).await;
+    }
+
+    /// The same first attempt overtaken right AFTER its write: the row is
+    /// written — the identity teardown's own wipe removes it — but nothing
+    /// that follows the write may run for the forgotten identity: no key
+    /// binding, no session, no update.
+    #[tokio::test]
+    async fn a_first_attempt_the_teardown_overtook_after_its_write_binds_and_wires_nothing() {
+        use mostro_core::message::Action;
+        let (db, order_uuid, order_id, book_order, now) = round4_setup("overtook-after").await;
+        let trade_pk = "ff00ffa2";
+        let request_id = 6_300_000_022u64;
+        register_timed_out_take(trade_pk, request_id, &book_order);
+
+        let mut rx = trade_updates_tx().subscribe();
+        let first = tokio::spawn(dispatch_mostro_message(
+            daemon_message_with_nonce(
+                order_uuid,
+                Action::WaitingSellerToPay,
+                None,
+                now as u64,
+                Some(request_id),
+            ),
+            "test-r9-after",
+            trade_pk,
+            98,
+        ));
+        let gate = pause_late_take_at("after-write").await;
+        assert!(
+            db.get_trade_by_order_id(&order_id).await.expect("lookup").is_some(),
+            "held after its write"
+        );
+
+        forget_late_take_retries().await;
+        gate.notify_one();
+        first.await.expect("the first attempt ran to its end");
+
+        assert_nothing_bound_announced_or_wired(db, &order_id, &mut rx).await;
+    }
+
     /// The identity release stops the late-take retries FIRST, awaited: a
     /// retry still running after the in-memory clears below it would write
     /// the old identity's binding back into them.
