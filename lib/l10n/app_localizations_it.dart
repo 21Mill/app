@@ -1164,6 +1164,30 @@ class AppLocalizationsIt extends AppLocalizations {
       'Impossibile generare l\'identità. Riprova.';
 
   @override
+  String get pendingWipeBannerTitle =>
+      'I dati dell\'utente precedente sono ancora su questo dispositivo';
+
+  @override
+  String get pendingWipeBannerBody =>
+      'L\'eliminazione dell\'identità precedente non ha potuto rimuovere i suoi scambi e le sue chat da questo dispositivo. L\'app riproverà alla prossima creazione o importazione di un nuovo utente.';
+
+  @override
+  String get pendingWipeBlockedMessage =>
+      'Non è stato possibile rimuovere da questo dispositivo i dati dell\'utente precedente, quindi il nuovo utente non è stato configurato e il tuo utente attuale è stato mantenuto. Riprova.';
+
+  @override
+  String get wipeNotRecordedMessage =>
+      'Non è stato possibile rimuovere in sicurezza l\'utente attuale, quindi non è stato modificato nulla. Riprova.';
+
+  @override
+  String get identitySwapStorageUnavailableMessage =>
+      'La memoria del dispositivo non è disponibile in questo momento, quindi l\'utente attuale è stato mantenuto e non è stato modificato nulla. Riavvia l\'app e riprova.';
+
+  @override
+  String get identitySwapPreviousNotReloadedMessage =>
+      'Il nuovo utente non è stato configurato e l\'utente attuale non è stato ricaricato. Riavvia l\'app per caricarlo.';
+
+  @override
   String get invalidMnemonicMessage =>
       'Parole segrete non valide. Controlla le tue parole e riprova.';
 
