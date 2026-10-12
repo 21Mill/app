@@ -215,37 +215,112 @@ struct LateTakeRetries {
     epoch: u64,
 }
 
-/// The current late-take teardown epoch, read by a dispatch as it begins so
-/// a retry it schedules later can be refused if the identity went meanwhile.
-pub(super) fn late_take_retry_epoch() -> u64 {
-    with_late_take_retries(|retries| retries.epoch)
+/// What [`LateTakeRetries::schedule`] decided.
+enum Scheduled {
+    /// Attempt number `attempt` (from 0) is due, its task registered as
+    /// `task_id`.
+    Attempt { attempt: usize, task_id: u64 },
+    /// The dispatch began under an epoch a teardown has since closed.
+    IdentityGone,
+    /// Every delay is spent: `attempts` were made.
+    Exhausted { attempts: usize },
+}
+
+impl LateTakeRetries {
+    /// Counts another attempt at the late take `event_id` and registers
+    /// `task` to run it — or refuses, for a dispatch that began under a
+    /// closed `epoch` or a take past its last delay, and then `task` is
+    /// dropped unregistered. `put_back` returns the take record to the
+    /// registry the interception reads; it runs only for a due attempt, and
+    /// inside the same critical section as the check, the count and the
+    /// registration, which the teardown's cannot interleave.
+    fn schedule(
+        &mut self,
+        epoch: u64,
+        event_id: &str,
+        task: LateTakeRetryTask,
+        put_back: impl FnOnce(),
+    ) -> Scheduled {
+        if self.epoch != epoch {
+            return Scheduled::IdentityGone;
+        }
+        let attempts = self.attempts.entry(event_id.to_string()).or_insert(0);
+        let attempt = *attempts;
+        *attempts += 1;
+        if attempt >= LATE_TAKE_RETRY_DELAYS.len() {
+            self.attempts.remove(event_id);
+            return Scheduled::Exhausted {
+                attempts: attempt + 1,
+            };
+        }
+        put_back();
+        let task_id = self.next_task;
+        self.next_task += 1;
+        self.tasks.insert(task_id, task);
+        Scheduled::Attempt { attempt, task_id }
+    }
+
+    /// Ends the bookkeeping of the late take `event_id`. Its task, if one is
+    /// running, stays registered — and stoppable — until it finishes.
+    fn settle(&mut self, event_id: &str) {
+        self.attempts.remove(event_id);
+    }
+
+    /// The registry's half of an identity teardown: a new epoch, no
+    /// bookkeeping, and every registered task handed over to be stopped
+    /// ([`stop_retry_tasks`]).
+    fn begin_forget(&mut self) -> Vec<LateTakeRetryTask> {
+        // A first attempt already running when the identity goes is no task
+        // of ours to stop: the new epoch refuses the retry it may schedule.
+        self.epoch += 1;
+        self.attempts.clear();
+        self.tasks.drain().map(|(_, task)| task).collect()
+    }
+}
+
+/// The registry the late-take retries live in: a mutex, because a retry
+/// task and the dispatcher may run on different runtime threads.
+type RetryRegistry = std::sync::Mutex<LateTakeRetries>;
+
+/// `registry`, locked. A poisoned lock is taken as is: every critical
+/// section leaves the registry consistent before anything in it can panic.
+fn lock_retries(registry: &RetryRegistry) -> std::sync::MutexGuard<'_, LateTakeRetries> {
+    registry
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// The late-take retries. Identity-scoped: [`forget_late_take_retries`]
 /// stops them when the identity goes.
 ///
-/// Process-wide in the app. Under test it is per thread instead, like the
-/// fault seam: a `#[tokio::test]` runs its retries on its own thread, and
-/// the identity-lifecycle tests running alongside tear the registry down — a
-/// shared one would stop other tests' retries.
-fn with_late_take_retries<R>(f: impl FnOnce(&mut LateTakeRetries) -> R) -> R {
+/// Process-wide in the app. Under test it is one per thread instead — the
+/// same mutex, leaked once per thread: a `#[tokio::test]` runs its retries
+/// on its own thread, and the identity-lifecycle tests running alongside
+/// tear the registry down, so a shared one would stop other tests' retries.
+fn late_take_retries() -> &'static RetryRegistry {
     #[cfg(not(test))]
     {
-        static RETRIES: OnceLock<std::sync::Mutex<LateTakeRetries>> = OnceLock::new();
-        let mut retries = RETRIES
-            .get_or_init(Default::default)
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        f(&mut retries)
+        static RETRIES: OnceLock<RetryRegistry> = OnceLock::new();
+        RETRIES.get_or_init(Default::default)
     }
     #[cfg(test)]
     {
         thread_local! {
-            static RETRIES: std::cell::RefCell<LateTakeRetries> =
-                std::cell::RefCell::new(LateTakeRetries::default());
+            static RETRIES: &'static RetryRegistry = Box::leak(Box::default());
         }
-        RETRIES.with(|retries| f(&mut retries.borrow_mut()))
+        RETRIES.with(|retries| *retries)
     }
+}
+
+/// Runs `f` on the late-take retries, locked.
+fn with_late_take_retries<R>(f: impl FnOnce(&mut LateTakeRetries) -> R) -> R {
+    f(&mut lock_retries(late_take_retries()))
+}
+
+/// The current late-take teardown epoch, read by a dispatch as it begins so
+/// a retry it schedules later can be refused if the identity went meanwhile.
+pub(super) fn late_take_retry_epoch() -> u64 {
+    with_late_take_retries(|retries| retries.epoch)
 }
 
 /// Stops every late-take retry task still running and waits until each has
@@ -262,13 +337,15 @@ fn with_late_take_retries<R>(f: impl FnOnce(&mut LateTakeRetries) -> R) -> R {
 /// whatever a retry wrote before it stopped, the rest of the teardown
 /// removes, and nothing is written after.
 pub(super) async fn forget_late_take_retries() {
-    let tasks: Vec<LateTakeRetryTask> = with_late_take_retries(|retries| {
-        // A first attempt already running when the identity goes is no task
-        // of ours to stop: the new epoch refuses the retry it may schedule.
-        retries.epoch += 1;
-        retries.attempts.clear();
-        retries.tasks.drain().map(|(_, task)| task).collect()
-    });
+    let tasks = with_late_take_retries(LateTakeRetries::begin_forget);
+    stop_retry_tasks(tasks).await;
+}
+
+/// Aborts `tasks`, then waits until each one's future is gone. The wait is
+/// what matters: an abort only takes effect at a task's next poll, so a
+/// task in the middle of one — on another runtime thread — runs on until
+/// that poll returns.
+async fn stop_retry_tasks(tasks: Vec<LateTakeRetryTask>) {
     for task in &tasks {
         task.abort.abort();
     }
@@ -283,7 +360,48 @@ pub(super) async fn forget_late_take_retries() {
 /// that settled it keeps running its dispatch and stays stoppable until it
 /// finishes.
 pub(super) fn settle_late_take_retry(event_id: &str) {
-    with_late_take_retries(|retries| retries.attempts.remove(event_id));
+    with_late_take_retries(|retries| retries.settle(event_id));
+}
+
+/// Counts another attempt at the late take `event_id` in `registry` and, if
+/// one is due, spawns the future `attempt` builds for it as the registered
+/// retry task: abortable through the handle the registry holds, holding
+/// that task's `stopped` sender until its future is gone — finished or
+/// aborted — and taking itself out of `registry` when it finishes.
+/// `put_back` runs inside the scheduling critical section
+/// ([`LateTakeRetries::schedule`]); `attempt` runs after it, unlocked.
+fn start_retry_task(
+    registry: &'static RetryRegistry,
+    epoch: u64,
+    event_id: &str,
+    put_back: impl FnOnce(),
+    attempt: impl FnOnce(usize) -> RedispatchFuture<'static>,
+) -> Scheduled {
+    let (abort, registration) = futures_util::future::AbortHandle::new_pair();
+    let (stopped_tx, stopped) = tokio::sync::oneshot::channel::<()>();
+    let scheduled = lock_retries(registry).schedule(
+        epoch,
+        event_id,
+        LateTakeRetryTask { abort, stopped },
+        put_back,
+    );
+    if let Scheduled::Attempt {
+        attempt: number,
+        task_id,
+    } = scheduled
+    {
+        let attempt = attempt(number);
+        crate::rt::spawn(async move {
+            // Dropped when this task ends — finished or aborted — which is
+            // what `stop_retry_tasks` waits for.
+            let _stopped = stopped_tx;
+            let _ = futures_util::future::Abortable::new(attempt, registration).await;
+            // Finished: nothing left to stop. (Aborted, the teardown already
+            // took it out.)
+            lock_retries(registry).tasks.remove(&task_id);
+        });
+    }
+    scheduled
 }
 
 /// Schedules another attempt at a late take the store failed to land
@@ -299,9 +417,7 @@ pub(super) fn settle_late_take_retry(event_id: &str) {
 /// ([`late_take_retry_epoch`]). A teardown since then means that dispatch
 /// was the forgotten identity's — not a retry task the teardown could stop,
 /// but a first attempt already running — so nothing is scheduled for it:
-/// no attempt, no record put back. The check, the count, the record and the
-/// task's registration are one critical section, which the teardown's own
-/// cannot interleave.
+/// no attempt, no record put back ([`LateTakeRetries::schedule`]).
 fn retry_late_take(late: LateTake, why: &str) {
     let LateTake {
         pending,
@@ -313,38 +429,65 @@ fn retry_late_take(late: LateTake, why: &str) {
         epoch,
         ..
     } = late;
-    enum Scheduled {
-        Attempt { attempt: usize, task_id: u64 },
-        IdentityGone,
-        Exhausted { attempts: usize },
-    }
-    let (abort, registration) = futures_util::future::AbortHandle::new_pair();
-    let (stopped_tx, stopped) = tokio::sync::oneshot::channel::<()>();
-    let scheduled = with_late_take_retries(|retries| {
-        if retries.epoch != epoch {
-            return Scheduled::IdentityGone;
-        }
-        let attempts = retries.attempts.entry(event_id.clone()).or_insert(0);
-        let attempt = *attempts;
-        *attempts += 1;
-        if attempt >= LATE_TAKE_RETRY_DELAYS.len() {
-            retries.attempts.remove(&event_id);
-            return Scheduled::Exhausted {
-                attempts: attempt + 1,
-            };
-        }
+    let registry = late_take_retries();
+    let put_back = || {
         if let Ok(mut map) = pending_requests().lock() {
             map.entry(trade_pubkey_hex.clone()).or_insert(pending);
         }
-        let task_id = retries.next_task;
-        retries.next_task += 1;
-        retries
-            .tasks
-            .insert(task_id, LateTakeRetryTask { abort, stopped });
-        Scheduled::Attempt { attempt, task_id }
-    });
-    let (attempt, task_id) = match scheduled {
-        Scheduled::Attempt { attempt, task_id } => (attempt, task_id),
+    };
+    let attempt = |attempt: usize| -> RedispatchFuture<'static> {
+        let delay = LATE_TAKE_RETRY_DELAYS[attempt];
+        crate::api::logging::blog_warn(
+            "orders",
+            format!(
+                "late take order={} not reconciled: {why} — retrying in {}ms",
+                crate::api::logging::short_id(&order_id),
+                delay.as_millis(),
+            ),
+        );
+        let scheduled_attempts = attempt + 1;
+        let (order_id, event_id, trade_pubkey_hex) =
+            (order_id.clone(), event_id.clone(), trade_pubkey_hex.clone());
+        Box::pin(async move {
+            crate::rt::time::sleep(delay).await;
+            let scheduled = lock_retries(registry).attempts.contains_key(&event_id);
+            if !scheduled {
+                return;
+            }
+            // Boxed: the dispatcher's own future holds this task's, so the
+            // type is erased to break the cycle.
+            let redispatch: RedispatchFuture<'_> = Box::pin(dispatch_mostro_message(
+                original,
+                &event_id,
+                &trade_pubkey_hex,
+                trade_index,
+            ));
+            redispatch.await;
+            // The attempt ran without reaching the reconcile — the node is no
+            // longer the active one, or the take record is gone — so it
+            // neither settled the take nor scheduled another attempt. End it
+            // here rather than leave an entry nothing will ever run again.
+            let stranded = {
+                let mut retries = lock_retries(registry);
+                let stranded = retries.attempts.get(&event_id) == Some(&scheduled_attempts);
+                if stranded {
+                    retries.attempts.remove(&event_id);
+                }
+                stranded
+            };
+            if stranded {
+                crate::api::logging::blog_warn(
+                    "orders",
+                    format!(
+                        "late take order={}: retry did not reach the reconcile — giving up",
+                        crate::api::logging::short_id(&order_id),
+                    ),
+                );
+            }
+        })
+    };
+    match start_retry_task(registry, epoch, &event_id, put_back, attempt) {
+        Scheduled::Attempt { .. } => {}
         Scheduled::IdentityGone => {
             crate::api::logging::blog_warn(
                 "orders",
@@ -353,7 +496,6 @@ fn retry_late_take(late: LateTake, why: &str) {
                     crate::api::logging::short_id(&order_id),
                 ),
             );
-            return;
         }
         Scheduled::Exhausted { attempts } => {
             crate::api::logging::blog_warn(
@@ -363,66 +505,14 @@ fn retry_late_take(late: LateTake, why: &str) {
                     crate::api::logging::short_id(&order_id),
                 ),
             );
-            return;
         }
-    };
-    let delay = LATE_TAKE_RETRY_DELAYS[attempt];
-    crate::api::logging::blog_warn(
-        "orders",
-        format!(
-            "late take order={} not reconciled: {why} — retrying in {}ms",
-            crate::api::logging::short_id(&order_id),
-            delay.as_millis(),
-        ),
-    );
-    let scheduled_attempts = attempt + 1;
-    let attempt = async move {
-        crate::rt::time::sleep(delay).await;
-        let scheduled =
-            with_late_take_retries(|retries| retries.attempts.contains_key(&event_id));
-        if !scheduled {
-            return;
-        }
-        // Boxed: the dispatcher's own future holds this task's, so the type
-        // is erased to break the cycle.
-        let redispatch: RedispatchFuture<'_> =
-            Box::pin(dispatch_mostro_message(original, &event_id, &trade_pubkey_hex, trade_index));
-        redispatch.await;
-        // The attempt ran without reaching the reconcile — the node is no
-        // longer the active one, or the take record is gone — so it neither
-        // settled the take nor scheduled another attempt. End it here rather
-        // than leave an entry nothing will ever run again.
-        let stranded = with_late_take_retries(|retries| {
-            let stranded = retries.attempts.get(&event_id) == Some(&scheduled_attempts);
-            if stranded {
-                retries.attempts.remove(&event_id);
-            }
-            stranded
-        });
-        if stranded {
-            crate::api::logging::blog_warn(
-                "orders",
-                format!(
-                    "late take order={}: retry did not reach the reconcile — giving up",
-                    crate::api::logging::short_id(&order_id),
-                ),
-            );
-        }
-    };
-    crate::rt::spawn(async move {
-        // Dropped when this task ends — finished or aborted — which is what
-        // `forget_late_take_retries` waits for.
-        let _stopped = stopped_tx;
-        let _ = futures_util::future::Abortable::new(attempt, registration).await;
-        // Finished: nothing left to stop. (Aborted, the teardown already
-        // took it out.)
-        with_late_take_retries(|retries| retries.tasks.remove(&task_id));
-    });
+    }
 }
 
-/// A dispatch run again by [`retry_late_take`], type-erased. `Send` where
-/// tasks can move across threads; on `wasm32` the storage futures are not,
-/// and nothing needs them to be.
+/// A future a retry runs, type-erased: the dispatch [`retry_late_take`]
+/// runs again, and the attempt holding it. `Send` where tasks can move
+/// across threads; on `wasm32` the storage futures are not, and nothing
+/// needs them to be.
 #[cfg(not(target_arch = "wasm32"))]
 type RedispatchFuture<'a> = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>>;
 #[cfg(target_arch = "wasm32")]
@@ -1989,4 +2079,5 @@ mod tests {
             crate::api::types::OrderStatus::WaitingPayment
         );
     }
+
 }
