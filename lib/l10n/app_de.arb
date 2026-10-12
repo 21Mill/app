@@ -342,7 +342,7 @@
   "pendingWipeBlockedMessage": "Die Daten des vorherigen Nutzers konnten nicht von diesem Gerät entfernt werden, daher wurde der neue Nutzer nicht eingerichtet und dein aktueller Nutzer beibehalten. Bitte versuche es erneut.",
   "wipeNotRecordedMessage": "Der aktuelle Nutzer konnte nicht sicher entfernt werden, daher wurde nichts geändert. Bitte versuche es erneut.",
   "identitySwapStorageUnavailableMessage": "Der Speicher des Geräts ist gerade nicht verfügbar, daher wurde der aktuelle Nutzer beibehalten und nichts geändert. Starte die App neu und versuche es erneut.",
-  "identitySwapPreviousNotReloadedMessage": "Der neue Nutzer wurde nicht eingerichtet, und der aktuelle Nutzer konnte nicht erneut geladen werden. Starte die App neu, um ihn zu laden.",
+  "identitySwapPreviousNotReloadedMessage": "Der neue Nutzer wurde nicht eingerichtet, und der aktuelle Nutzer konnte nicht vollständig wiederhergestellt werden. Starte die App neu, um ihn wieder zu laden.",
   "invalidMnemonicMessage": "Ungültige geheime Wörter. Bitte überprüfe deine Wörter und versuche es erneut.",
   "enterValidMnemonicError": "Gib deine 12 geheimen Wörter ein.",
   "orderBookRefreshedMessage": "Orderbuch aktualisiert",

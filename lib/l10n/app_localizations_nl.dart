@@ -1182,7 +1182,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get identitySwapPreviousNotReloadedMessage =>
-      'De nieuwe gebruiker is niet ingesteld, en de huidige gebruiker kon niet opnieuw worden geladen. Start de app opnieuw om hem te laden.';
+      'De nieuwe gebruiker is niet ingesteld, en de huidige gebruiker kon niet volledig worden hersteld. Start de app opnieuw om hem opnieuw te laden.';
 
   @override
   String get invalidMnemonicMessage =>

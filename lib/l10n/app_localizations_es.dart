@@ -1186,7 +1186,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get identitySwapPreviousNotReloadedMessage =>
-      'No se configuró el nuevo usuario, y el usuario actual no se pudo volver a cargar. Reinicia la app para cargarlo.';
+      'No se configuró el nuevo usuario, y el usuario actual no se pudo restaurar del todo. Reinicia la app para volver a cargarlo.';
 
   @override
   String get invalidMnemonicMessage =>

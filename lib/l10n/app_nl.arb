@@ -342,7 +342,7 @@
   "pendingWipeBlockedMessage": "De gegevens van de vorige gebruiker konden niet van dit apparaat worden verwijderd, dus de nieuwe gebruiker is niet ingesteld en je huidige gebruiker is behouden. Probeer het opnieuw.",
   "wipeNotRecordedMessage": "De huidige gebruiker kon niet veilig worden verwijderd, dus er is niets gewijzigd. Probeer het opnieuw.",
   "identitySwapStorageUnavailableMessage": "De opslag van het apparaat is nu niet beschikbaar, dus de huidige gebruiker is behouden en er is niets gewijzigd. Start de app opnieuw en probeer het nog eens.",
-  "identitySwapPreviousNotReloadedMessage": "De nieuwe gebruiker is niet ingesteld, en de huidige gebruiker kon niet opnieuw worden geladen. Start de app opnieuw om hem te laden.",
+  "identitySwapPreviousNotReloadedMessage": "De nieuwe gebruiker is niet ingesteld, en de huidige gebruiker kon niet volledig worden hersteld. Start de app opnieuw om hem opnieuw te laden.",
   "invalidMnemonicMessage": "Ongeldige geheime woorden. Controleer je woorden en probeer het opnieuw.",
   "enterValidMnemonicError": "Vul je 12 geheime woorden in.",
   "orderBookRefreshedMessage": "Orderboek ververst",

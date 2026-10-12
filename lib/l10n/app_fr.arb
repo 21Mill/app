@@ -342,7 +342,7 @@
   "pendingWipeBlockedMessage": "Les données de l'utilisateur précédent n'ont pas pu être effacées de cet appareil : le nouvel utilisateur n'a donc pas été configuré et votre utilisateur actuel a été conservé. Veuillez réessayer.",
   "wipeNotRecordedMessage": "L'utilisateur actuel n'a pas pu être supprimé en toute sécurité : rien n'a donc été modifié. Veuillez réessayer.",
   "identitySwapStorageUnavailableMessage": "Le stockage de l'appareil n'est pas disponible pour le moment : l'utilisateur actuel a donc été conservé et rien n'a été modifié. Redémarrez l'application et réessayez.",
-  "identitySwapPreviousNotReloadedMessage": "Le nouvel utilisateur n'a pas été configuré, et l'utilisateur actuel n'a pas pu être rechargé. Redémarrez l'application pour le charger.",
+  "identitySwapPreviousNotReloadedMessage": "Le nouvel utilisateur n'a pas été configuré, et l'utilisateur actuel n'a pas pu être entièrement restauré. Redémarrez l'application pour le recharger.",
   "invalidMnemonicMessage": "Mots secrets invalides. Veuillez vérifier vos mots et réessayer.",
   "enterValidMnemonicError": "Entrez vos 12 mots secrets.",
   "orderBookRefreshedMessage": "Carnet d'ordres actualisé",

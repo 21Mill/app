@@ -1488,9 +1488,9 @@
   "@identitySwapStorageUnavailableMessage": {
     "description": "Snackbar shown when generating or importing a user is refused because this session has no database, so the current identity cannot be deleted safely until the app restarts (review of #573)"
   },
-  "identitySwapPreviousNotReloadedMessage": "The new user was not set up, and the current user could not be loaded again. Restart the app to load it.",
+  "identitySwapPreviousNotReloadedMessage": "The new user was not set up, and the current user could not be fully restored. Restart the app to load it again.",
   "@identitySwapPreviousNotReloadedMessage": {
-    "description": "Snackbar shown when generating or importing a user is refused after the current identity was deleted, and that identity could not be loaded again in this session (review of #573)"
+    "description": "Snackbar shown when generating or importing a user is refused after the current identity was deleted, and that identity could not be loaded again — or was loaded but its session could not be rebuilt — in this session (review of #573)"
   },
   "invalidMnemonicMessage": "Invalid secret words. Please check your words and try again.",
   "@invalidMnemonicMessage": {

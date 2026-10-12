@@ -2152,10 +2152,10 @@ abstract class AppLocalizations {
   /// **'This device\'s storage is not available right now, so the current user was kept and nothing was changed. Restart the app and try again.'**
   String get identitySwapStorageUnavailableMessage;
 
-  /// Snackbar shown when generating or importing a user is refused after the current identity was deleted, and that identity could not be loaded again in this session (review of #573)
+  /// Snackbar shown when generating or importing a user is refused after the current identity was deleted, and that identity could not be loaded again — or was loaded but its session could not be rebuilt — in this session (review of #573)
   ///
   /// In en, this message translates to:
-  /// **'The new user was not set up, and the current user could not be loaded again. Restart the app to load it.'**
+  /// **'The new user was not set up, and the current user could not be fully restored. Restart the app to load it again.'**
   String get identitySwapPreviousNotReloadedMessage;
 
   /// Snackbar shown when an imported mnemonic is invalid on the Account screen

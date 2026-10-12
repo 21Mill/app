@@ -1190,7 +1190,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get identitySwapPreviousNotReloadedMessage =>
-      'Der neue Nutzer wurde nicht eingerichtet, und der aktuelle Nutzer konnte nicht erneut geladen werden. Starte die App neu, um ihn zu laden.';
+      'Der neue Nutzer wurde nicht eingerichtet, und der aktuelle Nutzer konnte nicht vollständig wiederhergestellt werden. Starte die App neu, um ihn wieder zu laden.';
 
   @override
   String get invalidMnemonicMessage =>

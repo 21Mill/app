@@ -189,22 +189,30 @@ void main() {
   );
 
   // Not only a pending wipe: any refusal after the deletion has the same
-  // effect on the session.
-  test('words the core rejects leave the previous identity loaded', () async {
-    FlutterSecureStorage.setMockInitialValues({
-      'mostro_identity_mnemonic': _old,
-    });
-    api.importError = AnyhowException('invalid mnemonic');
+  // effect on the session. (A phrase the core rejects no longer gets this
+  // far: it is refused before the deletion.)
+  test(
+    'an import the core refuses after the words pass leaves the previous identity loaded',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({
+        'mostro_identity_mnemonic': _old,
+      });
+      api.importError = AnyhowException('invalid mnemonic');
 
-    await expectLater(
-      IdentityService.importAndStore(_new.split(' ')),
-      throwsA(isA<AnyhowException>()),
-    );
+      await expectLater(
+        IdentityService.importAndStore(_new.split(' ')),
+        throwsA(isA<AnyhowException>()),
+      );
 
-    expect(api.loaded, isTrue);
-    expect(api.reloaded, _old.split(' '));
-    expect(api.restores, 1, reason: 'Rust rebuilds what the deletion gave up');
-  });
+      expect(api.loaded, isTrue);
+      expect(api.reloaded, _old.split(' '));
+      expect(
+        api.restores,
+        1,
+        reason: 'Rust rebuilds what the deletion gave up',
+      );
+    },
+  );
 
   // Nothing to reload from: the refusal says so, still carrying its marker
   // for the screen to match.

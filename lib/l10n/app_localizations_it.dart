@@ -1185,7 +1185,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get identitySwapPreviousNotReloadedMessage =>
-      'Il nuovo utente non è stato configurato e l\'utente attuale non è stato ricaricato. Riavvia l\'app per caricarlo.';
+      'Il nuovo utente non è stato configurato e l\'utente attuale non è stato ripristinato del tutto. Riavvia l\'app per ricaricarlo.';
 
   @override
   String get invalidMnemonicMessage =>
