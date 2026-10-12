@@ -96,8 +96,14 @@ a stale replay:
   stopped is removed by the rest of the teardown and nothing is written
   after. A **first** attempt already running when the identity goes is no
   task the teardown can stop; the teardown bumps an epoch the dispatch read
-  as it began, and a retry that attempt schedules afterwards is refused —
-  no attempt, no task, no take record put back. Nothing is announced, and the binding
+  as it began, and the attempt checks it itself, right before its write and
+  again right after it: on a mismatch the take is dropped, so nothing past
+  that point — the write, the key binding, the update, the session and the
+  watch — runs for the forgotten identity, and a retry that attempt would
+  schedule is refused — no attempt, no task, no take record put back. What
+  the checks cannot cover is a write already in flight when the teardown
+  wipes the rows: it may commit after the wipe and leave that row behind,
+  with nothing bound, announced or wired for it. Nothing is announced, and the binding
   (`store_trade_key_index`) does not move, before the row is durable.
   On the web the replacement also needs the origin-wide lock (Web Locks):
   its read of the earlier rows cannot join its write transaction, so

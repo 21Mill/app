@@ -20,7 +20,7 @@ pub(super) enum LateTakeOutcome {
     /// it as any message about a trade with no row.
     Declined,
     /// The reply must not reach the arms: the only row they would find is
-    /// an earlier take's.
+    /// an earlier take's, or the identity the take began under is gone.
     Drop,
     /// The store failed: the reply is scheduled for another attempt
     /// ([`retry_late_take`]) and must not reach the arms meanwhile.
@@ -127,6 +127,14 @@ pub(super) async fn reconcile_late_take(
     };
     #[cfg(test)]
     late_take_test_pause("before-write").await;
+    // A first attempt is no retry task, so the identity teardown cannot stop
+    // it: it checks the epoch itself, before its write and again after it,
+    // so nothing past either point runs for a forgotten identity. A write
+    // still in flight when the teardown wipes the rows can outlive the wipe;
+    // nothing bound, announced or wired follows it.
+    if late_take_identity_gone(&late, "before its write") {
+        return LateTakeOutcome::Drop;
+    }
     let written = match earlier {
         Some(_) => replace_with_late_take_row(db, &trade).await,
         None => save_late_take_row(db, &trade).await,
@@ -136,6 +144,9 @@ pub(super) async fn reconcile_late_take(
     }
     #[cfg(test)]
     late_take_test_pause("after-write").await;
+    if late_take_identity_gone(&late, "after its write") {
+        return LateTakeOutcome::Drop;
+    }
     if let Some(row) = earlier {
         crate::api::logging::blog_info(
             "orders",
@@ -167,6 +178,24 @@ pub(super) async fn reconcile_late_take(
     // with its session installed.
     wire_accepted_take(&mut trade, "late take").await;
     LateTakeOutcome::Landed(Box::new(trade))
+}
+
+/// Whether the identity `late`'s dispatch began under has been torn down
+/// since: the teardown bumps the epoch before it clears anything
+/// ([`forget_late_take_retries`]). Logged when it has, `at` saying where the
+/// take was dropped.
+fn late_take_identity_gone(late: &LateTake, at: &str) -> bool {
+    let gone = late.epoch != late_take_retry_epoch();
+    if gone {
+        crate::api::logging::blog_info(
+            "orders",
+            format!(
+                "late take order={} dropped {at}: its identity is gone (#566)",
+                crate::api::logging::short_id(&late.order_id),
+            ),
+        );
+    }
+    gone
 }
 
 /// How long a late take the store failed to land waits before each further
@@ -1680,10 +1709,12 @@ mod tests {
     }
 
     /// The teardown can stop retry TASKS only. A FIRST attempt already
-    /// running when the identity goes is not one: held before its write, the
-    /// identity is torn down, and then its write fails. The retry it would
-    /// schedule belongs to the forgotten identity and is refused — no
-    /// attempt counted, no task, no take record put back, no row later.
+    /// running when the identity goes is not one: held before a write that
+    /// would fail, the identity is torn down, and the attempt stops at its
+    /// own epoch check — the write is never tried, so no retry is scheduled
+    /// for the forgotten identity: no attempt counted, no task, no take
+    /// record put back, no row later. (The epoch also refuses a retry from a
+    /// write the teardown overtakes mid-flight: `schedule`'s `IdentityGone`.)
     #[tokio::test]
     async fn a_first_attempt_running_through_the_teardown_schedules_no_retry() {
         use mostro_core::message::Action;
@@ -1713,10 +1744,13 @@ mod tests {
         let_late_take_retries_run().await;
 
         LATE_TAKE_FAULTS.with(|faults| {
-            assert!(
-                faults.borrow().is_empty(),
-                "the first attempt did reach its write, and failed it"
-            )
+            let mut faults = faults.borrow_mut();
+            assert_eq!(
+                *faults,
+                vec!["save"],
+                "the first attempt stopped before its write"
+            );
+            faults.clear();
         });
         assert!(
             with_late_take_retries(|r| !r.attempts.contains_key("test-r8-epoch")
