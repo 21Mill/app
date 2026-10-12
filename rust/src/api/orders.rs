@@ -3131,6 +3131,54 @@ fn cant_do_message(reason: &str) -> String {
     }
 }
 
+/// Record `trade`'s escrow lock time from a daemon message dated `event_ts`,
+/// sent by `node`, when the message dates it
+/// ([`crate::mostro::status::dates_escrow_lock`]) and is older than the time
+/// already held: the oldest wins, so a re-send or a replay never moves it.
+async fn record_escrow_lock(
+    order_id: &str,
+    trade: &crate::api::types::TradeInfo,
+    kind: &mostro_core::message::MessageKind,
+    event_ts: i64,
+    node: &str,
+) {
+    if !crate::mostro::status::dates_escrow_lock(&kind.action, &kind.payload, &trade.order.kind) {
+        return;
+    }
+    if trade.escrow_locked_at.is_some_and(|held| held <= event_ts) {
+        return;
+    }
+    // A message dated beyond the tolerated skew is not a trustworthy start.
+    let horizon =
+        crate::rt::unix_now().saturating_add(crate::nostr::transport::MAX_CLOCK_SKEW_SECS as i64);
+    if event_ts > horizon {
+        return;
+    }
+    let Some(db) = crate::db::app_db::db() else {
+        return;
+    };
+    match db.mark_escrow_locked(order_id, event_ts, node).await {
+        Ok(()) => {
+            crate::api::logging::blog_info(
+                "orders",
+                format!(
+                    "escrow locked order={} at={event_ts} src={:?}",
+                    crate::api::logging::short_id(order_id),
+                    kind.action,
+                ),
+            );
+            crate::api::trade_touch::touch_trade(order_id);
+        }
+        Err(e) => crate::api::logging::blog_warn(
+            "orders",
+            format!(
+                "escrow lock not recorded order={}: {e}",
+                crate::api::logging::short_id(order_id),
+            ),
+        ),
+    }
+}
+
 /// Dispatch a Mostro `Message` recovered from a kind-14 NIP-44 reply.
 ///
 /// The caller recovers the `UnwrappedMessage` via
@@ -3607,6 +3655,14 @@ async fn dispatch_mostro_message(
                 }
             }
         }
+    }
+
+    // The escrow deadline counts from the message that moved the order out of
+    // `waiting-payment`. Recorded whatever the arms below decide about the
+    // status: a replayed message older than the stored status is exactly
+    // the one that dates the lock.
+    if let (Some(order_id), Some(trade)) = (&kind.id, row_state.trade()) {
+        record_escrow_lock(&order_id.to_string(), trade, kind, event_ts, &sender_hex).await;
     }
 
     match &kind.action {
@@ -16122,6 +16178,108 @@ mod tests {
             1,
         )
         .await;
+    }
+
+    /// [`dispatch_daemon_action_at`] with a payload.
+    async fn dispatch_daemon_message_at(
+        order_uuid: uuid::Uuid,
+        action: mostro_core::message::Action,
+        payload: Option<mostro_core::message::Payload>,
+        at: u64,
+    ) {
+        use mostro_core::message::Message;
+        let sender = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())
+            .expect("valid mostro pubkey");
+        dispatch_mostro_message(
+            mostro_core::transport::UnwrappedMessage {
+                message: Message::new_order(Some(order_uuid), None, None, action, payload),
+                signature: None,
+                sender,
+                identity: sender,
+                created_at: nostr_sdk::prelude::Timestamp::from(at),
+            },
+            &format!("test-escrow-lock-{order_uuid}-{at}"),
+            "ff00ff22",
+            1,
+        )
+        .await;
+    }
+
+    /// A trade row of `kind` waiting for the seller's payment.
+    async fn waiting_payment_row(kind: crate::api::types::OrderKind) -> (uuid::Uuid, String) {
+        let db = crate::db::app_db::db().expect("store initialised");
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let mut order = wire_order(&order_id, OrderStatus::WaitingPayment);
+        order.kind = kind;
+        db.save_trade(&cancel_test_row(order))
+            .await
+            .expect("save the trade row");
+        (order_uuid, order_id)
+    }
+
+    async fn escrow_lock_of(order_id: &str) -> (Option<i64>, Option<String>) {
+        let trade = crate::db::app_db::db()
+            .expect("store initialised")
+            .get_trade_by_order_id(order_id)
+            .await
+            .expect("read the trade row")
+            .expect("the row survives");
+        (trade.escrow_locked_at, trade.escrow_node)
+    }
+
+    /// The escrow lock is dated by the message that moved the order out of
+    /// `waiting-payment`, whichever way it arrives: on a sell order the
+    /// `waiting-buyer-invoice` of the take does not count; on a buy order the
+    /// lock is the `add-invoice` and the later re-sent `hold-invoice-payment-
+    /// accepted` does not move it; and a history replayed newest-first lands
+    /// on the same time.
+    #[tokio::test]
+    async fn the_escrow_lock_is_dated_by_the_message_that_left_waiting_payment() {
+        use crate::api::types::OrderKind;
+        use mostro_core::message::{Action, Payload};
+        use mostro_core::order::Status;
+
+        let path =
+            std::env::temp_dir().join(format!("mostro_escrow_lock_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let node = active_mostro_pubkey();
+        let add_invoice = || {
+            Some(Payload::Order(small_order_with(
+                Status::WaitingBuyerInvoice,
+                1_000,
+            )))
+        };
+
+        // Sell order: the buyer's step comes at the take, before the payment.
+        let (uuid, order_id) = waiting_payment_row(OrderKind::Sell).await;
+        dispatch_daemon_message_at(uuid, Action::WaitingBuyerInvoice, None, 1_000).await;
+        assert_eq!(escrow_lock_of(&order_id).await, (None, None));
+        dispatch_daemon_message_at(uuid, Action::HoldInvoicePaymentAccepted, None, 2_000).await;
+        assert_eq!(
+            escrow_lock_of(&order_id).await,
+            (Some(2_000), Some(node.clone()))
+        );
+        // Later steps keep it.
+        dispatch_daemon_message_at(uuid, Action::FiatSentOk, None, 4_000).await;
+        assert_eq!(escrow_lock_of(&order_id).await.0, Some(2_000));
+
+        // Buy order without the buyer's invoice: locked at the add-invoice,
+        // not at the confirmation re-sent once the invoice arrives.
+        let (uuid, order_id) = waiting_payment_row(OrderKind::Buy).await;
+        dispatch_daemon_message_at(uuid, Action::AddInvoice, add_invoice(), 3_000).await;
+        dispatch_daemon_message_at(uuid, Action::HoldInvoicePaymentAccepted, None, 9_000).await;
+        assert_eq!(
+            escrow_lock_of(&order_id).await,
+            (Some(3_000), Some(node.clone()))
+        );
+
+        // The seller's side of it, replayed newest-first.
+        let (uuid, order_id) = waiting_payment_row(OrderKind::Buy).await;
+        dispatch_daemon_message_at(uuid, Action::BuyerTookOrder, None, 9_000).await;
+        assert_eq!(escrow_lock_of(&order_id).await.0, Some(9_000));
+        dispatch_daemon_message_at(uuid, Action::WaitingBuyerInvoice, None, 3_000).await;
+        assert_eq!(escrow_lock_of(&order_id).await, (Some(3_000), Some(node)));
     }
 
     /// An active take, its public `in-progress` noted by the d-tag path.
