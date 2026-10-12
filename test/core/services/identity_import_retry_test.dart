@@ -24,6 +24,7 @@ class _Api implements RustLibApi {
   bool refuseCreates = false;
   Object? deleteError;
   Object? importError;
+  bool rejectWords = false;
   int deletes = 0;
   int imports = 0;
   List<String>? reloaded;
@@ -35,6 +36,14 @@ class _Api implements RustLibApi {
     if (deleteError case final error?) throw error;
     if (!loaded) throw AnyhowException('NoIdentity');
     loaded = false;
+  }
+
+  // No `@override` yet: the bridge gains this call with the fix, and the
+  // test must compile without it.
+  Future<void> crateApiIdentityValidateMnemonic({
+    required List<String> words,
+  }) async {
+    if (rejectWords) throw AnyhowException('invalid mnemonic');
   }
 
   @override
@@ -221,6 +230,27 @@ void main() {
     },
   );
 
+  // Review of #573: the deletion ran before the core read the words, so a
+  // phrase with a bad checksum — which the import dialog's shape check lets
+  // through — wiped the previous identity's trades, chats and payout claims,
+  // and the reload then brought that identity back empty.
+  test('words the core rejects never delete the current identity', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'mostro_identity_mnemonic': _old,
+    });
+    api.rejectWords = true;
+
+    await expectLater(
+      IdentityService.importAndStore(_new.split(' ')),
+      throwsA(isA<AnyhowException>()),
+    );
+
+    expect(api.deletes, 0, reason: 'the words are checked before the deletion');
+    expect(api.imports, 0);
+    expect(api.loaded, isTrue);
+    expect(api.reloaded, isNull, reason: 'nothing was given up to reload');
+  });
+
   test('a deletion that fails is not followed by a reload', () async {
     FlutterSecureStorage.setMockInitialValues({
       'mostro_identity_mnemonic': _old,
@@ -258,6 +288,10 @@ class _Delegate implements RustLibApi {
   @override
   Future<void> crateApiIdentityDeleteIdentity() =>
       _api().crateApiIdentityDeleteIdentity();
+
+  Future<void> crateApiIdentityValidateMnemonic({
+    required List<String> words,
+  }) => _api().crateApiIdentityValidateMnemonic(words: words);
 
   @override
   Future<IdentityInfo> crateApiIdentityImportFromMnemonic({
