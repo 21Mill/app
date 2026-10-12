@@ -152,46 +152,101 @@ class AppLocalizationsNl extends AppLocalizations {
       'De solver heeft de order geannuleerd en de sats aan de verkoper teruggegeven. Jij hebt de sats niet ontvangen.';
 
   @override
-  String get walkthroughSlideOneTitle => 'Handel vrij in bitcoin, zonder KYC';
+  String get walkthroughWelcomeTitle => 'P2P-bitcoin, zonder KYC';
 
   @override
-  String get walkthroughSlideOneBody =>
-      'Mostro is een peer-to-peer exchange waar je bitcoin verhandelt tegen elke valuta en betaalmethode, zonder KYC en zonder je gegevens aan iemand te geven. Hij draait op Nostr, en is daarmee bestand tegen censuur. Niemand kan je tegenhouden om te handelen.';
+  String get walkthroughWelcomeBody1 =>
+      'Mostro is een peer-to-peer exchange waar je bitcoin verhandelt tegen elke valuta en betaalmethode, zonder KYC en zonder je gegevens aan iemand te geven.';
 
   @override
-  String get walkthroughSlideTwoTitle => 'Privacy vanaf het begin';
+  String get walkthroughWelcomeBody2 =>
+      'Hij draait op Nostr en is daarmee bestand tegen censuur. Niemand kan je tegenhouden om te handelen.';
 
   @override
-  String get walkthroughSlideTwoBody =>
-      'Mostro maakt voor elke handel een nieuwe identiteit aan, zodat je trades niet aan elkaar te koppelen zijn. Je bepaalt zelf hoe privé je blijft:\n• Reputatiemodus: anderen zien je geslaagde trades en hoe betrouwbaar je bent.\n• Volledig privé: je bouwt geen reputatie op, maar wat je doet blijft volledig anoniem.\nJe kunt altijd wisselen in het scherm Account; sla daar ook je geheime woorden op, want dat is de enige manier om je account terug te krijgen.';
+  String get walkthroughPrivacyTitle => 'Privacy vanaf het begin';
 
   @override
-  String get walkthroughSlideThreeTitle => 'Zekerheid bij elke stap';
+  String get walkthroughPrivacyBody1 =>
+      'Mostro maakt voor elke trade een nieuwe identiteit aan, zodat je trades niet aan elkaar te koppelen zijn.';
 
   @override
-  String get walkthroughSlideThreeBody =>
-      'Mostro werkt met hold invoices: de sats blijven in de wallet van de verkoper tot het einde van de trade. Dat beschermt beide kanten. De app is bovendien gemaakt om voor iedereen vanzelfsprekend te werken.';
+  String get walkthroughPrivacyBody2 =>
+      'Je bepaalt ook zelf hoe privé je blijft:';
 
   @override
-  String get walkthroughSlideFourTitle => 'Volledig versleutelde chat';
+  String get walkthroughReputationModeName => 'Reputatiemodus';
 
   @override
-  String get walkthroughSlideFourBody =>
-      'Elke trade heeft een eigen privéchat, end-to-end versleuteld. Alleen de twee betrokken gebruikers kunnen hem lezen. Bij een dispuut kun je de gedeelde sleutel aan een solver geven om de zaak op te lossen.';
+  String get walkthroughReputationModeBody =>
+      'Anderen zien je geslaagde trades en hoe betrouwbaar je bent.';
 
   @override
-  String get walkthroughSlideFiveTitle => 'Een aanbod accepteren';
+  String get walkthroughFullPrivacyModeName => 'Volledig privé';
 
   @override
-  String get walkthroughSlideFiveBody =>
-      'Blader door het orderboek, kies een aanbod dat je bevalt en loop de trade stap voor stap door. Je kunt het profiel van de ander bekijken, veilig chatten en de trade zonder gedoe afronden.';
+  String get walkthroughFullPrivacyModeBody =>
+      'Je bouwt geen reputatie op, maar wat je doet blijft volledig anoniem.';
 
   @override
-  String get walkthroughSlideSixTitle => 'Niet gevonden wat je zoekt?';
+  String get walkthroughPrivacyFooter =>
+      'Je kunt altijd wisselen in het scherm Account. Sla daar ook je geheime woorden op: dat is de enige manier om je account terug te krijgen.';
 
   @override
-  String get walkthroughSlideSixBody =>
-      'Je kunt ook je eigen aanbod plaatsen en wachten tot iemand het accepteert. Kies het bedrag en je betaalmethode; Mostro regelt de rest.';
+  String get walkthroughHeldTitle => 'Zekerheid bij elke stap';
+
+  @override
+  String get walkthroughHeldBody1 =>
+      'De sats van de verkoper staan vast tot het einde van de trade. Dat beschermt beide kanten.';
+
+  @override
+  String get walkthroughHeldBody2 =>
+      'De app is bovendien gemaakt om voor iedereen vanzelfsprekend te werken.';
+
+  @override
+  String get walkthroughChatTitle => 'Volledig versleutelde chat';
+
+  @override
+  String get walkthroughChatBody1 =>
+      'Elke trade heeft een eigen privéchat, end-to-end versleuteld. Alleen jij en je tegenpartij kunnen hem lezen, tenzij een van jullie de sleutel deelt.';
+
+  @override
+  String get walkthroughChatBody2 =>
+      'Bij een dispuut kan een solver de chat lezen als je de sleutel met hem deelt, en zo helpen de zaak op te lossen.';
+
+  @override
+  String get walkthroughTakeTitle => 'Een order accepteren';
+
+  @override
+  String get walkthroughTakeBody1 =>
+      'Blader door het orderboek, kies een order die je bevalt en loop de trade stap voor stap door.';
+
+  @override
+  String get walkthroughTakeBody2 =>
+      'Je kunt het profiel van je tegenpartij bekijken, veilig chatten en de trade zonder gedoe afronden.';
+
+  @override
+  String get walkthroughMakeTitle => 'Niet gevonden wat je zoekt?';
+
+  @override
+  String get walkthroughMakeBody1 =>
+      'Je kunt ook je eigen order plaatsen en wachten tot iemand hem accepteert.';
+
+  @override
+  String get walkthroughMakeBody2 =>
+      'Kies het bedrag en je favoriete betaalmethode. Mostro regelt de rest.';
+
+  @override
+  String get walkthroughNext => 'Volgende';
+
+  @override
+  String walkthroughStepCounter(int current, int total) {
+    return '$current / $total';
+  }
+
+  @override
+  String walkthroughStepSemantics(int current, int total) {
+    return 'Stap $current van $total';
+  }
 
   @override
   String get tabBuyBtc => 'BTC kopen';
@@ -580,8 +635,19 @@ class AppLocalizationsNl extends AppLocalizations {
   String get nodeStatusUnreachableNoSignal => 'Reageert niet';
 
   @override
-  String get nodeDisclaimerShort =>
-      'Elke node wordt beheerd door een zelfstandige derde partij. Mostro is niet verantwoordelijk voor hun handelen of voor jouw trades.';
+  String get nodeChoiceSubtitle =>
+      'Kies de Mostro-node waarop je wilt handelen';
+
+  @override
+  String get nodeOperatorDisclaimer =>
+      'Het ontwikkelteam van Mostro is niet verantwoordelijk voor wat node-beheerders met het platform doen. Elke beheerder bestuurt een eigen Mostro-node en is als enige verantwoordelijk voor wat daar gebeurt. Door Mostro te gebruiken neem je de volledige verantwoordelijkheid voor je eigen trades, en erken je dat het ontwikkelteam geen zeggenschap heeft over afzonderlijke node-beheerders.';
+
+  @override
+  String get nodeChoiceConfirm => 'Deze node gebruiken';
+
+  @override
+  String get nodeChoiceSaveFailed =>
+      'Je keuze kon niet worden opgeslagen. Probeer het opnieuw.';
 
   @override
   String get nodeVerifyKeyWarning =>
@@ -1416,8 +1482,12 @@ class AppLocalizationsNl extends AppLocalizations {
       'Verloopt de tijd, dan gaat de order uit het orderboek. Dat raakt je reputatie niet.';
 
   @override
-  String get tradeTimerWaitingInvoiceConsequence =>
-      'Verloopt de tijd, dan wordt de trade geannuleerd en komt de order terug in het orderboek.';
+  String get tradeTimerExpiryBackToBook =>
+      'Verloopt de tijd, dan komt de order terug in het orderboek.';
+
+  @override
+  String get tradeTimerExpiryCancelled =>
+      'Verloopt de tijd, dan wordt de order geannuleerd.';
 
   @override
   String get tradeStepOrderTaken => 'Order geaccepteerd';
@@ -2216,10 +2286,33 @@ class AppLocalizationsNl extends AppLocalizations {
       'Nog geen chat: zolang de trade niet actief is, weet geen van beiden wie de ander is.';
 
   @override
-  String get tradeChatEncrypted => 'End-to-end versleutelde chat';
+  String get tradeChatEncrypted => 'End-to-end versleuteld';
 
   @override
   String get tradeChatClosed => 'Gesprek gesloten · berichten bekijken';
+
+  @override
+  String get tradeChatWithBuyer => 'Chat met de koper';
+
+  @override
+  String get tradeChatWithSeller => 'Chat met de verkoper';
+
+  @override
+  String get tradeChatWithCounterpart => 'Chat met je tegenpartij';
+
+  @override
+  String tradeChatNewMessages(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count nieuwe berichten',
+      one: '1 nieuw bericht',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get tradeChatOpen => 'Openen';
 
   @override
   String get tradeChatClosedAnnouncement =>
@@ -2722,7 +2815,21 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
-  String get aboutLimitsFootnote => 'Grenzen in satoshi per order';
+  String get aboutNodeDepositNone => 'Nee';
+
+  @override
+  String aboutNodeDepositFloor(String amount) {
+    return 'min. $amount sats';
+  }
+
+  @override
+  String get aboutDepositCell => 'Borg';
+
+  @override
+  String get aboutCurrenciesCell => 'Valuta';
+
+  @override
+  String get aboutOrderExpiryCell => 'Verloop';
 
   @override
   String get aboutNodeTechnicalDataRow => 'Technische gegevens van de node';
@@ -2752,7 +2859,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String aboutHoursShort(int count) {
-    return '$count u';
+    return '$count u';
   }
 
   @override
@@ -3471,21 +3578,19 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
-  String get invoiceExpiredTitle => 'De invoice is verlopen';
-
-  @override
-  String get invoiceExpiredBody =>
-      'Er is niet op tijd betaald: Mostro annuleert de trade en er zijn geen sats uit je wallet gegaan.';
-
-  @override
   String get invoiceBackToBook => 'Terug naar het orderboek';
 
   @override
-  String get invoiceTimeUpTitle => 'De tijd is om';
+  String get invoiceStepElapsed =>
+      'De tijd is om. Mostro sluit deze stap binnenkort af als hij niet wordt voltooid.';
 
   @override
-  String get invoiceTimeUpBody =>
-      'De invoice is niet op tijd verstuurd: Mostro annuleert de trade. Van jouw kant is er niets vastgelegd.';
+  String get stepElapsedBackToBook =>
+      'De tijd is om. Wordt de stap niet voltooid, dan zet Mostro de order binnenkort terug in het orderboek.';
+
+  @override
+  String get stepElapsedCancelled =>
+      'De tijd is om. Wordt de stap niet voltooid, dan annuleert Mostro de order binnenkort.';
 
   @override
   String invoiceErrorWrongNetwork(String invoice, String node) {
@@ -3731,6 +3836,13 @@ class AppLocalizationsNl extends AppLocalizations {
   String get fundsAtRiskBondInvoicePending => 'Borgfactuur nog te betalen';
 
   @override
+  String get fundsAtRiskCashuBalance => 'Ecash in de Cashu-portemonnee';
+
+  @override
+  String get fundsAtRiskCashuHint =>
+      'Alleen de woorden van deze gebruiker brengen het terug';
+
+  @override
   String get fundsAtRiskKeep => 'Deze gebruiker houden';
 
   @override
@@ -3949,6 +4061,45 @@ class AppLocalizationsNl extends AppLocalizations {
   String get cashuNotConnected => 'Niet verbonden met een mint';
 
   @override
+  String get cashuNoMintSet =>
+      'Geen mint ingesteld. Stel er een in, of ontvang een token om de mint daarvan te gebruiken.';
+
+  @override
+  String get cashuSetMintButton => 'Mint instellen';
+
+  @override
+  String get cashuChangeMintButton => 'Mint wijzigen';
+
+  @override
+  String get cashuMintDialogTitle => 'Cashu-mint';
+
+  @override
+  String get cashuMintFieldLabel => 'Mint-URL';
+
+  @override
+  String get cashuMintFieldHint => 'https://mint.example.com';
+
+  @override
+  String get cashuChangeMintTitle => 'Mint wijzigen?';
+
+  @override
+  String cashuChangeMintWarning(String sats, String mint) {
+    return 'Je $sats sats blijven bij $mint. Ze komen terug zodra je weer met die mint verbindt.';
+  }
+
+  @override
+  String get cashuErrorNoMint =>
+      'Stel eerst een mint in de Cashu-portemonnee in.';
+
+  @override
+  String get cashuErrorInvalidMintUrl =>
+      'Dat is geen bruikbare mint-URL. Hij moet beginnen met https://.';
+
+  @override
+  String get cashuErrorWalletOnOtherMint =>
+      'Je Cashu-portemonnee gebruikt een andere mint. Schakel in Instellingen → Cashu-portemonnee over naar de mint van deze node en probeer het opnieuw.';
+
+  @override
   String get cashuReceiveButton => 'Ontvangen';
 
   @override
@@ -3956,6 +4107,18 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get cashuReceiveHint => 'Plak of scan een Cashu-token';
+
+  @override
+  String get cashuReceiveTitle => 'Token ontvangen';
+
+  @override
+  String get cashuTokenFieldLabel => 'Cashu-token';
+
+  @override
+  String get cashuPasteTokenHint => 'Plak een Cashu-token';
+
+  @override
+  String get qrScanUnavailable => 'Niet beschikbaar op dit apparaat';
 
   @override
   String get cashuAmountLabel => 'Bedrag in sats';
@@ -3986,7 +4149,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get cashuWalletExplanation =>
-      'Deze portemonnee bewaart ecash die is uitgegeven door de mint die je Mostro-node gebruikt. Hij dient om trades op die node te financieren en te ontvangen — het is geen portemonnee voor algemeen gebruik.';
+      'Deze portemonnee bewaart ecash van de mint die je kiest. Hij dient om Cashu-trades te financieren en te ontvangen — het is geen portemonnee voor algemeen gebruik.';
 
   @override
   String get cashuErrorNotEnabled =>
@@ -4002,7 +4165,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get cashuErrorMintUnusable =>
-      'De mint van deze node mist functies die de escrow nodig heeft, dus handelen is hier niet mogelijk.';
+      'Deze mint mist functies die de portemonnee nodig heeft. Kies een andere mint.';
 
   @override
   String get cashuErrorUnsupportedOnWeb =>
@@ -4045,10 +4208,6 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get cashuTokenTooLargeForQr =>
       'Deze token is te groot voor een QR-code. Kopieer hem in plaats daarvan.';
-
-  @override
-  String get cashuErrorMintChanged =>
-      'De actieve node is gewijzigd en deze portemonnee hoort bij een andere mint. Ga terug en open de portemonnee opnieuw.';
 
   @override
   String get cashuErrorNoMnemonic =>
@@ -4226,4 +4385,71 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get settingsMintCopied => 'Mint-URL gekopieerd';
+
+  @override
+  String get pwaInstallTitle => 'Mostro installeren';
+
+  @override
+  String get pwaInstallBody =>
+      'Open hem vanaf je beginscherm, schermvullend, zoals elke andere app.';
+
+  @override
+  String get pwaInstallAction => 'Installeren';
+
+  @override
+  String get pwaInstallNotNow => 'Niet nu';
+
+  @override
+  String get pwaInstallSettingTitle => 'App installeren';
+
+  @override
+  String get pwaInstallStepsTitle => 'Zet Mostro op je beginscherm';
+
+  @override
+  String get pwaInstallStepShare =>
+      'Tik op de deelknop in de balk van je browser.';
+
+  @override
+  String get pwaInstallStepAdd => 'Kies ‘Zet op beginscherm’.';
+
+  @override
+  String get pwaInstallStepsDone => 'Begrepen';
+
+  @override
+  String get myReputationTitle => 'Jouw reputatie';
+
+  @override
+  String myReputationReviews(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count beoordelingen',
+      one: '1 beoordeling',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String myReputationSince(String date) {
+    return 'sinds $date';
+  }
+
+  @override
+  String get myReputationNoReviews =>
+      'Nog geen beoordelingen. Je reputatie begint bij je eerste beoordeelde ruil.';
+
+  @override
+  String get myReputationPrivacyMode =>
+      'De volledige privacymodus houdt geen reputatie bij. Kies hieronder de reputatiemodus om er een op te bouwen.';
+
+  @override
+  String get myReputationLoading => 'Je node wordt gevraagd…';
+
+  @override
+  String get myReputationUnavailable => 'Je node heeft nog niet geantwoord.';
+
+  @override
+  String myReputationOnNode(String node) {
+    return 'Op $node';
+  }
 }
