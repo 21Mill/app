@@ -1312,6 +1312,79 @@ mod tests {
         ("forget_identity_state", false),
     ];
 
+    /// A deletion whose data wipe fails gives up none of the identity's
+    /// persisted state: its row and its trade-key mappings, which name its
+    /// orders, stay with the trades and chats the wipe kept (review of #573).
+    /// Wiped one by one ahead of the rows, they were gone while the rows
+    /// stayed, so an identity loaded back over those rows could no longer
+    /// act on its own trades.
+    ///
+    /// The wipe is made to fail by a trigger aborting the delete of one of
+    /// the identity's settings rows, on a throwaway store; the identity is
+    /// installed and deleted on a slot of its own.
+    #[tokio::test]
+    async fn a_deletion_whose_wipe_fails_keeps_the_identity_and_its_trade_keys() {
+        let path = std::env::temp_dir().join(format!(
+            "mostro_identity_wipe_fails_{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let db = crate::db::sqlite::SqliteStorage::open(path.to_str().unwrap())
+            .await
+            .unwrap();
+
+        // Installed directly, not through `load_in`, whose legacy-store claim
+        // reads the process-wide database: nothing here leaves this slot.
+        let words = key_ops::generate_mnemonic().unwrap();
+        let keys = key_ops::derive_master_key(&words).unwrap();
+        let info = stored_identity(&keys.public_key().to_hex(), 3);
+        let slot = IdentitySlot::new();
+        *slot.state.write().await = Some(IdentityState {
+            mnemonic_words: words,
+            keys,
+            identity_info: info.clone(),
+        });
+        db.save_identity(&info).await.unwrap();
+        db.save_trade_key("order-a", 2).await.unwrap();
+        let cursor = crate::db::settings_keys::status_cursor("order-a");
+        db.set_setting(&cursor, "1").await.unwrap();
+
+        let mut conn = <sqlx::sqlite::SqliteConnection as sqlx::Connection>::connect_with(
+            &sqlx::sqlite::SqliteConnectOptions::new().filename(&path),
+        )
+        .await
+        .unwrap();
+        sqlx::query(&format!(
+            "CREATE TRIGGER wipe_fails BEFORE DELETE ON settings \
+             WHEN old.key = '{cursor}' BEGIN SELECT RAISE(ABORT, 'wipe fails'); END"
+        ))
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+        let effects = CallLog::default();
+        delete_in(&slot, Some(&db), &SpyEffects(&effects))
+            .await
+            .expect("a failed cleanup is reported, never a failed deletion");
+
+        assert!(slot.state.read().await.is_none(), "the identity is retired");
+        assert_eq!(
+            db.get_identity().await.unwrap().map(|i| i.public_key),
+            Some(info.public_key),
+            "the identity row stays with the rows the wipe kept",
+        );
+        assert_eq!(
+            db.get_trade_key("order-a").await.unwrap(),
+            Some(2),
+            "the trade-key mappings stay with the trades they name",
+        );
+        assert_eq!(db.get_setting(&cursor).await.unwrap().as_deref(), Some("1"));
+
+        drop(conn);
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
+
     #[test]
     fn deriving_without_durable_storage_is_refused() {
         // Asserted as a pure decision, not through `derive_trade_key`: that
