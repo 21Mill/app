@@ -182,6 +182,8 @@ cooperative_cancel_state: CooperativeCancelState?
 timeout_at: i64?
 started_at: i64
 completed_at: i64?
+escrow_locked_at: i64?
+escrow_node: String?
 outcome: TradeOutcome?
 peer_rating: f64?
 peer_reviews: u32?
@@ -197,6 +199,12 @@ predate it and for a value Dart's `DateTime` cannot hold. Like
 `order.maker_since` for the maker, the UI computes the age
 from it at display time and falls back to `peer_days`, a count frozen when
 the daemon sent it.
+
+`escrow_locked_at` is when the seller's hold invoice was accepted (the
+node's clock, the oldest daemon message that moved the order out of
+`waiting-payment`) and `escrow_node` the node that sent it; both `None`
+until recorded. See `data-model.md` and `trade_escrow_deadline`
+(`contracts/orders.md`).
 
 `bond` is set when the node required an anti-abuse bond for this trade, and
 `None` otherwise (and on rows written before the field existed).

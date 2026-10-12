@@ -286,6 +286,15 @@ bridged by flutter_rust_bridge.
   means "taken, real state unknown", and a trade's status comes from daemon messages only
   (`wire_status_applies` guards both ingest paths). Treating it as `Active` offers actions the
   daemon rejects with `CantDo` (#203).
+- **The Active / fiat-sent countdown is mostrod's escrow deadline, an estimate.** It counts
+  from `TradeInfo::escrow_locked_at`: the `created_at` of the daemon message that moved the
+  order out of `waiting-payment`, **the oldest one**, never the first to arrive (a replay comes
+  newest-first, and on a buy order `hold-invoice-payment-accepted` is re-sent once the buyer's
+  invoice arrives). It adds the window of the node that sent it (`escrow_node`, not the active
+  node): `hold_invoice_cltv_delta − escrow_deadline_margin_blocks` blocks of ten minutes, the
+  margin assumed 24 on mostrod ≥ 0.18.3 without the tag. Never the 38383 `expires_at`, which
+  after the take is the event's retention (~15 days). No lock time, a Cashu node or a node
+  without the guardian means no countdown, never an invented one.
 - **A `success` keeps its peer chat for one hour, dated by the completion itself (#642).**
   `completed_at` is written for `success` alone, before that status reaches the trade row, from
   the `created_at` of what carried it — the buyer's `purchase-completed`, the
