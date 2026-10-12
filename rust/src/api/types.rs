@@ -378,6 +378,19 @@ pub struct TradeInfo {
     pub timeout_at: Option<i64>,
     pub started_at: i64,
     pub completed_at: Option<i64>,
+    /// Unix seconds (the node's clock) when the seller's hold invoice was
+    /// accepted: the `created_at` of the daemon message that moved the order
+    /// out of `waiting-payment`. The escrow deadline guardian counts from
+    /// there. The oldest candidate is kept, so a replayed or re-sent message
+    /// never moves it. `None` until recorded, and on rows written before the
+    /// field existed (`#[serde(default)]`).
+    #[serde(default)]
+    pub escrow_locked_at: Option<i64>,
+    /// The node (hex pubkey) that sent the message [`Self::escrow_locked_at`]
+    /// was taken from: its info event says how far the deadline is, whichever
+    /// node is active now.
+    #[serde(default)]
+    pub escrow_node: Option<String>,
     pub outcome: Option<TradeOutcome>,
     /// Counterparty (taker) reputation snapshot from the daemon's follow-up
     /// Peer DM (issue #305). All-zeros is ambiguous on the wire — a brand-new

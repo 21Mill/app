@@ -9981,6 +9981,8 @@ impl SseDecode for crate::api::types::TradeInfo {
         let mut var_timeoutAt = <Option<i64>>::sse_decode(deserializer);
         let mut var_startedAt = <i64>::sse_decode(deserializer);
         let mut var_completedAt = <Option<i64>>::sse_decode(deserializer);
+        let mut var_escrowLockedAt = <Option<i64>>::sse_decode(deserializer);
+        let mut var_escrowNode = <Option<String>>::sse_decode(deserializer);
         let mut var_outcome = <Option<crate::api::types::TradeOutcome>>::sse_decode(deserializer);
         let mut var_peerRating = <Option<f64>>::sse_decode(deserializer);
         let mut var_peerReviews = <Option<u32>>::sse_decode(deserializer);
@@ -10007,6 +10009,8 @@ impl SseDecode for crate::api::types::TradeInfo {
             timeout_at: var_timeoutAt,
             started_at: var_startedAt,
             completed_at: var_completedAt,
+            escrow_locked_at: var_escrowLockedAt,
+            escrow_node: var_escrowNode,
             outcome: var_outcome,
             peer_rating: var_peerRating,
             peer_reviews: var_peerReviews,
@@ -12746,6 +12750,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::TradeInfo {
             self.timeout_at.into_into_dart().into_dart(),
             self.started_at.into_into_dart().into_dart(),
             self.completed_at.into_into_dart().into_dart(),
+            self.escrow_locked_at.into_into_dart().into_dart(),
+            self.escrow_node.into_into_dart().into_dart(),
             self.outcome.into_into_dart().into_dart(),
             self.peer_rating.into_into_dart().into_dart(),
             self.peer_reviews.into_into_dart().into_dart(),
@@ -15031,6 +15037,8 @@ impl SseEncode for crate::api::types::TradeInfo {
         <Option<i64>>::sse_encode(self.timeout_at, serializer);
         <i64>::sse_encode(self.started_at, serializer);
         <Option<i64>>::sse_encode(self.completed_at, serializer);
+        <Option<i64>>::sse_encode(self.escrow_locked_at, serializer);
+        <Option<String>>::sse_encode(self.escrow_node, serializer);
         <Option<crate::api::types::TradeOutcome>>::sse_encode(self.outcome, serializer);
         <Option<f64>>::sse_encode(self.peer_rating, serializer);
         <Option<u32>>::sse_encode(self.peer_reviews, serializer);

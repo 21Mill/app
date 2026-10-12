@@ -1086,6 +1086,14 @@ mod tests {
         async fn mark_trade_completed(&self, _order_id: &str, _completed_at: i64) -> Result<()> {
             unimplemented!()
         }
+        async fn mark_escrow_locked(
+            &self,
+            _order_id: &str,
+            _locked_at: i64,
+            _node: &str,
+        ) -> Result<()> {
+            unimplemented!()
+        }
         async fn set_cooperative_cancel_state(
             &self,
             _order_id: &str,

@@ -652,6 +652,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: Some(1),
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: Some(TradeOutcome::Success),
             peer_rating: None,
             peer_reviews: None,

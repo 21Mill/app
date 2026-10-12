@@ -8989,8 +8989,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TradeInfo dco_decode_trade_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 25)
-      throw Exception('unexpected arr length: expect 25 but see ${arr.length}');
+    if (arr.length != 27)
+      throw Exception('unexpected arr length: expect 27 but see ${arr.length}');
     return TradeInfo(
       id: dco_decode_String(arr[0]),
       order: dco_decode_order_info(arr[1]),
@@ -9005,19 +9005,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       timeoutAt: dco_decode_opt_box_autoadd_i_64(arr[9]),
       startedAt: dco_decode_i_64(arr[10]),
       completedAt: dco_decode_opt_box_autoadd_i_64(arr[11]),
-      outcome: dco_decode_opt_box_autoadd_trade_outcome(arr[12]),
-      peerRating: dco_decode_opt_box_autoadd_f_64(arr[13]),
-      peerReviews: dco_decode_opt_box_autoadd_u_32(arr[14]),
-      peerDays: dco_decode_opt_box_autoadd_u_32(arr[15]),
-      peerSince: dco_decode_opt_box_autoadd_i_64(arr[16]),
-      ratedAt: dco_decode_opt_box_autoadd_i_64(arr[17]),
-      bond: dco_decode_opt_box_autoadd_bond_info(arr[18]),
-      buyerTradePubkey: dco_decode_opt_String(arr[19]),
-      sellerTradePubkey: dco_decode_opt_String(arr[20]),
-      cashuMintUrl: dco_decode_opt_String(arr[21]),
-      cashuEscrowToken: dco_decode_opt_String(arr[22]),
-      cashuLockedAt: dco_decode_opt_box_autoadd_i_64(arr[23]),
-      cashuRejectedEscrowTokens: dco_decode_list_String(arr[24]),
+      escrowLockedAt: dco_decode_opt_box_autoadd_i_64(arr[12]),
+      escrowNode: dco_decode_opt_String(arr[13]),
+      outcome: dco_decode_opt_box_autoadd_trade_outcome(arr[14]),
+      peerRating: dco_decode_opt_box_autoadd_f_64(arr[15]),
+      peerReviews: dco_decode_opt_box_autoadd_u_32(arr[16]),
+      peerDays: dco_decode_opt_box_autoadd_u_32(arr[17]),
+      peerSince: dco_decode_opt_box_autoadd_i_64(arr[18]),
+      ratedAt: dco_decode_opt_box_autoadd_i_64(arr[19]),
+      bond: dco_decode_opt_box_autoadd_bond_info(arr[20]),
+      buyerTradePubkey: dco_decode_opt_String(arr[21]),
+      sellerTradePubkey: dco_decode_opt_String(arr[22]),
+      cashuMintUrl: dco_decode_opt_String(arr[23]),
+      cashuEscrowToken: dco_decode_opt_String(arr[24]),
+      cashuLockedAt: dco_decode_opt_box_autoadd_i_64(arr[25]),
+      cashuRejectedEscrowTokens: dco_decode_list_String(arr[26]),
     );
   }
 
@@ -12028,6 +12030,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_timeoutAt = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_startedAt = sse_decode_i_64(deserializer);
     var var_completedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_escrowLockedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_escrowNode = sse_decode_opt_String(deserializer);
     var var_outcome = sse_decode_opt_box_autoadd_trade_outcome(deserializer);
     var var_peerRating = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_peerReviews = sse_decode_opt_box_autoadd_u_32(deserializer);
@@ -12054,6 +12058,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       timeoutAt: var_timeoutAt,
       startedAt: var_startedAt,
       completedAt: var_completedAt,
+      escrowLockedAt: var_escrowLockedAt,
+      escrowNode: var_escrowNode,
       outcome: var_outcome,
       peerRating: var_peerRating,
       peerReviews: var_peerReviews,
@@ -14934,6 +14940,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.timeoutAt, serializer);
     sse_encode_i_64(self.startedAt, serializer);
     sse_encode_opt_box_autoadd_i_64(self.completedAt, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.escrowLockedAt, serializer);
+    sse_encode_opt_String(self.escrowNode, serializer);
     sse_encode_opt_box_autoadd_trade_outcome(self.outcome, serializer);
     sse_encode_opt_box_autoadd_f_64(self.peerRating, serializer);
     sse_encode_opt_box_autoadd_u_32(self.peerReviews, serializer);

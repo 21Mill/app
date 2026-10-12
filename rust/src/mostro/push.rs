@@ -374,6 +374,8 @@ mod tests {
             timeout_at: None,
             started_at: 0,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,

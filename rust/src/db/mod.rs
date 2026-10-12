@@ -465,6 +465,13 @@ pub trait Storage: Send + Sync {
     /// exists.
     async fn mark_trade_completed(&self, order_id: &str, completed_at: i64) -> Result<()>;
 
+    /// Record when the escrow of the trade identified by `order.id` locked
+    /// (`$.escrow_locked_at`, unix seconds) and the node that said so
+    /// (`$.escrow_node`), unless the row already holds an older time: the
+    /// oldest wins, so a replayed or re-sent message never moves it. No-op
+    /// when no matching trade exists.
+    async fn mark_escrow_locked(&self, order_id: &str, locked_at: i64, node: &str) -> Result<()>;
+
     /// Record who asked to cancel an active trade cooperatively
     /// (`$.cooperative_cancel_state`) on the trade identified by `order.id`.
     /// The status is left alone: the protocol has no cancel-requested status,
