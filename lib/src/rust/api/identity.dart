@@ -43,6 +43,18 @@ Future<IdentityInfo> loadIdentityFromMnemonic({
   createdAt: createdAt,
 );
 
+/// Check that `words` are a phrase the core accepts, without loading it: a
+/// bad word or a bad checksum fails with `invalid mnemonic: …`, as an import
+/// of them would.
+///
+/// The Account screen's import deletes the current identity before it
+/// imports, and the deletion wipes that identity's trades, chats and payout
+/// claims. So the words are checked first, here, by the same derivation the
+/// import runs (`derive_master_key` is the validation): a phrase the import
+/// would refuse never costs the previous identity its rows (review of #573).
+Future<void> validateMnemonic({required List<String> words}) =>
+    RustLib.instance.api.crateApiIdentityValidateMnemonic(words: words);
+
 /// Import identity from a BIP-39 mnemonic phrase (user-entered recovery).
 ///
 /// When `recover = true`, the daemon recovery flow is triggered (Phase 7).

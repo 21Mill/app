@@ -88,7 +88,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 461785622;
+  int get rustContentHash => -531377198;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -679,6 +679,8 @@ abstract class RustLibApi extends BaseApi {
   Future<PlatformInt64?> crateApiInvoiceTradeStepStartedAt({
     required String orderId,
   });
+
+  Future<void> crateApiIdentityValidateMnemonic({required List<String> words});
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_AnyMessageStream;
@@ -6894,6 +6896,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "trade_step_started_at",
         argNames: ["orderId"],
       );
+
+  @override
+  Future<void> crateApiIdentityValidateMnemonic({required List<String> words}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_String(words, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 194,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiIdentityValidateMnemonicConstMeta,
+        argValues: [words],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIdentityValidateMnemonicConstMeta =>
+      const TaskConstMeta(debugName: "validate_mnemonic", argNames: ["words"]);
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_AnyMessageStream =>

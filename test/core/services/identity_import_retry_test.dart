@@ -38,8 +38,7 @@ class _Api implements RustLibApi {
     loaded = false;
   }
 
-  // No `@override` yet: the bridge gains this call with the fix, and the
-  // test must compile without it.
+  @override
   Future<void> crateApiIdentityValidateMnemonic({
     required List<String> words,
   }) async {
@@ -289,6 +288,7 @@ class _Delegate implements RustLibApi {
   Future<void> crateApiIdentityDeleteIdentity() =>
       _api().crateApiIdentityDeleteIdentity();
 
+  @override
   Future<void> crateApiIdentityValidateMnemonic({
     required List<String> words,
   }) => _api().crateApiIdentityValidateMnemonic(words: words);

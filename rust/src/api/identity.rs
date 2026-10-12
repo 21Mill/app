@@ -336,6 +336,19 @@ async fn load_unlocked<S: Storage>(
     Ok(identity_info)
 }
 
+/// Check that `words` are a phrase the core accepts, without loading it: a
+/// bad word or a bad checksum fails with `invalid mnemonic: …`, as an import
+/// of them would.
+///
+/// The Account screen's import deletes the current identity before it
+/// imports, and the deletion wipes that identity's trades, chats and payout
+/// claims. So the words are checked first, here, by the same derivation the
+/// import runs (`derive_master_key` is the validation): a phrase the import
+/// would refuse never costs the previous identity its rows (review of #573).
+pub fn validate_mnemonic(words: Vec<String>) -> Result<()> {
+    key_ops::derive_master_key(&words).map(|_| ())
+}
+
 /// Import identity from a BIP-39 mnemonic phrase (user-entered recovery).
 ///
 /// When `recover = true`, the daemon recovery flow is triggered (Phase 7).
@@ -2544,6 +2557,36 @@ mod tests {
             store.db.get_trade_key("order-b").await.unwrap(),
             Some(1),
             "the new identity's rows survive the previous one's wipe"
+        );
+    }
+
+    /// The words an import would refuse are refused by the check that runs
+    /// before the deletion, with the same error, and the ones it would
+    /// accept pass.
+    #[test]
+    fn validating_a_phrase_answers_as_the_import_would() {
+        let valid: Vec<String> = "abandon abandon abandon abandon abandon abandon \
+                                  abandon abandon abandon abandon abandon about"
+            .split_whitespace()
+            .map(str::to_string)
+            .collect();
+        validate_mnemonic(valid).unwrap();
+
+        // Twelve valid words whose checksum is wrong.
+        let bad_checksum = vec!["abandon".to_string(); 12];
+        let err = validate_mnemonic(bad_checksum.clone()).unwrap_err();
+        assert!(err.to_string().contains("invalid mnemonic"), "{err}");
+        assert_eq!(
+            err.to_string(),
+            key_ops::derive_master_key(&bad_checksum)
+                .unwrap_err()
+                .to_string()
+        );
+
+        let not_a_word = validate_mnemonic(vec!["mostro".to_string(); 12]).unwrap_err();
+        assert!(
+            not_a_word.to_string().contains("invalid mnemonic"),
+            "{not_a_word}"
         );
     }
 

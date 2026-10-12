@@ -185,8 +185,11 @@ class IdentityService {
   /// Import an identity from a BIP-39 mnemonic phrase and persist it.
   ///
   /// Replaces any currently loaded identity. Throws if [words] is not a valid
-  /// 12- or 24-word BIP-39 phrase.
+  /// 12- or 24-word BIP-39 phrase — checked before the current identity is
+  /// deleted, since the deletion wipes its trades, chats and payout claims
+  /// (review of #573).
   static Future<void> importAndStore(List<String> words) async {
+    await identity_api.validateMnemonic(words: words);
     await _replaceLoadedIdentity(
       () => identity_api.importFromMnemonic(words: words, recover: false),
     );
