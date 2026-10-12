@@ -2598,4 +2598,107 @@ mod tests {
             assert!(check_one_transition_at_a_time(&broken).is_err());
         }
     }
+
+    /// Everything a deletion gives up has its way back for an identity loaded
+    /// again in the same session (review of #573): a replacement refused
+    /// after the deletion reloads the previous identity, and
+    /// `restore_identity_session` must rebuild what a cold start would. A
+    /// teardown step added without its restore — or without saying why a cold
+    /// start leaves it empty too — fails here.
+    #[test]
+    fn every_identity_teardown_has_its_restore() {
+        let identity = production_code(include_str!("identity.rs"));
+        let orders = production_code(include_str!("orders.rs"));
+        let effects = production_code(include_str!("../mostro/delete_effects.rs"));
+        let body = |code: &str, signature: &str| {
+            item_body(code, signature).unwrap_or_else(|e| panic!("{e}"))
+        };
+        let teardown = [
+            body(
+                &orders,
+                "pub(crate) async fn release_identity_subscriptions()",
+            ),
+            body(&identity, "pub(crate) async fn forget_identity_state()"),
+            body(&effects, "impl DeleteEffects for RealDeleteEffects"),
+        ]
+        .concat();
+        let restore = [
+            body(
+                &identity,
+                "pub async fn restore_identity_session() -> Result<()>",
+            ),
+            body(
+                &orders,
+                "pub(crate) async fn restore_identity_subscriptions()",
+            ),
+            body(&orders, "pub(crate) async fn reclaim_book_ownership()"),
+        ]
+        .concat();
+
+        // Each step of the teardown, and what undoes it — `None` where a cold
+        // start leaves it empty too, so the reload matches a restart.
+        let steps: [(&str, Option<&str>); 17] = [
+            // Per-trade receivers are temporary; the bulk feed covers the keys.
+            ("single_order_tasks()", None),
+            ("global_dm_keys()", Some("seed_global_dm_coverage()")),
+            (
+                "watched_orders_subscription_id()",
+                Some("resync_watched_orders("),
+            ),
+            // Per-trade REQs: a cold start opens none either.
+            ("subscriptions::teardown(", None),
+            (
+                "mostro_dm_subscription_id()",
+                Some("resubscribe_global_dm_filter()"),
+            ),
+            (
+                "forget_identity_chats()",
+                Some("resubscribe_active_chats()"),
+            ),
+            // Filled again on demand from the persisted bindings.
+            ("trade_key_map()", None),
+            ("trade_key_misses()", None),
+            // A cold start replays the history with an empty window too.
+            ("forget_processed_daemon_messages()", None),
+            (
+                "forget_identity_disputes()",
+                Some("resubscribe_active_dispute_chats()"),
+            ),
+            // Hydrated from the trade rows on the first read.
+            ("forget_identity_ratings()", None),
+            (
+                "forget_identity_reputation()",
+                Some("my_reputation::spawn_refresh("),
+            ),
+            // The chat rearm installs the sessions again.
+            (
+                "session_manager().clear()",
+                Some("resubscribe_active_chats()"),
+            ),
+            ("set_claim_nodes(", Some("refresh_claim_nodes()")),
+            ("clear_retained()", Some("refresh_claim_nodes()")),
+            ("forget_book_ownership()", Some("reclaim_book_ownership()")),
+            ("unregister_all()", Some("push::request_reconcile()")),
+        ];
+        for (step, undo) in steps {
+            assert!(
+                teardown.contains(step),
+                "{step} is no longer a teardown step: update this list"
+            );
+            if let Some(undo) = undo {
+                assert!(
+                    restore.contains(undo),
+                    "{step} is given up by a deletion, so the reload must call {undo}"
+                );
+            }
+        }
+        // A tripwire on the size of the teardown: a new step changes it, and
+        // whoever adds one updates `steps` and the restore with it.
+        assert_eq!(
+            teardown.matches(';').count(),
+            21,
+            "the identity teardown changed: give the new step its restore \
+             (or say why a cold start does not rebuild it), then update this count"
+        );
+    }
 }
