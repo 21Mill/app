@@ -34,9 +34,11 @@ a stale replay:
   index, and the maker row is persisted from the echoed order itself (#394;
   the payload is the published order, min/max included).
 - **take**: reconciled — the nonce-correlated late reply is consumed as the
-  take's (so a stale replay still touches nothing) and then falls through to
-  the normal dispatch, which rebuilds the row and pushes the UI, with no
-  restart (#566). The row is built from the pending record's own snapshot of
+  take's (so a stale replay still touches nothing) and handed to the
+  late-take reconcile (`reconcile_late_take`, in `api/orders/late_take.rs`),
+  which builds, persists and wires up the row and pushes the UI, with no
+  restart (#566); the normal dispatch's arms then run on that row. The row
+  is built from the pending record's own snapshot of
   the taken book order — same order, same role, same range amount, same
   classification of the reply the live waiter would have applied — through
   the live path's row builder, so it is the live path's row: a fresh id, the
@@ -69,7 +71,10 @@ a stale replay:
   terminal guard would read the earlier row's status as this take's) before
   anything is written. The replacement is **one storage transaction**
   (`Storage::replace_trades_for_order`): whatever fails, or if the process
-  dies halfway, the order keeps the earlier row. The reply is never applied
+  dies halfway, the order keeps the earlier row. It is written through the
+  same steps as every other trade row (`persist_trade_row_in`, with
+  `TradeWrite::ReplaceForOrder`): the tombstone lift before the write, the
+  touch after it. The reply is never applied
   to the earlier row: when it proves no row of its own (a late
   `pay-bond-invoice`, a cursor-refused reply) it is dropped with that row
   left in place.

@@ -766,11 +766,14 @@ mod tests {
 
     /// #566: a genuine take reply arriving after the caller's 10 s timeout
     /// must land the trade while the app runs. The dispatcher consumes the
-    /// detached record and falls through to the normal dispatch, where the
-    /// row is rebuilt from the message itself (#394) — restart no longer
-    /// required. Restoring the old early return fails this test (the issue's
-    /// mutation guard), and the trailing replay asserts the record was
-    /// consumed exactly once: the same message again changes nothing.
+    /// detached record and hands the reply to the late-take reconcile, which
+    /// builds the row from the record's snapshot of the order taken
+    /// ([`take_snapshot_row`]) — the row the live waiter would have built —
+    /// then persists it, binds its key and wires it up as an accepted take:
+    /// no restart required. Restoring the old early return fails this test
+    /// (the issue's mutation guard), and the trailing replay asserts the
+    /// record was consumed exactly once: the same message again changes
+    /// nothing.
     #[tokio::test]
     async fn a_late_take_reply_lands_the_trade_without_a_restart() {
         // Current timestamps: a row this recent stays inside the stale
