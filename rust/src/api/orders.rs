@@ -3148,10 +3148,12 @@ async fn record_escrow_lock(
     if trade.escrow_locked_at.is_some_and(|held| held <= event_ts) {
         return;
     }
-    // A message dated beyond the tolerated skew is not a trustworthy start.
+    // A message dated beyond the tolerated skew is not a trustworthy start,
+    // and one dated at or before the epoch is no date at all: kept as the
+    // oldest, it would expire the deadline for good.
     let horizon =
         crate::rt::unix_now().saturating_add(crate::nostr::transport::MAX_CLOCK_SKEW_SECS as i64);
-    if event_ts > horizon {
+    if event_ts <= 0 || event_ts > horizon {
         return;
     }
     let Some(db) = crate::db::app_db::db() else {
@@ -16273,6 +16275,14 @@ mod tests {
             escrow_lock_of(&order_id).await,
             (Some(3_000), Some(node.clone()))
         );
+
+        // A message dated at the epoch is no date: it is not kept, so it
+        // cannot stand as the oldest over the real one.
+        let (uuid, order_id) = waiting_payment_row(OrderKind::Sell).await;
+        dispatch_daemon_message_at(uuid, Action::HoldInvoicePaymentAccepted, None, 0).await;
+        assert_eq!(escrow_lock_of(&order_id).await, (None, None));
+        dispatch_daemon_message_at(uuid, Action::HoldInvoicePaymentAccepted, None, 2_500).await;
+        assert_eq!(escrow_lock_of(&order_id).await.0, Some(2_500));
 
         // The seller's side of it, replayed newest-first.
         let (uuid, order_id) = waiting_payment_row(OrderKind::Buy).await;
