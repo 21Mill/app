@@ -265,7 +265,11 @@ bridged by flutter_rust_bridge.
   `delete_identity` (generate *and* import go through it) wipes what the identity produced:
   rows via `Storage::clear_identity_data`, Rust's in-memory stores via `forget_identity_state`,
   relay subscriptions via `release_identity_subscriptions`, and the Dart caches via
-  `resetIdentityScopedState` (issue #533). Device preferences stay (relays, node choice,
+  `resetIdentityScopedState` (issue #533). A task that can still write for the old identity is
+  stopped **first**, and awaited, before anything is cleared — today the late-take retries
+  (#566), by `forget_late_take_retries` at the head of `release_identity_subscriptions`. A new
+  one goes there too, or what it writes after the clears leaks into the next user's session.
+  Device preferences stay (relays, node choice,
   push token, overrides). Anything new that holds per-trade or per-identity data — a table, a
   `settings` key family (add its prefix to `IDENTITY_SCOPED_PREFIXES`), a process-wide store,
   a non-`autoDispose` provider — must be added to the matching one, or it leaks into the next
