@@ -2080,4 +2080,161 @@ mod tests {
         );
     }
 
+    // ── The shipped registry, across runtime threads (#566 review) ──────────
+    //
+    // Every test above runs the registry on one thread. These run the type
+    // the app ships — a `Mutex`, shared by tasks on different workers — each
+    // over a registry of its own, leaked like the app's static, so no other
+    // test's retries are in it. They drive `start_retry_task` and the
+    // teardown's own halves, never a copy of them.
+
+    fn own_registry() -> &'static RetryRegistry {
+        Box::leak(Box::default())
+    }
+
+    /// Waits, boundedly, until every retry task in `registry` has finished
+    /// and taken itself out.
+    async fn until_no_retry_tasks(registry: &'static RetryRegistry) {
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !lock_retries(registry).tasks.is_empty() {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("every retry task finishes and deregisters");
+    }
+
+    /// The teardown waits for a retry caught in the middle of a poll on
+    /// another worker. An abort only lands at a task's next poll, so without
+    /// the wait the teardown would go on — and the next identity begin —
+    /// while the old identity's retry still runs. The task blocks its worker
+    /// synchronously until released: mid-poll, not parked at an await, which
+    /// is the one case an abort alone does not stop.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_teardown_waits_for_a_retry_caught_mid_poll_on_another_worker() {
+        use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+        let registry = own_registry();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel::<()>();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let ended = std::sync::Arc::new(AtomicBool::new(false));
+        let ended_in_task = std::sync::Arc::clone(&ended);
+        let scheduled = start_retry_task(registry, 0, "test-mt-mid-poll", || {}, |_| {
+            Box::pin(async move {
+                entered_tx.send(()).expect("the test listens");
+                // Blocks this worker: the task is inside a poll.
+                release_rx.recv().expect("the test releases it");
+                ended_in_task.store(true, SeqCst);
+            })
+        });
+        assert!(matches!(scheduled, Scheduled::Attempt { attempt: 0, .. }));
+        tokio::task::spawn_blocking(move || entered_rx.recv().expect("the retry starts"))
+            .await
+            .expect("the wait for the retry");
+
+        let tasks = lock_retries(registry).begin_forget();
+        let teardown = tokio::spawn(stop_retry_tasks(tasks));
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert!(
+            !teardown.is_finished(),
+            "the teardown is still waiting while the retry runs"
+        );
+        release_tx.send(()).expect("the retry is waiting");
+        tokio::time::timeout(std::time::Duration::from_secs(5), teardown)
+            .await
+            .expect("the teardown returns once the retry has stopped")
+            .expect("the teardown task");
+        assert!(
+            ended.load(SeqCst),
+            "the poll the abort caught ran to its end — which is why the wait is needed"
+        );
+        assert!(lock_retries(registry).tasks.is_empty());
+    }
+
+    /// The teardown stops a retry parked at an await at once — aborted, not
+    /// waited out — and the retry never runs past that await.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_teardown_aborts_a_retry_parked_at_an_await_on_another_worker() {
+        use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+        let registry = own_registry();
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel::<()>();
+        let resumed = std::sync::Arc::new(AtomicBool::new(false));
+        let resumed_in_task = std::sync::Arc::clone(&resumed);
+        let scheduled = start_retry_task(registry, 0, "test-mt-parked", || {}, |_| {
+            Box::pin(async move {
+                let _ = entered_tx.send(());
+                std::future::pending::<()>().await;
+                resumed_in_task.store(true, SeqCst);
+            })
+        });
+        assert!(matches!(scheduled, Scheduled::Attempt { attempt: 0, .. }));
+        entered_rx.await.expect("the retry starts");
+
+        let tasks = lock_retries(registry).begin_forget();
+        tokio::time::timeout(std::time::Duration::from_secs(5), stop_retry_tasks(tasks))
+            .await
+            .expect("a parked retry is aborted, not waited out");
+        assert!(!resumed.load(SeqCst), "an aborted retry is never polled again");
+        let retries = lock_retries(registry);
+        assert!(retries.tasks.is_empty());
+        assert_eq!(retries.epoch, 1, "the teardown closed the epoch");
+    }
+
+    /// The bookkeeping, with each attempt's task running on a worker: a take
+    /// gets one attempt per delay and is then given up, its record put back
+    /// only for an attempt that is due; a settled take starts counting
+    /// again; and once a teardown closes the epoch, a dispatch that began
+    /// under the old one schedules nothing and puts nothing back.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_shipped_registry_counts_settles_and_closes_epochs_across_workers() {
+        use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+        let registry = own_registry();
+        let put_backs = AtomicUsize::new(0);
+        let put_back = || {
+            put_backs.fetch_add(1, SeqCst);
+        };
+        let finished = || -> RedispatchFuture<'static> { Box::pin(async {}) };
+
+        for expected in 0..LATE_TAKE_RETRY_DELAYS.len() {
+            let scheduled = start_retry_task(registry, 0, "test-mt-take", put_back, |_| finished());
+            assert!(
+                matches!(scheduled, Scheduled::Attempt { attempt, .. } if attempt == expected),
+                "attempt {expected} is due"
+            );
+            until_no_retry_tasks(registry).await;
+        }
+        let scheduled = start_retry_task(registry, 0, "test-mt-take", put_back, |_| finished());
+        assert!(
+            matches!(
+                scheduled,
+                Scheduled::Exhausted { attempts } if attempts == LATE_TAKE_RETRY_DELAYS.len() + 1
+            ),
+            "past the last delay the take is given up"
+        );
+        assert_eq!(put_backs.load(SeqCst), LATE_TAKE_RETRY_DELAYS.len());
+        assert!(
+            !lock_retries(registry).attempts.contains_key("test-mt-take"),
+            "a given-up take leaves no bookkeeping"
+        );
+
+        let scheduled = start_retry_task(registry, 0, "test-mt-settled", put_back, |_| finished());
+        assert!(matches!(scheduled, Scheduled::Attempt { attempt: 0, .. }));
+        until_no_retry_tasks(registry).await;
+        lock_retries(registry).settle("test-mt-settled");
+        let scheduled = start_retry_task(registry, 0, "test-mt-settled", put_back, |_| finished());
+        assert!(
+            matches!(scheduled, Scheduled::Attempt { attempt: 0, .. }),
+            "a settled take counts from zero again"
+        );
+        until_no_retry_tasks(registry).await;
+
+        let tasks = lock_retries(registry).begin_forget();
+        stop_retry_tasks(tasks).await;
+        let before = put_backs.load(SeqCst);
+        let scheduled =
+            start_retry_task(registry, 0, "test-mt-old-epoch", put_back, |_| finished());
+        assert!(matches!(scheduled, Scheduled::IdentityGone));
+        assert_eq!(put_backs.load(SeqCst), before, "nothing put back for a gone identity");
+        let retries = lock_retries(registry);
+        assert!(retries.tasks.is_empty() && !retries.attempts.contains_key("test-mt-old-epoch"));
+    }
 }
