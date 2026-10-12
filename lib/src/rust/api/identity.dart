@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `create_in`, `current_bip39_seed`, `delete_identity_inner`, `delete_in`, `derive_trade_key_with`, `ensure_trade_key_index_at_least_with`, `ensure_trade_key_index_at_least`, `forget_identity_state`, `get_active_keys`, `get_active_trade_keys_up_to`, `get_active_trade_keys`, `get_transport_identity_keys`, `identity_generation`, `identity_lock`, `identity_slot`, `import_in`, `import_nsec_in`, `load_in`, `publish_index`, `reconcile_and_publish_to`, `reconcile_trade_key_index`, `require_durable_storage`, `trade_key_index_tx`, `while_identity_current`
+// These functions are ignored because they are not marked as `pub`: `clear_logs_and_report`, `create_in`, `current_bip39_seed`, `delete_identity_inner`, `delete_in`, `derive_trade_key_with`, `ensure_trade_key_index_at_least_with`, `ensure_trade_key_index_at_least`, `forget_identity_state`, `get_active_keys`, `get_active_trade_keys_up_to`, `get_active_trade_keys`, `get_transport_identity_keys`, `has_pending_wipe`, `identity_generation`, `identity_lock`, `identity_slot`, `import_in`, `import_nsec_in`, `load_in`, `publish_index`, `reconcile_and_publish_to`, `reconcile_trade_key_index`, `record_wipe_intent`, `release_own_wipe_marker`, `require_durable_storage`, `retry_pending_wipe_if_vacant`, `retry_pending_wipe`, `trade_key_index_tx`, `while_identity_current`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RecoveryProgress`
 
 /// Subscribe to consumed trade-key indices. Flutter calls this once at startup
@@ -58,6 +58,10 @@ Future<IdentityInfo> importFromMnemonic({
 
 /// Import identity from an nsec (bech32-encoded Nostr secret key).
 /// Note: nsec import produces a single key with no BIP-39 mnemonic backup.
+///
+/// When the slot is empty, a pending wipe is retried first, and a retry that
+/// fails refuses the import with `PendingWipeFailed` (issue #555). A slot
+/// already taken is installed over, as before, without a generation bump.
 Future<IdentityInfo> importFromNsec({required String nsec}) =>
     RustLib.instance.api.crateApiIdentityImportFromNsec(nsec: nsec);
 
@@ -69,6 +73,14 @@ Future<IdentityInfo?> getIdentity() =>
 /// `flutter_secure_storage` after calling this.
 Future<void> deleteIdentity() =>
     RustLib.instance.api.crateApiIdentityDeleteIdentity();
+
+/// Whether a previous identity deletion left its data wipe pending: the
+/// previous identity's rows may still be on disk and no retry has succeeded
+/// yet (issue #555). The Account screen shows a warning while this holds.
+/// A marker that cannot be read reads as none: the warning is diagnostic,
+/// and the retry does not depend on it.
+Future<bool> hasPendingIdentityWipe() =>
+    RustLib.instance.api.crateApiIdentityHasPendingIdentityWipe();
 
 /// What the current identity would lose if it were replaced now: locked
 /// escrow, locked or payable bonds, open payout claims, live trades — most
