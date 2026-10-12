@@ -8,6 +8,7 @@ import 'api/bond.dart';
 import 'api/cashu.dart';
 import 'api/disputes.dart';
 import 'api/escrow.dart';
+import 'api/escrow_deadline.dart';
 import 'api/identity.dart';
 import 'api/invoice.dart';
 import 'api/logging.dart';
@@ -84,7 +85,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 1271703544;
+  int get rustContentHash => 1473639726;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -650,6 +651,10 @@ abstract class RustLibApi extends BaseApi {
     required String orderId,
     required TradeRole role,
     double? fiatAmount,
+  });
+
+  Future<PlatformInt64?> crateApiEscrowDeadlineTradeEscrowDeadline({
+    required String orderId,
   });
 
   Future<PlatformInt64?> crateApiInvoiceTradeStepStartedAt({
@@ -6634,7 +6639,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<PlatformInt64?> crateApiInvoiceTradeStepStartedAt({
+  Future<PlatformInt64?> crateApiEscrowDeadlineTradeEscrowDeadline({
     required String orderId,
   }) {
     return handler.executeNormal(
@@ -6646,6 +6651,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             generalizedFrbRustBinding,
             serializer,
             funcId: 186,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_i_64,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiEscrowDeadlineTradeEscrowDeadlineConstMeta,
+        argValues: [orderId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEscrowDeadlineTradeEscrowDeadlineConstMeta =>
+      const TaskConstMeta(
+        debugName: "trade_escrow_deadline",
+        argNames: ["orderId"],
+      );
+
+  @override
+  Future<PlatformInt64?> crateApiInvoiceTradeStepStartedAt({
+    required String orderId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(orderId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 187,
             port: port_,
           );
         },

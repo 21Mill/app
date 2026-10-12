@@ -11,6 +11,7 @@ import 'api/bond.dart';
 import 'api/cashu.dart';
 import 'api/disputes.dart';
 import 'api/escrow.dart';
+import 'api/escrow_deadline.dart';
 import 'api/identity.dart';
 import 'api/invoice.dart';
 import 'api/logging.dart';

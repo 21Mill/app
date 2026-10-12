@@ -3,6 +3,7 @@ pub mod bridge_handler;
 pub mod cashu;
 pub mod disputes;
 pub mod escrow;
+pub mod escrow_deadline;
 pub mod identity;
 pub mod invoice;
 pub mod logging;
