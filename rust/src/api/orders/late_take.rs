@@ -125,6 +125,7 @@ pub(super) async fn reconcile_late_take(
     let Some(db) = crate::db::app_db::db() else {
         return retry(late, "store unavailable");
     };
+    #[cfg(test)]
     late_take_test_pause("before-write").await;
     let written = match earlier {
         Some(_) => replace_with_late_take_row(db, &trade).await,
@@ -473,42 +474,40 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
+/// An armed pause: the point it holds a late take at, the gate the take
+/// waits on there, and the flag it raises once it waits.
+#[cfg(test)]
+type LateTakePause = (
+    &'static str,
+    std::sync::Arc<tokio::sync::Notify>,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+);
+
 #[cfg(test)]
 thread_local! {
-    /// An armed pause for the next late take on this thread to reach the
-    /// named point: the point, the gate it waits on, and the flag it raises
-    /// once it waits.
-    static LATE_TAKE_PAUSE: std::cell::RefCell<
-        Option<(
-            &'static str,
-            std::sync::Arc<tokio::sync::Notify>,
-            std::sync::Arc<std::sync::atomic::AtomicBool>,
-        )>,
-    > = const { std::cell::RefCell::new(None) };
+    /// The armed pause, if any, for the next late take on this thread to
+    /// reach its point.
+    static LATE_TAKE_PAUSE: std::cell::RefCell<Option<LateTakePause>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// The test seam that holds a late take at a named exposed point, so a test
 /// can run the identity teardown against it: `"before-write"` (the take
 /// record consumed, nothing written yet) and `"settled"` (the take landed
-/// and settled, its action arm still to write). Nothing in a non-test build.
+/// and settled, its action arm still to write). Test builds only: each call
+/// is a `#[cfg(test)]` statement, so the dispatch path carries none of it.
+#[cfg(test)]
 pub(super) async fn late_take_test_pause(point: &'static str) {
-    #[cfg(test)]
-    {
-        let armed = LATE_TAKE_PAUSE.with(|pause| {
-            let mut pause = pause.borrow_mut();
-            match pause.as_ref() {
-                Some((at, _, _)) if *at == point => pause.take(),
-                _ => None,
-            }
-        });
-        if let Some((_, gate, reached)) = armed {
-            reached.store(true, std::sync::atomic::Ordering::SeqCst);
-            gate.notified().await;
+    let armed = LATE_TAKE_PAUSE.with(|pause| {
+        let mut pause = pause.borrow_mut();
+        match pause.as_ref() {
+            Some((at, _, _)) if *at == point => pause.take(),
+            _ => None,
         }
-    }
-    #[cfg(not(test))]
-    {
-        let _ = point;
+    });
+    if let Some((_, gate, reached)) = armed {
+        reached.store(true, std::sync::atomic::Ordering::SeqCst);
+        gate.notified().await;
     }
 }
 

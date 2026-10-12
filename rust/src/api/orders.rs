@@ -27,9 +27,11 @@ use crate::nostr::first_answer::replaceable_rank;
 use crate::nostr::order_events::parse_order_event;
 
 mod late_take;
+#[cfg(test)]
+use late_take::late_take_test_pause;
 use late_take::{
-    forget_late_take_retries, late_take_retry_epoch, late_take_test_pause, reconcile_late_take,
-    settle_late_take_retry, LateTake, LateTakeOutcome,
+    forget_late_take_retries, late_take_retry_epoch, reconcile_late_take, settle_late_take_retry,
+    LateTake, LateTakeOutcome,
 };
 
 // ── Per-trade key index map ───────────────────────────────────────────────────
@@ -3706,6 +3708,7 @@ async fn dispatch_mostro_message(
         let outcome = reconcile_late_take(late, kind, &row_state).await;
         if !matches!(outcome, LateTakeOutcome::Retry) {
             settle_late_take_retry(event_id);
+            #[cfg(test)]
             late_take_test_pause("settled").await;
         }
         match outcome {
