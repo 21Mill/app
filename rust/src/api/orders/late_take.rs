@@ -134,6 +134,8 @@ pub(super) async fn reconcile_late_take(
     if let Err(e) = written {
         return retry(late, &format!("row not persisted ({e})"));
     }
+    #[cfg(test)]
+    late_take_test_pause("after-write").await;
     if let Some(row) = earlier {
         crate::api::logging::blog_info(
             "orders",
@@ -570,7 +572,8 @@ thread_local! {
 
 /// The test seam that holds a late take at a named exposed point, so a test
 /// can run the identity teardown against it: `"before-write"` (the take
-/// record consumed, nothing written yet) and `"settled"` (the take landed
+/// record consumed, nothing written yet), `"after-write"` (its row written,
+/// nothing bound, announced or wired yet) and `"settled"` (the take landed
 /// and settled, its action arm still to write). Test builds only: each call
 /// is a `#[cfg(test)]` statement, so the dispatch path carries none of it.
 #[cfg(test)]
