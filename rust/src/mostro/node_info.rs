@@ -22,37 +22,47 @@ use crate::api::node_stats::CachedNodeInfo;
 /// Per node (hex), the info event its last capability fetch brought.
 static LIVE: RwLock<Option<HashMap<String, CachedNodeInfo>>> = RwLock::new(None);
 
-/// Record the info `event` a capability fetch brought for its author.
+/// Record the info `event` a capability fetch brought for its author, unless
+/// a newer revision is already held: a fetch answered by a relay that is
+/// behind must not undo a newer one.
 pub(crate) fn set_from_event(event: &Event) {
-    set_live(
+    let info = CachedNodeInfo {
+        created_at: event.created_at.as_secs() as i64,
+        event_id: Some(event.id.to_hex()),
+        tags: event.tags.iter().map(|t| t.as_slice().to_vec()).collect(),
+    };
+    let mut live = LIVE.write().unwrap_or_else(|e| e.into_inner());
+    keep_newest(
+        live.get_or_insert_with(HashMap::new),
         &event.pubkey.to_hex(),
-        CachedNodeInfo {
-            created_at: event.created_at.as_secs() as i64,
-            event_id: Some(event.id.to_hex()),
-            tags: event.tags.iter().map(|t| t.as_slice().to_vec()).collect(),
-        },
+        info,
     );
+}
+
+/// Hold `info` for `node` unless what `held` has for it supersedes it.
+fn keep_newest(held: &mut HashMap<String, CachedNodeInfo>, node: &str, info: CachedNodeInfo) {
+    let node = node.to_lowercase();
+    if held.get(&node).is_some_and(|prev| !info.supersedes(prev)) {
+        return;
+    }
+    held.insert(node, info);
 }
 
 /// Record what `node` announces now, as a revision dated this instant with
-/// no id: newer than anything cached, older than any later fetch.
+/// no id, replacing whatever is held: a test's word is the newest.
 #[cfg(test)]
 pub(crate) fn set_from_tags(node: &str, tags: &[Vec<String>]) {
-    set_live(
-        node,
-        CachedNodeInfo {
-            created_at: crate::rt::unix_now(),
-            event_id: None,
-            tags: tags.to_vec(),
-        },
-    );
-}
-
-fn set_live(node: &str, info: CachedNodeInfo) {
     LIVE.write()
         .unwrap_or_else(|e| e.into_inner())
         .get_or_insert_with(HashMap::new)
-        .insert(node.to_lowercase(), info);
+        .insert(
+            node.to_lowercase(),
+            CachedNodeInfo {
+                created_at: crate::rt::unix_now(),
+                event_id: None,
+                tags: tags.to_vec(),
+            },
+        );
 }
 
 /// What the capability fetches brought, per node.
@@ -88,4 +98,45 @@ pub(crate) fn newest_in(
 pub(crate) async fn newest(node: &str) -> Option<CachedNodeInfo> {
     let cached = crate::api::node_stats::cached_info().await;
     newest_in(node, &live(), &cached)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn revision(created_at: i64, id: &str) -> CachedNodeInfo {
+        CachedNodeInfo {
+            created_at,
+            event_id: Some(id.to_string()),
+            tags: vec![vec![
+                "hold_invoice_cltv_delta".into(),
+                created_at.to_string(),
+            ]],
+        }
+    }
+
+    /// A fetch answered by a relay that is behind brings an older revision:
+    /// it must not undo the newer one already held.
+    #[test]
+    fn an_older_fetch_does_not_replace_a_newer_one() {
+        let mut held = HashMap::new();
+        keep_newest(&mut held, "NODE", revision(2_000, "bb"));
+        keep_newest(&mut held, "node", revision(1_000, "aa"));
+        assert_eq!(held["node"].created_at, 2_000);
+
+        keep_newest(&mut held, "node", revision(3_000, "cc"));
+        assert_eq!(held["node"].created_at, 3_000);
+        assert_eq!(held.len(), 1, "node keys are case-insensitive");
+    }
+
+    /// Within one second NIP-01 keeps the lowest id, as the cache does.
+    #[test]
+    fn a_tie_goes_to_the_lowest_id() {
+        let mut held = HashMap::new();
+        keep_newest(&mut held, "node", revision(2_000, "bb"));
+        keep_newest(&mut held, "node", revision(2_000, "cc"));
+        assert_eq!(held["node"].event_id.as_deref(), Some("bb"));
+        keep_newest(&mut held, "node", revision(2_000, "aa"));
+        assert_eq!(held["node"].event_id.as_deref(), Some("aa"));
+    }
 }
