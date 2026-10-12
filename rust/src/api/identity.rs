@@ -159,11 +159,14 @@ pub struct RecoveryProgress {
 ///
 /// Returns `Err("AlreadyExists")` if an identity is already loaded.
 pub async fn create_identity() -> Result<IdentityCreationResult> {
-    create_in(identity_slot()).await
+    create_in(identity_slot(), crate::db::app_db::db()).await
 }
 
-/// [`create_identity`] on `slot`.
-async fn create_in(slot: &IdentitySlot) -> Result<IdentityCreationResult> {
+/// [`create_identity`] on `slot`, against `_db`.
+async fn create_in<S: Storage>(
+    slot: &IdentitySlot,
+    _db: Option<&S>,
+) -> Result<IdentityCreationResult> {
     let mut guard = slot.state.write().await;
     if guard.is_some() {
         bail!("AlreadyExists");
@@ -305,7 +308,14 @@ pub async fn import_from_mnemonic(words: Vec<String>, recover: bool) -> Result<I
     if recover && privacy_mode {
         bail!("PrivacyModeRecoveryUnavailable");
     }
-    let info = load_identity_from_mnemonic(words, 0, privacy_mode, None).await?;
+    let info = import_in(
+        identity_slot(),
+        crate::db::app_db::db(),
+        trade_key_index_tx(),
+        words,
+        privacy_mode,
+    )
+    .await?;
     if recover {
         // NOTE: recovery is best-effort relative to the import, but this `?`
         // propagates a restore failure AFTER the identity has already been
@@ -318,14 +328,29 @@ pub async fn import_from_mnemonic(words: Vec<String>, recover: bool) -> Result<I
     Ok(info)
 }
 
+/// The install half of [`import_from_mnemonic`], on `slot` against `db`.
+async fn import_in<S: Storage>(
+    slot: &IdentitySlot,
+    db: Option<&S>,
+    tx: &broadcast::Sender<u32>,
+    words: Vec<String>,
+    privacy_mode: bool,
+) -> Result<IdentityInfo> {
+    load_in(slot, db, tx, words, 0, privacy_mode, None).await
+}
+
 /// Import identity from an nsec (bech32-encoded Nostr secret key).
 /// Note: nsec import produces a single key with no BIP-39 mnemonic backup.
 pub async fn import_from_nsec(nsec: String) -> Result<IdentityInfo> {
-    import_nsec_in(identity_slot(), nsec).await
+    import_nsec_in(identity_slot(), crate::db::app_db::db(), nsec).await
 }
 
-/// [`import_from_nsec`] on `slot`.
-async fn import_nsec_in(slot: &IdentitySlot, nsec: String) -> Result<IdentityInfo> {
+/// [`import_from_nsec`] on `slot`, against `_db`.
+async fn import_nsec_in<S: Storage>(
+    slot: &IdentitySlot,
+    _db: Option<&S>,
+    nsec: String,
+) -> Result<IdentityInfo> {
     let keys =
         Keys::parse(&nsec).map_err(|e| anyhow!("InvalidKey: {e}"))?;
     let public_key = keys.public_key().to_hex();

@@ -18,9 +18,9 @@ pub(crate) struct IdentityState {
 /// The loaded identity and the generation that tells it from the next one.
 ///
 /// The process has one (`api::identity::identity_slot`); the lifecycle seams
-/// (`create_in`, `load_in`, `import_nsec_in`, `delete_in`) take it as a
-/// parameter so a test can drive them on a slot of its own, without racing
-/// the tests that share the global one.
+/// (`create_in`, `load_in`, `import_in`, `import_nsec_in`, `delete_in`) take
+/// it as a parameter so a test can drive them on a slot of its own, without
+/// racing the tests that share the global one.
 pub(crate) struct IdentitySlot {
     pub(crate) state: RwLock<Option<IdentityState>>,
     /// Bumped by every identity deletion, under the write lock: it tells work
