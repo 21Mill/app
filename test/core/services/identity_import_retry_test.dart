@@ -250,6 +250,33 @@ void main() {
     expect(api.reloaded, isNull, reason: 'nothing was given up to reload');
   });
 
+  // Review of #573: a session already left without an identity — an earlier
+  // refusal whose reload failed — finds the slot empty, and a refusal then
+  // left it so: the screen said the current user was kept when none was.
+  test('a refusal over an empty slot loads the stored identity too', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'mostro_identity_mnemonic': _old,
+    });
+    api.loaded = false;
+    api.refuseCreates = true;
+
+    await expectLater(
+      IdentityService.regenerate(),
+      throwsA(
+        isA<AnyhowException>().having(
+          (e) => e.message,
+          'message',
+          'PendingWipeFailed',
+        ),
+      ),
+    );
+
+    expect(api.deletes, 1);
+    expect(api.loaded, isTrue, reason: 'the stored identity is loaded');
+    expect(api.reloaded, _old.split(' '));
+    expect(api.restores, 1);
+  });
+
   test('a deletion that fails is not followed by a reload', () async {
     FlutterSecureStorage.setMockInitialValues({
       'mostro_identity_mnemonic': _old,
