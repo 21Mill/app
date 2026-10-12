@@ -168,13 +168,16 @@ async fn create_in<S: Storage>(
     slot: &IdentitySlot,
     db: Option<&S>,
 ) -> Result<IdentityCreationResult> {
-    let mut guard = slot.state.write().await;
-    if guard.is_some() {
+    let _transition = slot.lifecycle.lock().await;
+    // Checked with a read lock, not held across the wipe below: the
+    // lifecycle lock keeps the slot as checked until the install, so readers
+    // of the identity never wait on the wipe.
+    if slot.state.read().await.is_some() {
         bail!("AlreadyExists");
     }
 
     // A point where retrying a pending data wipe is safe: the slot is empty
-    // (checked above, and held), so the tables hold nothing of a live
+    // (checked above, and kept so), so the tables hold nothing of a live
     // identity (issue #555). A retry that fails again refuses the new
     // identity: once one is installed, the launch reload never retries, and
     // the previous user's rows would stay for the life of the install.
@@ -195,7 +198,7 @@ async fn create_in<S: Storage>(
         created_at: now,
     };
 
-    *guard = Some(IdentityState {
+    *slot.state.write().await = Some(IdentityState {
         mnemonic_words: mnemonic_words.clone(),
         keys,
         identity_info,
@@ -234,6 +237,29 @@ pub async fn load_identity_from_mnemonic(
 /// [`load_identity_from_mnemonic`] on `slot`, against `db`, publishing the
 /// reconciled trade-key counter to `tx`.
 async fn load_in<S: Storage>(
+    slot: &IdentitySlot,
+    db: Option<&S>,
+    tx: &broadcast::Sender<u32>,
+    words: Vec<String>,
+    trade_key_index: u32,
+    privacy_mode: bool,
+    created_at: Option<i64>,
+) -> Result<IdentityInfo> {
+    let _transition = slot.lifecycle.lock().await;
+    load_unlocked(
+        slot,
+        db,
+        tx,
+        words,
+        trade_key_index,
+        privacy_mode,
+        created_at,
+    )
+    .await
+}
+
+/// [`load_in`] for a caller already holding `slot.lifecycle`.
+async fn load_unlocked<S: Storage>(
     slot: &IdentitySlot,
     db: Option<&S>,
     tx: &broadcast::Sender<u32>,
@@ -300,9 +326,11 @@ async fn load_in<S: Storage>(
     }
 
     // An older install's shared Cashu proof store goes to the identity the
-    // app starts with — this load, at the first launch after the upgrade —
-    // before any screen can replace it. With the identity lock released: the
-    // claim touches only files and settings.
+    // app starts with — this load, at the first launch after the upgrade.
+    // Inside the transition, both the launch reload and an import claim it,
+    // and the lifecycle lock the caller holds keeps any replacement out until
+    // the claim is done. Not under the state lock: the claim touches only
+    // files and settings, so no reader of the identity waits on it.
     crate::api::cashu::claim_legacy_store(&identity_info.public_key).await;
 
     Ok(identity_info)
@@ -356,11 +384,14 @@ async fn import_in<S: Storage>(
     words: Vec<String>,
     privacy_mode: bool,
 ) -> Result<IdentityInfo> {
+    // The retry and the load are one transition: a creation slipping in
+    // between would find the slot the retry left empty.
+    let _transition = slot.lifecycle.lock().await;
     // Deriving is the validation, done before the retry: a phrase the core
     // rejects must not cost the previous identity's rows a wipe.
     key_ops::derive_master_key(&words)?;
     retry_pending_wipe_if_vacant(slot, db).await?;
-    load_in(slot, db, tx, words, 0, privacy_mode, None).await
+    load_unlocked(slot, db, tx, words, 0, privacy_mode, None).await
 }
 
 /// Import identity from an nsec (bech32-encoded Nostr secret key).
@@ -379,6 +410,7 @@ async fn import_nsec_in<S: Storage>(
     db: Option<&S>,
     nsec: String,
 ) -> Result<IdentityInfo> {
+    let _transition = slot.lifecycle.lock().await;
     let keys =
         Keys::parse(&nsec).map_err(|e| anyhow!("InvalidKey: {e}"))?;
     let public_key = keys.public_key().to_hex();
@@ -392,13 +424,8 @@ async fn import_nsec_in<S: Storage>(
         created_at: now,
     };
 
-    let mut guard = slot.state.write().await;
-    if guard.is_none() {
-        if let Some(db) = db {
-            retry_pending_wipe(db).await?;
-        }
-    }
-    *guard = Some(IdentityState {
+    retry_pending_wipe_if_vacant(slot, db).await?;
+    *slot.state.write().await = Some(IdentityState {
         mnemonic_words: vec![], // no mnemonic for nsec imports
         keys,
         identity_info: identity_info.clone(),
@@ -473,6 +500,10 @@ async fn delete_in<S: Storage, W: DeleteEffects>(
     db: Option<&S>,
     fx: &W,
 ) -> Result<()> {
+    // Held to the end, the wipe included: the owner read here is the
+    // identity the take below retires and the wipe below clears, and no
+    // transition sees the slot or the marker in between.
+    let _transition = slot.lifecycle.lock().await;
     let Some(owner) = slot
         .state
         .read()
@@ -609,8 +640,9 @@ fn clear_logs_and_report(failures: &[String]) {
 /// Only sound while no identity holds the slot: `clear_identity_data`
 /// empties whole tables, so a retry with a live identity would take its
 /// trades — and its payout claims, which no restore brings back — along with
-/// the leftovers. Its callers check the slot first, under its lock; that is
-/// why the launch reload (`load_identity_from_mnemonic`) never calls this.
+/// the leftovers. Its callers check the slot first, holding its lifecycle
+/// lock until they install; that is why the launch reload
+/// (`load_identity_from_mnemonic`) never calls this.
 ///
 /// Fails with the `PendingWipeFailed` marker when the wipe fails again, and
 /// the caller must not install an identity then: the marker stays, and the
@@ -655,20 +687,19 @@ async fn retry_pending_wipe<S: Storage>(db: &S) -> Result<()> {
 /// retries only while it is empty. Dart deletes the current identity before
 /// importing, so that is every import it makes; a slot already taken is the
 /// launch reload's case, where a retry would take the live identity's data.
-/// The slot is checked under its write lock, held through the retry, so no
-/// identity is installed in between.
+/// The caller holds `slot.lifecycle`, which keeps the slot as checked until
+/// it installs; the check takes a read lock, released before the wipe, so
+/// readers of the identity never wait on it.
 async fn retry_pending_wipe_if_vacant<S: Storage>(
     slot: &IdentitySlot,
     db: Option<&S>,
 ) -> Result<()> {
-    let guard = slot.state.write().await;
-    if guard.is_some() {
+    if slot.state.read().await.is_some() {
         return Ok(());
     }
     if let Some(db) = db {
         retry_pending_wipe(db).await?;
     }
-    drop(guard);
     Ok(())
 }
 
@@ -2487,5 +2518,84 @@ mod tests {
             Some(1),
             "the new identity's rows survive the previous one's wipe"
         );
+    }
+
+    /// The transitions of the slot: each takes its lifecycle lock first.
+    const TRANSITIONS: [&str; 5] = [
+        "async fn create_in<S: Storage>(slot: &IdentitySlot, db: Option<&S>,) -> Result<IdentityCreationResult>",
+        "async fn load_in<S: Storage>(slot: &IdentitySlot, db: Option<&S>, tx: &broadcast::Sender<u32>, words: Vec<String>, trade_key_index: u32, privacy_mode: bool, created_at: Option<i64>,) -> Result<IdentityInfo>",
+        "async fn import_in<S: Storage>(slot: &IdentitySlot, db: Option<&S>, tx: &broadcast::Sender<u32>, words: Vec<String>, privacy_mode: bool,) -> Result<IdentityInfo>",
+        "async fn import_nsec_in<S: Storage>(slot: &IdentitySlot, db: Option<&S>, nsec: String,) -> Result<IdentityInfo>",
+        "async fn delete_in<S: Storage, W: DeleteEffects>(slot: &IdentitySlot, db: Option<&S>, fx: &W,) -> Result<()>",
+    ];
+
+    /// Every transition locks the slot's lifecycle before it reads it, and
+    /// only a transition writes it: `load_unlocked`, which writes, is called
+    /// from `load_in` and `import_in` alone, both holding the lock.
+    fn check_one_transition_at_a_time(source: &str) -> Result<(), String> {
+        let code = production_code(source);
+        let lock = "let_transition=slot.lifecycle.lock().await;";
+        let mut writes = 0;
+        for signature in TRANSITIONS {
+            let body = item_body(&code, signature)?;
+            if !body.starts_with(lock) {
+                return Err(format!("`{signature}` must take the lifecycle lock first"));
+            }
+            writes += body.matches("slot.state.write()").count();
+        }
+        let unlocked = item_body(
+            &code,
+            "async fn load_unlocked<S: Storage>(slot: &IdentitySlot, db: Option<&S>, tx: &broadcast::Sender<u32>, words: Vec<String>, trade_key_index: u32, privacy_mode: bool, created_at: Option<i64>,) -> Result<IdentityInfo>",
+        )?;
+        writes += unlocked.matches("slot.state.write()").count();
+        if writes != code.matches("slot.state.write()").count() {
+            return Err("the slot is written outside a transition".into());
+        }
+        let callers = ["load_in", "import_in"]
+            .iter()
+            .map(|name| {
+                let signature = TRANSITIONS
+                    .iter()
+                    .find(|s| s.contains(&format!("fn {name}<")));
+                item_body(&code, signature.unwrap())
+                    .map(|body| body.matches("load_unlocked(").count())
+            })
+            .sum::<Result<usize, String>>()?;
+        if callers != code.matches("load_unlocked(").count() {
+            return Err("load_unlocked is called outside load_in and import_in".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn one_transition_of_the_slot_at_a_time() {
+        check_one_transition_at_a_time(include_str!("identity.rs")).unwrap();
+    }
+
+    /// The guard above refuses a transition that reads before locking, a
+    /// write of the slot outside a transition, and an unlocked load called
+    /// from anywhere else.
+    #[test]
+    fn the_transition_guard_refuses_an_unlocked_path() {
+        let identity = include_str!("identity.rs");
+        for broken in [
+            mutant(
+                identity,
+                "    let _transition = slot.lifecycle.lock().await;\n    let Some(owner) = slot",
+                "    let Some(owner) = slot",
+            ),
+            mutant(
+                identity,
+                "pub async fn get_identity() -> Result<Option<IdentityInfo>> {",
+                "pub async fn get_identity() -> Result<Option<IdentityInfo>> {\n    let slot = identity_slot();\n    drop(slot.state.write().await);",
+            ),
+            mutant(
+                identity,
+                "    retry_pending_wipe_if_vacant(slot, db).await?;\n    *slot.state.write()",
+                "    load_unlocked(slot, None::<&crate::db::sqlite::SqliteStorage>, trade_key_index_tx(), vec![], 0, false, None).await?;\n    *slot.state.write()",
+            ),
+        ] {
+            assert!(check_one_transition_at_a_time(&broken).is_err());
+        }
     }
 }

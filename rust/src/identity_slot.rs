@@ -27,6 +27,16 @@ pub(crate) struct IdentitySlot {
     /// that started under one identity apart from the next — even when the
     /// same mnemonic is imported again, which a pubkey comparison would not.
     pub(crate) generation: std::sync::atomic::AtomicU64,
+    /// Held by every transition of the slot — creation, load, the imports,
+    /// deletion — from its first read to its last write, so none interleaves
+    /// with another (review round 4 of #573). A deletion awaits the relays,
+    /// the push server and the store between reading its owner and wiping
+    /// that owner's rows; without this, a second deletion could retire the
+    /// replacement installed after it, a reload release the marker it
+    /// recorded, or a creation land before the wipe and lose its rows to it.
+    /// Readers of the identity take only `state`, so none of them waits on a
+    /// transition's I/O.
+    pub(crate) lifecycle: tokio::sync::Mutex<()>,
 }
 
 impl IdentitySlot {
@@ -34,6 +44,7 @@ impl IdentitySlot {
         Self {
             state: RwLock::const_new(None),
             generation: std::sync::atomic::AtomicU64::new(0),
+            lifecycle: tokio::sync::Mutex::const_new(()),
         }
     }
 }
