@@ -33,6 +33,12 @@ read refuses it the same way, without wiping.
 when the pending wipe failed again or its marker cannot be read (nothing
 installed, the marker stays).
 
+A first launch with nothing in secure storage over a store that still holds
+another identity's pending wipe, and whose wipe keeps failing, therefore
+starts with no identity, and *Generate new user* is refused the same way:
+there is nothing to reload. Deliberate — refusing beats installing over
+another user's rows — and the only way out is a store that wipes again.
+
 ---
 
 ### import_from_mnemonic(words: Vec<String>, recover: bool) → IdentityInfo
