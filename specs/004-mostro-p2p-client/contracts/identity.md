@@ -220,7 +220,8 @@ counterparties), and leaves the marker recorded ahead. `create_identity`,
 while the slot is empty, clear it on success and refuse the new identity on
 failure. A refused replacement leaves the deleted identity's mnemonic in
 secure storage, and the Dart side loads that identity again in the same
-session — any refusal after the deletion went through — then calls
+session — any refusal after the deletion went through, or with the slot
+already empty (an earlier refusal whose reload failed) — then calls
 `restore_identity_session`, so the session is not left without an identity
 (review of #573). Should that reload fail, the refusal reaches the Account
 screen as such, and the next launch loads the identity. Either way

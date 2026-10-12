@@ -284,20 +284,23 @@ class IdentityService {
   /// identity — its subscriptions, push registrations and in-memory stores
   /// are given back — while the screen and secure storage still hold it. So
   /// when [install] is refused after that (`PendingWipeFailed`, issue #555,
-  /// or words the core rejects), that identity is loaded again before the
-  /// error goes on, and the session is not left without one (review of
-  /// #573). When it cannot be, the error goes on as a
+  /// or an import the core refuses), that identity is loaded again before
+  /// the error goes on, and the session is not left without one (review of
+  /// #573). The same holds when the slot was already empty — an earlier
+  /// refusal whose reload failed — so a retry also brings the stored
+  /// identity back. When it cannot be loaded, the error goes on as a
   /// [PreviousIdentityNotReloaded]. A deletion that is itself refused
   /// (`WipeNotRecorded`, `StorageUnavailable`) gave nothing up, and nothing
   /// is reloaded.
   static Future<T> _replaceLoadedIdentity<T>(
     Future<T> Function() install,
   ) async {
-    final retired = await _deleteLoadedIdentity();
+    await _deleteLoadedIdentity();
     try {
       return await install();
     } catch (e) {
-      if (retired && !await _reloadRetiredIdentity()) {
+      // The slot is empty either way: deleted above, or found so.
+      if (!await _reloadRetiredIdentity()) {
         throw PreviousIdentityNotReloaded(e);
       }
       rethrow;
@@ -322,14 +325,13 @@ class IdentityService {
     }
   }
 
-  /// Delete the identity Rust holds, if it holds one, and say whether it did.
-  /// An empty slot is not an error for a replacement: a fresh install
-  /// followed at once by a regeneration has none, and neither has a session
-  /// whose earlier replacement was refused without the reload.
-  static Future<bool> _deleteLoadedIdentity() async {
+  /// Delete the identity Rust holds, if it holds one. An empty slot is not an
+  /// error for a replacement: a fresh install followed at once by a
+  /// regeneration has none, and neither has a session whose earlier
+  /// replacement was refused without the reload.
+  static Future<void> _deleteLoadedIdentity() async {
     try {
       await identity_api.deleteIdentity();
-      return true;
     } catch (e) {
       final msg = e.toString().toLowerCase();
       if (!msg.contains('noidentity') &&
@@ -338,7 +340,6 @@ class IdentityService {
         rethrow;
       }
       debugPrint('[identity] no identity loaded, nothing to delete');
-      return false;
     }
   }
 
