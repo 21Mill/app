@@ -27,7 +27,9 @@ enum TradeTimerOwner { none, user, counterpart, order }
 
 /// The note under the countdown bar. [stepOutcome] is what expiry does to
 /// the order, which depends on who owes the step (`stepExpiry`).
-enum TradeTimerNote { none, stepOutcome, coordinateInChat, leavesBook }
+/// [escrowOutcome] is what mostrod's escrow deadline does to the trade:
+/// cancel it while `active`, open a dispute once `fiat-sent`.
+enum TradeTimerNote { none, stepOutcome, escrowOutcome, leavesBook }
 
 /// Number of steps on the timeline.
 const kTradeStepCount = 5;
@@ -234,7 +236,7 @@ class TradeView {
               isBuyer ? TradePrimaryAction.fiatSent : TradePrimaryAction.none,
           secondary: cancelOrDispute,
           timer: isBuyer ? TradeTimerOwner.user : TradeTimerOwner.counterpart,
-          note: TradeTimerNote.coordinateInChat,
+          note: TradeTimerNote.escrowOutcome,
           isCompleted: false,
         );
       case TradeStatus.fiatSent:
@@ -247,7 +249,7 @@ class TradeView {
               isBuyer ? TradePrimaryAction.none : TradePrimaryAction.release,
           secondary: cancelOrDispute,
           timer: isBuyer ? TradeTimerOwner.counterpart : TradeTimerOwner.user,
-          note: TradeTimerNote.none,
+          note: TradeTimerNote.escrowOutcome,
           isCompleted: false,
           showsReleaseWarning: !isBuyer,
         );

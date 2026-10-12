@@ -1478,6 +1478,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'If it expires, the order is cancelled.';
 
   @override
+  String get tradeTimerEscrowCancels =>
+      'Approximate time. If it runs out, Mostro cancels the trade.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Approximate time. If it runs out, Mostro opens a dispute.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'The hold invoice is about to be cancelled.';
+
+  @override
+  String get tradeTimerEscrowDisputing => 'A dispute is about to be opened.';
+
+  @override
   String get tradeStepOrderTaken => 'Order taken';
 
   @override
@@ -2332,10 +2347,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Time left';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'If you need more time, coordinate in the chat before it expires.';
 
   @override
   String get tradeRoleBuyer => 'Buyer';

@@ -50,15 +50,16 @@ class TradeCountdown extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+        // The figure sits beside the label while both fit, and drops under
+        // it when they do not: an hours figure (`19 Std. 59`) at 2x text on
+        // 320 dp is wider than the row (DS-A11Y-4).
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
           children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 11, color: book.textTertiary),
-              ),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, color: book.textTertiary),
             ),
             CountdownUrgencyAnnouncer(
               urgent: tone == CountdownTone.urgent,

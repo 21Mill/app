@@ -1495,6 +1495,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get tradeTimerExpiryCancelled => 'S\'il expire, l\'ordre est annulé.';
 
   @override
+  String get tradeTimerEscrowCancels =>
+      'Temps approximatif. S\'il s\'écoule, Mostro annule la transaction.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Temps approximatif. S\'il s\'écoule, Mostro ouvre un litige.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'La hold invoice est sur le point d\'être annulée.';
+
+  @override
+  String get tradeTimerEscrowDisputing =>
+      'Un litige est sur le point d\'être ouvert.';
+
+  @override
   String get tradeStepOrderTaken => 'Ordre pris';
 
   @override
@@ -2356,10 +2372,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Temps restant';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'S\'il vous faut plus de temps, convenez-en dans le chat avant l\'expiration.';
 
   @override
   String get tradeRoleBuyer => 'Acheteur';

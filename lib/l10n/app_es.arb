@@ -432,6 +432,10 @@
   "tradeTimerPendingConsequence": "Si expira, la orden se elimina del libro. No afectará tu reputación.",
   "tradeTimerExpiryBackToBook": "Si expira, la orden vuelve al libro.",
   "tradeTimerExpiryCancelled": "Si expira, la orden se cancela.",
+  "tradeTimerEscrowCancels": "Tiempo aproximado. Si se agota, Mostro cancela el trade.",
+  "tradeTimerEscrowDisputes": "Tiempo aproximado. Si se agota, Mostro abre una disputa.",
+  "tradeTimerEscrowCancelling": "La hold invoice está a punto de cancelarse.",
+  "tradeTimerEscrowDisputing": "Está a punto de abrirse una disputa.",
   "tradeStepOrderTaken": "Orden tomada",
   "tradeStepInvoiceBuyer": "El vendedor bloquea los sats",
   "tradeStepInvoiceSeller": "Bloqueas los sats",
@@ -733,10 +737,6 @@
   "tradeTimerOrderHas": "Queda",
   "@tradeTimerOrderHas": {
     "description": "Countdown label of a pending order's time in the book"
-  },
-  "tradeTimerNoteCoordinate": "Si necesitan más tiempo, coordínenlo por el chat antes de que expire.",
-  "@tradeTimerNoteCoordinate": {
-    "description": "Note under the countdown of an active trade"
   },
   "tradeRoleBuyer": "Comprador",
   "@tradeRoleBuyer": {

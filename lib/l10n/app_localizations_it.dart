@@ -1492,6 +1492,21 @@ class AppLocalizationsIt extends AppLocalizations {
       'Se scade, l\'ordine viene annullato.';
 
   @override
+  String get tradeTimerEscrowCancels =>
+      'Tempo approssimativo. Se si esaurisce, Mostro annulla il trade.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Tempo approssimativo. Se si esaurisce, Mostro apre una disputa.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'La hold invoice sta per essere annullata.';
+
+  @override
+  String get tradeTimerEscrowDisputing => 'Sta per essere aperta una disputa.';
+
+  @override
   String get tradeStepOrderTaken => 'Ordine preso';
 
   @override
@@ -2352,10 +2367,6 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Tempo rimasto';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'Se vi serve più tempo, accordatevi in chat prima che scada.';
 
   @override
   String get tradeRoleBuyer => 'Acquirente';

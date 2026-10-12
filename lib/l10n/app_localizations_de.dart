@@ -1502,6 +1502,22 @@ class AppLocalizationsDe extends AppLocalizations {
       'Bei Ablauf wird die Bestellung storniert.';
 
   @override
+  String get tradeTimerEscrowCancels =>
+      'Ungefähre Zeit. Läuft sie ab, storniert Mostro den Handel.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Ungefähre Zeit. Läuft sie ab, eröffnet Mostro einen Streitfall.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'Die Hold-Invoice wird gleich storniert.';
+
+  @override
+  String get tradeTimerEscrowDisputing =>
+      'Gleich wird ein Streitfall eröffnet.';
+
+  @override
   String get tradeStepOrderTaken => 'Bestellung angenommen';
 
   @override
@@ -2364,10 +2380,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Verbleibend';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'Wenn ihr mehr Zeit braucht, sprecht es im Chat ab, bevor sie abläuft.';
 
   @override
   String get tradeRoleBuyer => 'Käufer';
