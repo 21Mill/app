@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:mostro/core/app_routes.dart';
 import 'package:mostro/features/notifications/services/device_token.dart';
@@ -15,6 +16,16 @@ import 'package:mostro/src/rust/api/nostr.dart' as nostr_api;
 import 'package:mostro/features/notifications/services/token_handoff.dart';
 import 'package:mostro/src/rust/api/push.dart' as push_api;
 import 'package:mostro/src/rust/api/types.dart';
+
+/// Where a tap on an OS notification lands: Notifications, the one screen a
+/// payload-free push can name (docs/PUSH_NOTIFICATIONS.md §7.2), on Book.
+///
+/// A tap enters the app from outside, like a link, so it replaces the stack
+/// instead of growing it: back from Notifications is Book, not whatever the
+/// user had open before, and a second tap does not stack a second copy.
+@visibleForTesting
+void openNotificationsOnTap(GoRouter router) =>
+    router.go(AppRoute.notifications);
 
 /// The device side of push notifications: Firebase, the OS permission, and
 /// the device token, which is handed to Rust and nothing else.
@@ -55,10 +66,6 @@ class PushNotificationService {
   /// Token delivery is suspended until the OS permission has been checked.
   /// Kept separate from opt-out so a later permission grant can retry.
   bool _permissionDenied = true;
-
-  /// Test seam — production pushes on the global [appRouter].
-  @visibleForTesting
-  void Function(String destination)? navigate;
 
   /// Whether the permission prompt only shows from a user gesture: on the
   /// web, Safari and Firefox ignore one asked for at startup, and the token
@@ -214,9 +221,8 @@ class PushNotificationService {
   }
 
   void _openNotifications() {
-    final go = navigate ?? (destination) => appRouter.push(destination);
     try {
-      go(AppRoute.notifications);
+      openNotificationsOnTap(appRouter);
     } catch (e) {
       debugPrint('[push] could not open notifications: $e');
     }
