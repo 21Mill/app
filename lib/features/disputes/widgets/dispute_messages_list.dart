@@ -43,14 +43,14 @@ int? takeoverLineIndex(
 /// Scrollable list of dispute messages with info card and optional banners.
 ///
 /// Slot order (always shown in this sequence):
-///   1. [DisputeInfoCard] — always first, then [outcome] once resolved
+///   1. [DisputeInfoCard] — always first, then [outcome] once resolved; the
+///      outcome is what says the chat is closed
 ///   2. "Solver assigned" banner — shown when status is `inReview` and no
 ///      messages yet; it names Serbero while Serbero holds the dispute
 ///   3. [DisputeMessageBubble] entries — sorted by `createdAt`, deduped by
 ///      `nostrEventId` if present, with a "resolver took over" line where a
 ///      person took the dispute over from Serbero (#637)
 ///   4. [UploadBubble]s — files still on their way to the solver
-///   5. "Chat closed" lock banner — shown when status is resolved/closed
 ///
 /// Auto-scrolls to bottom when new messages arrive.
 class DisputeMessagesList extends StatefulWidget {
@@ -161,7 +161,6 @@ class _DisputeMessagesListState extends State<DisputeMessagesList> {
     }).toList()
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
-    final isResolved = widget.dispute.status == DisputeStatus.resolved;
     final isInReview = widget.dispute.status == DisputeStatus.inReview;
     final currentRole = widget.roleOf(widget.dispute.adminPubkey);
     final takeoverAt = takeoverLineIndex(deduped, widget.roleOf, currentRole);
@@ -222,12 +221,6 @@ class _DisputeMessagesListState extends State<DisputeMessagesList> {
             childCount: widget.uploads.length,
           ),
         ),
-
-        // 5. "Chat closed" lock banner (resolved state)
-        if (isResolved)
-          SliverToBoxAdapter(
-            child: _ChatClosedBanner(colors: colors),
-          ),
 
         // Bottom padding
         const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
@@ -410,38 +403,6 @@ class _SolverAssignedBanner extends StatelessWidget {
                   : AppLocalizations.of(context).disputeSolverAssigned,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.statusActive.$2,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChatClosedBanner extends StatelessWidget {
-  const _ChatClosedBanner({required this.colors});
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.lock_outline, size: 14, color: colors.textSubtle),
-          const SizedBox(width: AppSpacing.xs),
-          // Wraps on a narrow phone instead of overflowing (PR #596).
-          Flexible(
-            child: Text(
-              AppLocalizations.of(context).disputeChatClosed,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.textSubtle,
-                    fontStyle: FontStyle.italic,
                   ),
             ),
           ),
