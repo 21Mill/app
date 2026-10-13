@@ -28,10 +28,14 @@ A link whose node cannot be read is refused, never taken for the active node's.
 
 A link's relays are asked before the user has said anything, and anyone can
 write a link, so only public relays over TLS are kept: `wss://` to a host that
-is not loopback, link-local, a private network or a `.local`-style name. That
-keeps a link from making the app knock on the user's own machine or network. At
-most eight are kept. A node on a private network (a test setup) is still found
-through the pool's relays.
+is not loopback, link-local, a private network or a `.local`-style name. On
+native platforms each name is also resolved first, and dropped unless every
+address it gives is public. That keeps a link from making the app knock on the
+user's own machine or network. It is not airtight: the client resolves the name
+again when it connects, so a name that changes its answer in between (DNS
+rebinding) gets through, and the web, which has no DNS lookup of its own, only
+reads the name. At most eight are kept. A node on a private network (a test
+setup) is still found through the pool's relays.
 
 ## Opening one
 
