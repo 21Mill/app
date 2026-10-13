@@ -225,7 +225,7 @@ impl CashuWallet {
     /// (malformed, wrong mint, already spent).
     pub async fn receive_token(&self, encoded: &str) -> Result<u64> {
         let normalized = normalize_token(encoded);
-        let token = Token::from_str(&normalized).map_err(|e| anyhow!("CashuReceiveFailed: {e}"))?;
+        let token = parse_received_token(&normalized)?;
 
         if let Err(e) = self.inner.verify_token_dleq(&token).await {
             // A token minted elsewhere is a plain user mistake, not a failed
@@ -469,12 +469,21 @@ pub async fn stored_balance(db_path: &str, mint_url: Option<&str>) -> Result<u64
 /// **Errors**: `CashuReceiveFailed` when the token does not parse or names no
 /// single mint.
 pub fn token_mint_url(encoded: &str) -> Result<String> {
-    let token = Token::from_str(&normalize_token(encoded))
-        .map_err(|e| anyhow!("CashuReceiveFailed: {e}"))?;
+    let token = parse_received_token(encoded)?;
     let mint = token
         .mint_url()
         .map_err(|e| anyhow!("CashuReceiveFailed: {e}"))?;
     Ok(mint.to_string())
+}
+
+/// Decode a token handed to this wallet to receive.
+///
+/// The one place a received token is read, so every receive path refuses the
+/// same tokens for the same reasons.
+///
+/// **Errors**: `CashuReceiveFailed` when the token does not parse.
+pub(crate) fn parse_received_token(encoded: &str) -> Result<Token> {
+    Token::from_str(&normalize_token(encoded)).map_err(|e| anyhow!("CashuReceiveFailed: {e}"))
 }
 
 /// Strip whitespace and the `cashu:` URI scheme.
