@@ -43,14 +43,14 @@ int? takeoverLineIndex(
 /// Scrollable list of dispute messages with info card and optional banners.
 ///
 /// Slot order (always shown in this sequence):
-///   1. [DisputeInfoCard] — always first, then [outcome] once resolved; the
-///      outcome is what says the chat is closed
+///   1. [DisputeInfoCard] — always first
 ///   2. "Solver assigned" banner — shown when status is `inReview` and no
 ///      messages yet; it names Serbero while Serbero holds the dispute
 ///   3. [DisputeMessageBubble] entries — sorted by `createdAt`, deduped by
 ///      `nostrEventId` if present, with a "resolver took over" line where a
 ///      person took the dispute over from Serbero (#637)
 ///   4. [UploadBubble]s — files still on their way to the solver
+///   5. [outcome] — once resolved; it also says the chat is closed
 ///
 /// Auto-scrolls to bottom when new messages arrive.
 class DisputeMessagesList extends StatefulWidget {
@@ -74,9 +74,10 @@ class DisputeMessagesList extends StatefulWidget {
   /// Who a solver pubkey is, as Rust decided it (#637).
   final SolverRoleOf roleOf;
 
-  /// The resolved dispute's outcome, under the info card. It scrolls with
-  /// the card, as v1's resolution box inside its card does, so a tall one
-  /// never squeezes the conversation.
+  /// The resolved dispute's outcome, after the conversation. The list opens
+  /// on its end, so a long history still opens on the verdict and on the
+  /// chat being closed (#800). It scrolls with the messages, so a tall one
+  /// never squeezes them.
   final Widget? outcome;
 
   static rust_types.SolverRole _unknownIsAPerson(String? _) =>
@@ -111,6 +112,10 @@ class _DisputeMessagesListState extends State<DisputeMessagesList> {
       } else {
         _scrollToBottom();
       }
+    } else if (oldWidget.outcome == null && widget.outcome != null) {
+      // A verdict arriving live ends the conversation, below what is on
+      // screen: bring it into view.
+      _scrollToBottom();
     }
   }
 
@@ -183,8 +188,6 @@ class _DisputeMessagesListState extends State<DisputeMessagesList> {
       slivers: [
         // 1. Info card (always first)
         SliverToBoxAdapter(child: DisputeInfoCard(dispute: widget.dispute)),
-        if (widget.outcome case final outcome?)
-          SliverToBoxAdapter(child: outcome),
 
         // 2. "Solver assigned" banner (inReview + no messages)
         if (isInReview && deduped.isEmpty)
@@ -221,6 +224,10 @@ class _DisputeMessagesListState extends State<DisputeMessagesList> {
             childCount: widget.uploads.length,
           ),
         ),
+
+        // 5. The outcome ends the conversation, where the list opens.
+        if (widget.outcome case final outcome?)
+          SliverToBoxAdapter(child: outcome),
 
         // Bottom padding
         const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),

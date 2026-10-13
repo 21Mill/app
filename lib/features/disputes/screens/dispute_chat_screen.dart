@@ -26,7 +26,7 @@ import 'package:mostro/src/rust/api/types.dart' as rust_types;
 ///     once a solver took the dispute (#415)
 ///   - Scrollable [DisputeMessagesList]: the info card ("Dispute with
 ///     [role]: [handle]", status chip, order and dispute ids, instructions
-///     — #680), the resolved outcome, bubbles and banners
+///     — #680), bubbles and banners, then the resolved outcome (#800)
 ///   - [DisputeMessageInput] — only once a solver took the dispute
 ///
 /// The conversation is with the solver (#143): history and live messages
@@ -257,7 +257,7 @@ class _DisputeChatScreenState extends ConsumerState<DisputeChatScreen> {
           Expanded(
             child: DisputeMessagesList(
               dispute: dispute,
-              // Terminal state: the outcome scrolls under the info card.
+              // Terminal state: the outcome ends the conversation.
               outcome: isResolved
                   ? _ResolvedBanner(
                       dispute: dispute,
@@ -315,7 +315,7 @@ String disputeSendErrorMessage(AppLocalizations l10n, Object error) {
 
 // ── Terminal state banners ─────────────────────────────────────────────────────
 
-/// Shown above the chat when the dispute is resolved.
+/// Shown after the conversation when the dispute is resolved.
 ///
 /// Three sub-cases driven by [DisputeResolution]:
 /// - [DisputeResolution.fundsToBuyer] or [DisputeResolution.fundsToSeller] where the
