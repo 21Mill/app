@@ -20,13 +20,14 @@
 
 use anyhow::{anyhow, bail, Result};
 use futures_util::future::join;
-use futures_util::{stream, StreamExt};
+use futures_util::{stream, Stream, StreamExt};
 use nostr_sdk::prelude::*;
 
 use crate::nostr::first_answer::{newest_answer, replaceable_rank};
 use crate::nostr::order_events::{trade_order_filter, KIND_ORDER};
 use crate::nostr::relay_list::normalize_relay_url;
 use crate::rt::time::Duration;
+use std::net::{IpAddr, Ipv4Addr};
 
 /// The scheme of an order link.
 pub const ORDER_LINK_SCHEME: &str = "mostro";
@@ -39,10 +40,12 @@ pub const MAX_LINK_RELAYS: usize = 8;
 /// reads of a node's events (`fetch_mostro_instance_tags`).
 pub const LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// How long the lookup keeps listening after the first copy, in case that
-/// relay held an older revision. Relays that answer at all answer within a
-/// few hundred milliseconds of each other.
-const ANSWER_GRACE: Duration = Duration::from_millis(750);
+/// How long the lookup keeps listening after the first copy, for a relay
+/// slower to answer that may hold a newer revision: a link's relays are
+/// connected cold, so they answer after the pool's warm ones. The lookup ends
+/// sooner once every relay has answered; only a slow or silent one costs this
+/// wait, never more than [`LOOKUP_TIMEOUT`] in all.
+const ANSWER_GRACE: Duration = Duration::from_secs(3);
 
 /// What a `mostro:` link says, checked for shape. Nothing here is known to
 /// exist until [`find_order_event`] finds it.
@@ -137,19 +140,6 @@ impl OrderLink {
 /// on a private network (a test setup) is still reached through the pool.
 fn is_public_relay(relay: &str) -> bool {
     use nostr::types::url::Host;
-    use std::net::Ipv4Addr;
-
-    fn public_v4(ip: Ipv4Addr) -> bool {
-        let [a, b, ..] = ip.octets();
-        let shared = a == 100 && (64..128).contains(&b); // RFC 6598
-        !(ip.is_private()
-            || ip.is_loopback()
-            || ip.is_link_local()
-            || ip.is_unspecified()
-            || ip.is_broadcast()
-            || ip.is_documentation()
-            || shared)
-    }
 
     let Ok(url) = Url::parse(relay) else {
         return false;
@@ -165,17 +155,103 @@ fn is_public_relay(relay: &str) -> bool {
                 && !domain.ends_with(".local")
                 && !domain.ends_with(".internal")
         }
-        Some(Host::Ipv4(ip)) => public_v4(ip),
-        Some(Host::Ipv6(ip)) => match ip.to_ipv4_mapped() {
+        Some(Host::Ipv4(ip)) => is_public_ip(ip.into()),
+        Some(Host::Ipv6(ip)) => is_public_ip(ip.into()),
+        None => false,
+    }
+}
+
+/// Whether `ip` is on the public internet: not loopback, private,
+/// link-local, shared (RFC 6598), unspecified, broadcast or documentation,
+/// in either family.
+fn is_public_ip(ip: IpAddr) -> bool {
+    fn public_v4(ip: Ipv4Addr) -> bool {
+        let [a, b, ..] = ip.octets();
+        let shared = a == 100 && (64..128).contains(&b); // RFC 6598
+        !(ip.is_private()
+            || ip.is_loopback()
+            || ip.is_link_local()
+            || ip.is_unspecified()
+            || ip.is_broadcast()
+            || ip.is_documentation()
+            || shared)
+    }
+
+    match ip {
+        IpAddr::V4(v4) => public_v4(v4),
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
             Some(v4) => public_v4(v4),
             None => {
-                !(ip.is_loopback()
-                    || ip.is_unspecified()
-                    || ip.is_unique_local()
-                    || ip.is_unicast_link_local())
+                !(v6.is_loopback()
+                    || v6.is_unspecified()
+                    || v6.is_unique_local()
+                    || v6.is_unicast_link_local())
             }
         },
-        None => false,
+    }
+}
+
+/// How long one relay name may take to resolve before it is dropped.
+#[cfg(not(target_arch = "wasm32"))]
+const RESOLVE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// The relays among `relays` whose name resolves to public addresses only
+/// ([`is_public_ip`]). [`is_public_relay`] reads a name as text, and any name
+/// can be pointed at the user's own network, so each is resolved before the
+/// lookup connects to it. A name that does not resolve in time is dropped.
+///
+/// Not airtight: the client resolves the name again when it connects, so a
+/// name that changes its answer in between (DNS rebinding) gets through.
+/// Pinning the checked address would take a WebSocket transport of our own.
+/// What it does stop is a name that simply points at a private address.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn resolving_publicly(relays: Vec<String>) -> Vec<String> {
+    let checks = relays
+        .into_iter()
+        .map(|relay| async move { resolves_publicly(&relay).await.then_some(relay) });
+    futures_util::future::join_all(checks)
+        .await
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// The web has no DNS lookup of its own: the browser resolves the name when
+/// it connects, and only [`is_public_relay`]'s reading of it applies.
+#[cfg(target_arch = "wasm32")]
+pub async fn resolving_publicly(relays: Vec<String>) -> Vec<String> {
+    relays
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn resolves_publicly(relay: &str) -> bool {
+    use nostr::types::url::Host;
+
+    let Ok(url) = Url::parse(relay) else {
+        return false;
+    };
+    let Some(port) = url.port_or_known_default() else {
+        return false;
+    };
+    let domain = match url.host() {
+        Some(Host::Domain(domain)) => domain.to_string(),
+        Some(Host::Ipv4(ip)) => return is_public_ip(ip.into()),
+        Some(Host::Ipv6(ip)) => return is_public_ip(ip.into()),
+        None => return false,
+    };
+    match tokio::time::timeout(RESOLVE_TIMEOUT, tokio::net::lookup_host((domain, port))).await {
+        Ok(Ok(addresses)) => {
+            let addresses: Vec<IpAddr> = addresses.map(|address| address.ip()).collect();
+            !addresses.is_empty() && addresses.into_iter().all(is_public_ip)
+        }
+        Ok(Err(e)) => {
+            log::debug!("[order-link] relay {relay} does not resolve: {e}");
+            false
+        }
+        Err(_) => {
+            log::debug!("[order-link] relay {relay} took too long to resolve");
+            false
+        }
     }
 }
 
@@ -229,14 +305,25 @@ pub async fn find_order_event(
     };
     let (from_pool, (lookup_client, from_link)) = join(ask_pool, ask_link).await;
 
-    let answers = stream::select(from_pool, from_link)
-        .filter(|event| std::future::ready(is_revision_of(event, node, order_id)));
-    let newest = newest_answer(Box::pin(answers), ANSWER_GRACE, replaceable_rank).await;
+    let newest = newest_revision(stream::select(from_pool, from_link), node, order_id).await;
 
     if let Some(client) = lookup_client {
         client.shutdown().await;
     }
     newest
+}
+
+/// The newest revision of `order_id` by `node` among `answers`: the first
+/// one, then whatever newer arrives within [`ANSWER_GRACE`] of it or before
+/// `answers` ends.
+async fn newest_revision(
+    answers: impl Stream<Item = Event> + Unpin,
+    node: &PublicKey,
+    order_id: &str,
+) -> Option<Event> {
+    let revisions =
+        answers.filter(|event| std::future::ready(is_revision_of(event, node, order_id)));
+    newest_answer(Box::pin(revisions), ANSWER_GRACE, replaceable_rank).await
 }
 
 /// Whether `event` is a revision of `order_id` as `node` publishes it.
@@ -417,6 +504,39 @@ mod tests {
         assert_eq!(link.relays, vec!["wss://nos.lol", "wss://203.0.114.7"]);
     }
 
+    /// Codex and CodeRabbit review of #805: a name is not read as text alone.
+    /// `localhost` resolves to loopback without any network.
+    #[tokio::test]
+    async fn drops_a_relay_whose_name_resolves_to_a_private_address() {
+        let kept = resolving_publicly(vec![
+            "wss://localhost:7777".to_string(),
+            "wss://127.0.0.1".to_string(),
+            "wss://does-not-exist.invalid".to_string(),
+        ])
+        .await;
+
+        assert!(kept.is_empty(), "{kept:?}");
+    }
+
+    #[test]
+    fn public_addresses_are_told_from_private_ones() {
+        for ip in ["8.8.8.8", "2606:4700::1111", "::ffff:8.8.8.8"] {
+            assert!(is_public_ip(ip.parse().unwrap()), "{ip}");
+        }
+        for ip in [
+            "10.1.2.3",
+            "192.168.0.1",
+            "127.0.0.1",
+            "100.64.0.1",
+            "::1",
+            "fd00::1",
+            "fe80::1",
+            "::ffff:10.0.0.1",
+        ] {
+            assert!(!is_public_ip(ip.parse().unwrap()), "{ip}");
+        }
+    }
+
     #[test]
     fn refuses_what_is_not_an_order_link() {
         for raw in [
@@ -484,6 +604,64 @@ mod tests {
         assert!(is_revision_of(&own, &node.public_key(), &id));
         assert!(!is_revision_of(&other_order, &node.public_key(), &id));
         assert!(!is_revision_of(&impostor, &node.public_key(), &id));
+    }
+
+    /// A stream that yields each event of `answers` after its delay, counted
+    /// from the start, then ends.
+    fn arriving(answers: Vec<(Duration, Event)>) -> impl Stream<Item = Event> + Unpin {
+        Box::pin(stream::unfold(
+            (answers.into_iter(), Duration::ZERO),
+            |(mut rest, elapsed)| async move {
+                let (at, event) = rest.next()?;
+                tokio::time::sleep(at.saturating_sub(elapsed)).await;
+                Some((event, (rest, at)))
+            },
+        ))
+    }
+
+    /// CodeRabbit review of #805: a warm pool relay answers first with an
+    /// older revision, and a link relay, connected cold, brings the newer one
+    /// a second later. The newer one is what the link opens.
+    #[tokio::test(start_paused = true)]
+    async fn a_newer_revision_from_a_slower_relay_still_wins() {
+        let node = Keys::generate();
+        let id = uuid::Uuid::new_v4().to_string();
+        let answers = arriving(vec![
+            (Duration::ZERO, order_event(&node, &id, "pending", 1_000)),
+            (
+                Duration::from_secs(1),
+                order_event(&node, &id, "canceled", 2_000),
+            ),
+        ]);
+
+        let found = newest_revision(answers, &node.public_key(), &id).await;
+
+        assert_eq!(
+            found.map(|e| e.created_at),
+            Some(Timestamp::from_secs(2_000))
+        );
+    }
+
+    /// Only a relay that keeps silent past the grace costs it: once every
+    /// relay has answered, the lookup returns.
+    #[tokio::test(start_paused = true)]
+    async fn returns_once_every_relay_has_answered() {
+        let node = Keys::generate();
+        let id = uuid::Uuid::new_v4().to_string();
+        let started = tokio::time::Instant::now();
+
+        let found = newest_revision(
+            arriving(vec![(
+                Duration::ZERO,
+                order_event(&node, &id, "pending", 1_000),
+            )]),
+            &node.public_key(),
+            &id,
+        )
+        .await;
+
+        assert!(found.is_some());
+        assert!(started.elapsed() < ANSWER_GRACE);
     }
 
     /// A relay holding the events, and its URL.

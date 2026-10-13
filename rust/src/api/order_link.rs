@@ -6,7 +6,7 @@ use nostr_sdk::prelude::PublicKey;
 
 use crate::api::types::OrderInfo;
 use crate::nostr::order_events::parse_order_event;
-use crate::nostr::order_link::{find_order_event, OrderLink};
+use crate::nostr::order_link::{find_order_event, resolving_publicly, OrderLink};
 
 /// The order a `mostro:` link points at, as its node publishes it now.
 #[derive(Debug, Clone)]
@@ -50,14 +50,10 @@ pub async fn resolve_order_link(link: String) -> Result<OrderLinkTarget> {
             .collect(),
         None => Vec::new(),
     };
-    let event = find_order_event(
-        pool.as_deref(),
-        &link.relays_outside(&pool_relays),
-        &node,
-        &link.order_id,
-    )
-    .await
-    .ok_or_else(|| anyhow!("OrderLinkNotFound: {}", link.order_id))?;
+    let extra_relays = resolving_publicly(link.relays_outside(&pool_relays)).await;
+    let event = find_order_event(pool.as_deref(), &extra_relays, &node, &link.order_id)
+        .await
+        .ok_or_else(|| anyhow!("OrderLinkNotFound: {}", link.order_id))?;
     let order = parse_order_event(&event, None).ok_or_else(|| {
         anyhow!(
             "OrderLinkNotFound: {} is not a readable order",
@@ -65,16 +61,13 @@ pub async fn resolve_order_link(link: String) -> Result<OrderLinkTarget> {
         )
     })?;
 
-    // Read after the lookup: the user may have switched nodes meanwhile, and
-    // the book holds the active node's orders only.
-    let node_pubkey = node.to_hex();
-    let on_active_node = node_pubkey == crate::config::active_mostro_pubkey();
-    if on_active_node {
-        crate::api::orders::ingest_order_event(&event).await;
-    }
+    // Filed only while its node is the active one, decided under the book's
+    // lock: the user may switch nodes during the lookup, and the book holds
+    // the active node's orders only.
+    let on_active_node = crate::api::orders::ingest_order_event_from_active_node(&event).await;
     Ok(OrderLinkTarget {
         order,
-        node_pubkey,
+        node_pubkey: node.to_hex(),
         on_active_node,
     })
 }
