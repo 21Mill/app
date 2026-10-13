@@ -6,6 +6,7 @@ import 'package:mostro/l10n/app_localizations.dart';
 /// Bottom message composition bar.
 ///
 /// Pill-shaped row containing an attach button, a text field, and a send button.
+/// The field takes the cursor as it appears, so a chat opens ready to type.
 class MessageInput extends StatefulWidget {
   const MessageInput({
     super.key,
@@ -91,6 +92,7 @@ class _MessageInputState extends State<MessageInput> {
           Expanded(
             child: TextField(
               controller: _controller,
+              autofocus: true,
               maxLines: 1,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _handleSend(),
