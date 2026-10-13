@@ -90,7 +90,8 @@ deliver it.
 A **debug** build on Linux and Windows takes no part in that: it is never
 single-instance, so `flutter run` keeps working next to an open release build,
 and on Windows it does not claim the scheme, so the user's links keep opening
-the release. It still reads a link it is started with (`./mostro '<link>'`).
+the release, and its window is titled apart (`mostro (debug)`), so a release
+launch never hands a link to it. It still reads a link it is started with (`./mostro '<link>'`).
 Handing a link to a running window takes a release or profile build.
 
 `test/ci/order_link_scheme_test.dart` holds these registrations.

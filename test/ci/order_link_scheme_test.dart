@@ -107,6 +107,17 @@ void main() {
     expect(runner, contains(r'L"Software\\Classes\\mostro"'));
     expect(runner, contains('L"URL Protocol"'));
     expect(runner, contains('SendAppLink(hwnd)'));
+    // A release launch finds the open window by its title: a debug build open
+    // beside it is titled apart, so it never takes the release's link.
+    expect(
+      runner,
+      matches(
+        RegExp(
+          r'#ifdef _DEBUG\s+constexpr wchar_t kWindowTitle\[\] = L"mostro \(debug\)";'
+          r'\s+#else\s+constexpr wchar_t kWindowTitle\[\] = L"mostro";',
+        ),
+      ),
+    );
     expect(
       main,
       matches(

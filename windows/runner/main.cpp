@@ -10,8 +10,14 @@
 
 namespace {
 
-// The window title, which is also how a second launch finds the first one.
+// The window title, which is also how a second launch finds the first one. A
+// debug build is titled apart: with one open next to a release, a release
+// launch must hand its link to the release window, never to the debug one.
+#ifdef _DEBUG
+constexpr wchar_t kWindowTitle[] = L"mostro (debug)";
+#else
 constexpr wchar_t kWindowTitle[] = L"mostro";
+#endif
 
 // `mostro:` order links (docs/DEEP_LINKS.md). A debug build takes no part:
 // handing over to an open Mostro would end `flutter run` against a release
