@@ -563,6 +563,24 @@ void main() {
         expect(find.text(_en.disputeLostFundsToSeller), findsNothing);
       });
     }
+
+    // The banner says the chat is closed; the list under the messages does
+    // not say it again.
+    for (final resolution in DisputeResolution.values) {
+      testWidgets('${resolution.name}: says once that the chat is closed', (
+        tester,
+      ) async {
+        await _pump(
+          tester,
+          dispute: _dispute(
+            status: DisputeStatus.resolved,
+            resolution: resolution,
+          ),
+        );
+
+        expect(find.text(_en.disputeChatClosed), findsOneWidget);
+      });
+    }
   });
 
   // Measured with the app's fonts: the test engine's em squares would put
