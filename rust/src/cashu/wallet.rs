@@ -698,6 +698,50 @@ mod tests {
     }
 
     #[test]
+    fn a_token_in_another_unit_is_refused_as_such() {
+        // Arrange — the wallet holds sats only, and msat is no exception:
+        // turning millisats into sats is a melt and a mint, not a swap.
+        let mint = cdk::mint_url::MintUrl::from_str("https://mint.example.com").unwrap();
+        let token_in =
+            |unit: CurrencyUnit| Token::new(mint.clone(), Vec::new(), None, unit).to_string();
+
+        // Act / Assert — refused for its unit, before any mint is asked.
+        // The code after the marker is what Dart names: the known units, a
+        // currency-code-shaped custom one, and "other" for any text a token's
+        // maker could have put there.
+        for (unit, code) in [
+            (CurrencyUnit::Msat, "msat"),
+            (CurrencyUnit::Usd, "usd"),
+            (CurrencyUnit::Eur, "eur"),
+            (CurrencyUnit::custom("GBP"), "gbp"),
+            (CurrencyUnit::Auth, "other"),
+            (CurrencyUnit::custom("sats"), "other"),
+            (CurrencyUnit::custom("usd now"), "other"),
+            (CurrencyUnit::custom("u$d"), "other"),
+        ] {
+            let err = parse_received_token(&token_in(unit.clone())).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                format!("CashuUnsupportedUnit: {code}"),
+                "a {unit} token"
+            );
+        }
+
+        // A sat token is read, and so is a v3 token that names no unit: cdk
+        // takes those as sats, and old sat tokens were written that way.
+        assert!(parse_received_token(&token_in(CurrencyUnit::Sat)).is_ok());
+        let unitless = Token::TokenV3(cdk::nuts::TokenV3 {
+            token: vec![cdk::nuts::nut00::token::TokenV3Token::new(
+                mint.clone(),
+                Vec::new(),
+            )],
+            memo: None,
+            unit: None,
+        });
+        assert!(parse_received_token(&unitless.to_string()).is_ok());
+    }
+
+    #[test]
     fn a_fresh_capability_set_is_unusable() {
         // Assert — the default must fail closed, so a probe that never ran
         // cannot be mistaken for a usable mint.
