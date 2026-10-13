@@ -97,7 +97,8 @@ class _DisputeMessagesListState extends State<DisputeMessagesList> {
   @override
   void initState() {
     super.initState();
-    if (widget.messages.isNotEmpty) _jumpToLatest();
+    // A resolved dispute opens on its outcome even when nobody wrote in it.
+    if (widget.messages.isNotEmpty || widget.outcome != null) _jumpToLatest();
   }
 
   @override

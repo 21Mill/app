@@ -457,6 +457,10 @@ void main() {
             size: const Size(320, 640),
             textScale: 2,
           );
+          expect(tester.takeException(), isNull);
+          // A resolved dispute opens on its outcome, past the card.
+          _chatPosition(tester).jumpTo(0);
+          await tester.pump();
 
           expect(tester.takeException(), isNull);
           expect(_inCard(find.text(de.orderIdLabel)), findsOneWidget);
