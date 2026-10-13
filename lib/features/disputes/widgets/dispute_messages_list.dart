@@ -155,6 +155,7 @@ class _DisputeMessagesListState extends State<DisputeMessagesList> {
 
   @override
   Widget build(BuildContext context) {
+    // design-check: ignore DS-COL-11 — the v1 bubble colours (§14), unchanged; the dispute chat has no palette yet
     final colors = Theme.of(context).extension<AppColors>();
     if (colors == null) throw StateError('AppColors theme extension must be registered');
 
