@@ -111,6 +111,10 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   /// alone would misreport a reader who never left the bottom.
   int _followAnimations = 0;
 
+  /// The list's height at its last metrics change, to tell a list that got
+  /// shorter (see [_onListMetricsChanged]) from one that grew.
+  double? _listViewportExtent;
+
   bool _historyLoaded = false;
 
   final ScrollController _scrollController = ScrollController();
@@ -438,6 +442,31 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     });
   }
 
+  /// Keeps a reader who was at the bottom there when the list gets shorter.
+  ///
+  /// The composer takes the cursor as the room opens, so on a phone the
+  /// keyboard rises on every visit. A list keeps its offset when it shrinks,
+  /// which would slide the newest messages under the composer.
+  bool _onListMetricsChanged(ScrollMetricsNotification notification) {
+    if (notification.depth != 0) return false;
+    final metrics = notification.metrics;
+    final previous = _listViewportExtent;
+    _listViewportExtent = metrics.viewportDimension;
+    if (previous == null || metrics.viewportDimension >= previous) {
+      return false;
+    }
+    // The offset did not move, so the end was this much closer before.
+    final shrunkBy = previous - metrics.viewportDimension;
+    final wasPinned =
+        _followAnimations > 0 ||
+        isPinnedToBottom(
+          offset: metrics.pixels,
+          maxScrollExtent: metrics.maxScrollExtent - shrunkBy,
+        );
+    if (wasPinned) _scrollController.jumpTo(metrics.maxScrollExtent);
+    return false;
+  }
+
   void _toggleTradeInfo() => setState(() {
     _showTradeInfo = !_showTradeInfo;
     if (_showTradeInfo) _showUserInfo = false;
@@ -605,47 +634,50 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 ),
               ),
             )
-            : ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              itemCount: _messages.length + uploads.length,
-              itemBuilder: (context, index) {
-                // Files still on their way out follow the history.
-                if (index >= _messages.length) {
-                  final upload = uploads[index - _messages.length];
-                  return UploadBubble(
-                    key: ValueKey(upload.id),
-                    upload: upload,
-                    onRetry: () => _retryUpload(upload.id),
-                    onDiscard:
-                        () => ref
-                            .read(chatUploadsProvider(widget.orderId).notifier)
-                            .discard(upload.id),
+            : NotificationListener<ScrollMetricsNotification>(
+              onNotification: _onListMetricsChanged,
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                itemCount: _messages.length + uploads.length,
+                itemBuilder: (context, index) {
+                  // Files still on their way out follow the history.
+                  if (index >= _messages.length) {
+                    final upload = uploads[index - _messages.length];
+                    return UploadBubble(
+                      key: ValueKey(upload.id),
+                      upload: upload,
+                      onRetry: () => _retryUpload(upload.id),
+                      onDiscard:
+                          () => ref
+                              .read(chatUploadsProvider(widget.orderId).notifier)
+                              .discard(upload.id),
+                    );
+                  }
+                  final msg = _messages[index];
+                  return MessageBubble(
+                    // Adapt the FRB-generated ChatMessage to the
+                    // Dart-side ChatMessage used by MessageBubble.
+                    message: ChatMessage(
+                      id: msg.id,
+                      tradeId: msg.tradeId,
+                      content: msg.content,
+                      isMine: msg.isMine,
+                      isRead: msg.isRead,
+                      hasAttachment: msg.hasAttachment,
+                      createdAt: msg.createdAt.toInt(),
+                      messageType: _msgTypeStr(msg.messageType),
+                      attachment: msg.attachment,
+                      reaction: shownReaction(msg),
+                    ),
+                    peerColorHue: room.peerColorHue,
+                    onReact:
+                        msg.isMine || !canReact
+                            ? null
+                            : (emoji) => _onReact(msg, emoji),
                   );
-                }
-                final msg = _messages[index];
-                return MessageBubble(
-                  // Adapt the FRB-generated ChatMessage to the
-                  // Dart-side ChatMessage used by MessageBubble.
-                  message: ChatMessage(
-                    id: msg.id,
-                    tradeId: msg.tradeId,
-                    content: msg.content,
-                    isMine: msg.isMine,
-                    isRead: msg.isRead,
-                    hasAttachment: msg.hasAttachment,
-                    createdAt: msg.createdAt.toInt(),
-                    messageType: _msgTypeStr(msg.messageType),
-                    attachment: msg.attachment,
-                    reaction: shownReaction(msg),
-                  ),
-                  peerColorHue: room.peerColorHue,
-                  onReact:
-                      msg.isMine || !canReact
-                          ? null
-                          : (emoji) => _onReact(msg, emoji),
-                );
-              },
+                },
+              ),
             );
 
     final chatColumn = Column(
