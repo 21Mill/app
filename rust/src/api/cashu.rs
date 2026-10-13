@@ -525,9 +525,14 @@ pub async fn cashu_get_balance() -> Result<u64> {
 /// is adopted only by a receive that succeeds: a token that turns out spent or
 /// worthless leaves the wallet unbound and nothing remembered.
 ///
-/// **Errors**: `CashuReceiveFailed` (wrong mint, already spent, malformed),
-/// `CashuTokenUnverified`, plus the markers from [`cashu_connect`].
+/// A token in any unit but sats is refused from the token alone, before a
+/// mint is asked or a wallet opened for it.
+///
+/// **Errors**: `CashuUnsupportedUnit`, `CashuReceiveFailed` (wrong mint,
+/// already spent, malformed), `CashuTokenUnverified`, plus the markers from
+/// [`cashu_connect`].
 pub async fn cashu_receive_token(encoded: String) -> Result<u64> {
+    crate::cashu::ensure_receivable(&encoded)?;
     let amount = match live_wallet().await {
         Some(wallet) => wallet.receive_token(&encoded).await?,
         None => receive_unbound(&encoded).await?,

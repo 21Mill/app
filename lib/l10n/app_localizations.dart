@@ -6994,6 +6994,36 @@ abstract class AppLocalizations {
   /// **'This token could not be verified: it carries no proof of the mint\'s signature, so it was not accepted.'**
   String get cashuErrorTokenUnverified;
 
+  /// Cashu wallet — a received token is in a unit other than sats (msat, usd, …); refused before any mint was asked
+  ///
+  /// In en, this message translates to:
+  /// **'This wallet only holds sats, and this token is in another unit (such as millisats or dollars). It was left untouched: you can redeem it in a wallet that supports its unit.'**
+  String get cashuErrorUnsupportedUnit;
+
+  /// Cashu wallet — a received token is in a unit the app can name; {unit} is one of cashuUnitMsat/Usd/Eur or an upper-case currency code
+  ///
+  /// In en, this message translates to:
+  /// **'This wallet only holds sats, and this token is in {unit}. It was left untouched: you can redeem it in a wallet that supports that unit.'**
+  String cashuErrorUnsupportedUnitNamed(String unit);
+
+  /// Cashu unit name inside cashuErrorUnsupportedUnitNamed — millisatoshis
+  ///
+  /// In en, this message translates to:
+  /// **'millisats'**
+  String get cashuUnitMsat;
+
+  /// Cashu unit name inside cashuErrorUnsupportedUnitNamed — US dollars
+  ///
+  /// In en, this message translates to:
+  /// **'dollars (USD)'**
+  String get cashuUnitUsd;
+
+  /// Cashu unit name inside cashuErrorUnsupportedUnitNamed — euros
+  ///
+  /// In en, this message translates to:
+  /// **'euros (EUR)'**
+  String get cashuUnitEur;
+
   /// Cashu wallet — a failed send whose proofs could not be confirmed back
   ///
   /// In en, this message translates to:

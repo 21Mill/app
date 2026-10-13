@@ -47,8 +47,12 @@ Future<BigInt> cashuGetBalance() =>
 /// is adopted only by a receive that succeeds: a token that turns out spent or
 /// worthless leaves the wallet unbound and nothing remembered.
 ///
-/// **Errors**: `CashuReceiveFailed` (wrong mint, already spent, malformed),
-/// `CashuTokenUnverified`, plus the markers from [`cashu_connect`].
+/// A token in any unit but sats is refused from the token alone, before a
+/// mint is asked or a wallet opened for it.
+///
+/// **Errors**: `CashuUnsupportedUnit`, `CashuReceiveFailed` (wrong mint,
+/// already spent, malformed), `CashuTokenUnverified`, plus the markers from
+/// [`cashu_connect`].
 Future<BigInt> cashuReceiveToken({required String encoded}) =>
     RustLib.instance.api.crateApiCashuCashuReceiveToken(encoded: encoded);
 
