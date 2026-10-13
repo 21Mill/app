@@ -581,6 +581,31 @@ void main() {
         expect(find.text(_en.disputeChatClosed), findsOneWidget);
       });
     }
+
+    // The chat opens on its latest message, so the outcome follows it: a
+    // long history still opens on the verdict and the closed chat.
+    testWidgets('a long history opens on the outcome, after the messages', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        dispute: _dispute(
+          status: DisputeStatus.resolved,
+          resolution: DisputeResolution.fundsToBuyer,
+        ),
+        history: [
+          for (var i = 1; i <= 40; i++) _solverMessage('ok $i', createdAt: i),
+        ],
+      );
+
+      final outcome = find.text(_en.disputeSuccessfullyCompleted);
+      final closed = find.text(_en.disputeChatClosed);
+      expect(outcome, findsOneWidget);
+      expect(closed, findsOneWidget);
+      final latest = tester.getRect(find.text('ok 40'));
+      expect(tester.getRect(outcome).top, greaterThan(latest.bottom));
+      expect(tester.getRect(closed).bottom, lessThanOrEqualTo(800));
+    });
   });
 
   // Measured with the app's fonts: the test engine's em squares would put
