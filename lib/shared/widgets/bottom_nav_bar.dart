@@ -9,7 +9,6 @@ import 'package:mostro/core/automation/automation_ids.dart';
 import 'package:mostro/features/trades/providers/trades_providers.dart'
     show orderBookNotificationCountProvider;
 import 'package:mostro/l10n/app_localizations.dart';
-import 'package:mostro/shared/providers/nav_providers.dart';
 
 /// Badge count for the Chat tab. Will be wired to Rust bridge.
 final chatNotificationCountProvider = StateProvider<int>((_) => 0);
@@ -32,14 +31,13 @@ class BottomNavBar extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    final currentIndex = ref.watch(bottomNavIndexProvider);
+    final currentIndex = _destinationOf(context);
     final palette = OrderBookPalette.of(context);
     final tradesCount = ref.watch(orderBookNotificationCountProvider);
     final chatCount = ref.watch(chatNotificationCountProvider);
     final l10n = AppLocalizations.of(context);
 
     void select(int index) {
-      ref.read(bottomNavIndexProvider.notifier).state = index;
       switch (index) {
         case 0:
           context.go(AppRoute.home);
@@ -117,6 +115,21 @@ class BottomNavBar extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The destination of the screen the bar sits on, read from that screen's
+/// route, so every way of reaching it (the bar, the drawer, back, a
+/// notification) lights the same tab. Mounted without the router, as in
+/// widget tests, the bar lights Book.
+int _destinationOf(BuildContext context) {
+  if (GoRouter.maybeOf(context) == null) return 0;
+  final location = GoRouterState.of(context).matchedLocation;
+  if (location == AppRoute.orderBook) return 1;
+  if (location == AppRoute.chatList ||
+      location.startsWith(AppRoute.chatRoomPath(''))) {
+    return 2;
+  }
+  return 0;
 }
 
 class _NavItem extends StatelessWidget {
