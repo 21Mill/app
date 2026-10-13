@@ -853,6 +853,31 @@ impl OrderBook {
     /// claim of the new identity's — and is dropped when finished, like any
     /// stranger's.
     pub(crate) async fn apply_ingested_order(&self, ingested: IngestedOrder, publish: Publish) {
+        self.apply_ingested_order_by(ingested, publish, None).await;
+    }
+
+    /// [`Self::apply_ingested_order`] for an order fetched outside the live
+    /// subscription (an order link): applied only while `author` is still the
+    /// active node, and decided under the book's lock. A node switch sets the
+    /// new key before it clears the book under this same lock, so the old
+    /// node's order either lands before the clear and leaves with it, or is
+    /// not filed at all. `false` when the node was no longer the active one.
+    pub(crate) async fn apply_ingested_order_from_active(
+        &self,
+        ingested: IngestedOrder,
+        publish: Publish,
+        author: &str,
+    ) -> bool {
+        self.apply_ingested_order_by(ingested, publish, Some(author))
+            .await
+    }
+
+    async fn apply_ingested_order_by(
+        &self,
+        ingested: IngestedOrder,
+        publish: Publish,
+        author: Option<&str>,
+    ) -> bool {
         let IngestedOrder {
             order,
             wire,
@@ -861,6 +886,11 @@ impl OrderBook {
         } = ingested;
         let (touched, changed) = {
             let mut book = self.orders.write().await;
+            if let Some(author) = author {
+                if !author.eq_ignore_ascii_case(&active_mostro_pubkey()) {
+                    return false;
+                }
+            }
             let (order, ours) = if book.ownership_epoch == epoch {
                 (order, ours)
             } else {
@@ -887,6 +917,7 @@ impl OrderBook {
         if let Some(order_id) = touched {
             crate::api::trade_touch::touch_trade(&order_id);
         }
+        true
     }
 
     pub(crate) fn subscribe(&self) -> broadcast::Receiver<Vec<OrderInfo>> {
@@ -8898,12 +8929,6 @@ fn dispute_id_from_payload(payload: Option<&mostro_core::message::Payload>) -> O
     }
 }
 
-/// Parse a Kind 38383 event and upsert it into the order book, applying
-/// maker-order reconciliation (is_mine detection, local→daemon id bridging,
-/// trade-status sync).
-///
-/// Shared by the live subscription loop and the node-switch refetch so both
-/// paths populate the book identically.
 /// When an ingested event reaches subscribers.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Publish {
@@ -8914,11 +8939,44 @@ pub(crate) enum Publish {
     WhenBatchEnds,
 }
 
+/// Parse a Kind 38383 event and upsert it into the order book, applying
+/// maker-order reconciliation (is_mine detection, local→daemon id bridging,
+/// trade-status sync).
+///
+/// Shared by the live subscription loop, the node-switch refetch and an
+/// opened order link ([`ingest_order_event_from_active_node`]), so every path
+/// populates the book identically. The caller checks that the active node
+/// authored `event`.
 async fn ingest_order_event(event: &nostr_sdk::prelude::Event) {
     ingest_order_event_with(event, Publish::Coalesced).await;
 }
 
+/// An order event fetched outside the live subscription — an order link —
+/// filed through the same path, but only while its author is the active node:
+/// checked first, then again under the book's lock
+/// ([`OrderBook::apply_ingested_order_from_active`]), so a node switch landing
+/// during the lookup cannot leave it in the new node's book. `false` when its
+/// author is not, or no longer, the active node.
+pub(crate) async fn ingest_order_event_from_active_node(event: &nostr_sdk::prelude::Event) -> bool {
+    let author = event.pubkey.to_hex();
+    if !author.eq_ignore_ascii_case(&active_mostro_pubkey()) {
+        return false;
+    }
+    ingest_order_event_by(event, Publish::Coalesced, Some(&author)).await
+}
+
 async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Publish) {
+    ingest_order_event_by(event, publish, None).await;
+}
+
+/// The ingest behind both: `only_from`, when set, is the author that must
+/// still be the active node when the order is filed. `false` only when it is
+/// not; an older revision skipped, or an event the parser rejects, is `true`.
+async fn ingest_order_event_by(
+    event: &nostr_sdk::prelude::Event,
+    publish: Publish,
+    only_from: Option<&str>,
+) -> bool {
     log::debug!(
         "[orders] event kind={} author={}",
         event.kind,
@@ -8935,7 +8993,7 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
             // Held to the end: the classification below writes the trade row
             // and the wire note, and an older revision must reach neither.
             let Some(_revision) = claim_book_revision(&info.id, event).await else {
-                return;
+                return true;
             };
             let book = order_book();
             let revision_at = event.created_at.as_secs() as i64;
@@ -8946,10 +9004,23 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
             let public_success = (ingested.ours
                 && ingested.wire.status == OrderStatus::Success)
                 .then(|| ingested.wire.id.clone());
-            book.apply_ingested_order(ingested, publish).await;
+            let filed = match only_from {
+                Some(author) => {
+                    book.apply_ingested_order_from_active(ingested, publish, author)
+                        .await
+                }
+                None => {
+                    book.apply_ingested_order(ingested, publish).await;
+                    true
+                }
+            };
+            if !filed {
+                return false;
+            }
             if let Some(order_id) = public_success {
                 note_public_success(&order_id, revision_at).await;
             }
+            true
         }
         None => {
             log::warn!(
@@ -8962,6 +9033,7 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
                     .map(|t| t.as_slice().first().map(|s| s.as_str()).unwrap_or("?"))
                     .collect::<Vec<_>>()
             );
+            true
         }
     }
 }
@@ -10987,6 +11059,45 @@ mod tests {
 
         pending_requests().lock().unwrap().remove(&hex);
         crate::nostr::subscriptions::teardown(&nostr_sdk::prelude::Client::default(), &hex).await;
+    }
+
+    /// Codex review of #805: an order link's event is filed only while its
+    /// author is the active node, and that is decided under the book's lock,
+    /// where a node switch clears the book after setting the new key.
+    #[tokio::test]
+    async fn a_linked_order_is_filed_only_while_its_node_is_active() {
+        let book = OrderBook::new();
+        let order = dummy_order_info(&format!("linked-{}", uuid::Uuid::new_v4()));
+        let switched_from = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+
+        let refused = book
+            .apply_ingested_order_from_active(
+                current(&book, order.clone(), false).await,
+                Publish::WhenBatchEnds,
+                &switched_from,
+            )
+            .await;
+        assert!(!refused, "a node that is no longer active files nothing");
+        assert!(book.get_order(&order.id).await.is_none());
+
+        let filed = book
+            .apply_ingested_order_from_active(
+                current(&book, order.clone(), false).await,
+                Publish::WhenBatchEnds,
+                &active_mostro_pubkey(),
+            )
+            .await;
+        assert!(filed);
+        assert!(book.get_order(&order.id).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_linked_order_from_another_node_never_reaches_the_book() {
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let event = book_event_by(&order_id, "pending", &nostr_sdk::prelude::Keys::generate());
+
+        assert!(!ingest_order_event_from_active_node(&event).await);
+        assert!(order_book().get_order(&order_id).await.is_none());
     }
 
     /// Nothing ever displays a stranger's finished order — the book filters to
