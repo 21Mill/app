@@ -114,6 +114,16 @@ Future<void> _leaveRoom(WidgetTester tester) async {
 ScrollController _listController(WidgetTester tester) =>
     tester.widget<ListView>(find.byType(ListView)).controller!;
 
+bool _composerHasFocus(WidgetTester tester) => tester
+    .widget<EditableText>(
+      find.descendant(
+        of: find.byType(MessageInput),
+        matching: find.byType(EditableText),
+      ),
+    )
+    .focusNode
+    .hasFocus;
+
 /// Counts `markAsRead` bridge calls by their failure log line: without
 /// `RustLib.init()` every call fails, so the line count *is* the call count.
 ///
@@ -367,6 +377,112 @@ void main() {
 
       final composer = tester.getRect(find.byType(MessageInput));
       expect(composer.bottom, 800 - 300 - AppSpacing.sm);
+      await _leaveRoom(tester);
+    });
+
+    testWidgets('has the cursor when the chat opens', (tester) async {
+      await _pumpChatRoom(tester, incoming, overrides: [openChat]);
+
+      expect(_composerHasFocus(tester), isTrue);
+      await _leaveRoom(tester);
+    });
+
+    testWidgets('takes the cursor once the trade turns out to be open', (
+      tester,
+    ) async {
+      final rowState = StateProvider<ChatRowState>(
+        (ref) => ChatRowState.resolving,
+      );
+      await _pumpChatRoom(
+        tester,
+        incoming,
+        overrides: [
+          chatRowStateProvider(_orderId).overrideWith(
+            (ref) => ref.watch(rowState),
+          ),
+        ],
+      );
+      expect(find.byType(MessageInput), findsNothing);
+
+      ProviderScope.containerOf(tester.element(find.byType(ChatRoomScreen)))
+          .read(rowState.notifier)
+          .state = const ChatRowState(
+        group: ChatGroup.active,
+        tone: ChatAvatarTone.waiting,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(_composerHasFocus(tester), isTrue);
+      await _leaveRoom(tester);
+    });
+
+    testWidgets('keeps the newest message in view as the keyboard opens',
+        (tester) async {
+      await _pumpChatRoom(tester, incoming, overrides: [openChat]);
+      await _receive(
+          tester, incoming, List.generate(30, (i) => _peerMessage(i)));
+      await tester.pump(const Duration(milliseconds: 300));
+      final list = _listController(tester);
+      list.jumpTo(list.position.maxScrollExtent);
+      await tester.pump();
+
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
+      await tester.pump();
+
+      expect(list.offset, list.position.maxScrollExtent,
+          reason: 'the keyboard must not cover the newest message');
+      await _leaveRoom(tester);
+    });
+
+    testWidgets('keeps following when the keyboard opens mid-animation',
+        (tester) async {
+      await _pumpChatRoom(tester, incoming, overrides: [openChat]);
+      await _receive(
+          tester, incoming, List.generate(30, (i) => _peerMessage(i)));
+      await tester.pump(const Duration(milliseconds: 300));
+      final list = _listController(tester);
+      list.jumpTo(list.position.maxScrollExtent);
+      await tester.pump();
+
+      // A message starts a 200 ms follow animation, and the keyboard rises
+      // while the list is still more than a bubble short of its end.
+      await _receive(tester, incoming, [_peerMessage(99)]);
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(
+        list.position.maxScrollExtent - list.offset,
+        greaterThan(kFollowThresholdPixels),
+        reason: 'the position alone must not read as pinned',
+      );
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(list.offset, list.position.maxScrollExtent,
+          reason: 'the animation was following; the keyboard must not stop it '
+              'short of the newest message');
+      await _leaveRoom(tester);
+    });
+
+    testWidgets('leaves a reader who scrolled up there as the keyboard opens',
+        (tester) async {
+      await _pumpChatRoom(tester, incoming, overrides: [openChat]);
+      await _receive(
+          tester, incoming, List.generate(30, (i) => _peerMessage(i)));
+      await tester.pump(const Duration(milliseconds: 300));
+      final list = _listController(tester);
+      list.jumpTo(100);
+      await tester.pump();
+
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
+      await tester.pump();
+
+      expect(list.offset, 100);
       await _leaveRoom(tester);
     });
   });
