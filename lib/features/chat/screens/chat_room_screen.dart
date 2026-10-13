@@ -259,6 +259,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.messageSendFailed),
+          // design-check: ignore DS-COL-1 — the v1 send-failure snackbar (§14), unchanged; the chat has no palette yet
           backgroundColor: Colors.red,
         ),
       );
@@ -523,7 +524,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.orderId.isEmpty) {
+      // design-check: ignore DS-CMP-18 — the v1 chat room (§14), unchanged; the chat has no palette yet
       return Scaffold(
+        // design-check: ignore DS-CMP-12 — the v1 chat room (§14), unchanged; the chat has no palette yet
         appBar: AppBar(title: Text(AppLocalizations.of(context).navChat)),
         body: Center(child: Text(AppLocalizations.of(context).invalidTradeId)),
         bottomNavigationBar: const BottomNavBar(),
@@ -558,6 +561,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final l10n = AppLocalizations.of(context);
     final room = _resolveRoom(ref.watch(chatRoomsNotifierProvider));
     final displayHandle = room.displayHandle(l10n);
+    // design-check: ignore DS-COL-11 — the v1 chat colours (§14), unchanged; the chat has no palette yet
     final colors = Theme.of(context).extension<AppColors>();
     if (colors == null) {
       throw StateError('AppColors theme extension must be registered');
@@ -732,10 +736,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       ],
     );
 
+    // design-check: ignore DS-CMP-18 — the v1 chat room (§14), unchanged; the chat has no palette yet
     return Scaffold(
       // The Scaffold owns keyboard avoidance: the body ends at the taller of
       // the keyboard and the BottomNavBar, never their sum, so the composer
       // must not add viewInsets itself.
+      // design-check: ignore DS-CMP-12 — the v1 chat room (§14), unchanged; the chat has no palette yet
       appBar: AppBar(
         leading: const BackButton(),
         title: _AppBarTitle(room: room),
@@ -827,6 +833,7 @@ class _AppBarTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // design-check: ignore DS-COL-11 — the v1 chat colours (§14), unchanged; the chat has no palette yet
     final colors = Theme.of(context).extension<AppColors>();
     if (colors == null) {
       throw StateError('AppColors theme extension must be registered');
@@ -854,6 +861,7 @@ class _AppBarTitle extends StatelessWidget {
             Flexible(
               child: Text(
                 handle,
+                // design-check: ignore DS-TYP-4 — the v1 app bar title (§14), unchanged; the chat has no palette yet
                 style: textTheme.headlineSmall,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
