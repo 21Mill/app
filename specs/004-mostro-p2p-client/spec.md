@@ -428,6 +428,7 @@ Users manage their cryptographic identity from the Account screen: view their 12
 - **FR-055**: A slide-in drawer menu (from left, approximately 70% of screen width) MUST provide access to Account, Settings, and About.
 - **FR-056**: The My Trades tab MUST show a red dot badge when there are unseen trade status updates.
 - **FR-057**: The Notifications screen MUST be accessible from the notification bell in the app bar and MUST support "Mark all as read" and "Clear all" actions. These actions MUST NOT affect the backup reminder notification.
+- **FR-057a**: Order Book is the start destination. Back (the app bar arrow and the system back button or gesture) MUST end on Order Book from every screen before it leaves the app, however the screen was reached; the My Trades and Chat tabs go back to Order Book. A tap on an OS notification MUST open Notifications on a fresh stack, Order Book under it, never over the screens the user had open. The bottom bar lights the tab of the screen shown.
 
 **Settings & Preferences**
 

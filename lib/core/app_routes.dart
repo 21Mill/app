@@ -112,6 +112,14 @@ String? firstRunRedirect({required bool done, required String location}) {
   return location == AppRoute.chooseNode ? AppRoute.home : null;
 }
 
+/// A screen stacked on Book. Nested under `/`, its path is [location]
+/// without the leading slash, so its URL does not change.
+GoRoute _onHome(
+  String location, {
+  required GoRouterWidgetBuilder builder,
+  List<RouteBase> routes = const [],
+}) => GoRoute(path: location.substring(1), builder: builder, routes: routes);
+
 /// Application router.
 ///
 /// Redirect logic: [firstRunRedirect], once `firstRunComplete` is known.
@@ -143,145 +151,152 @@ final GoRouter appRouter = GoRouter(
       path: AppRoute.chooseNode,
       builder: (_, __) => const NodeChoiceScreen(),
     ),
-    GoRoute(path: AppRoute.home, builder: (_, __) => const HomeScreen()),
-    GoRoute(path: AppRoute.orderBook, builder: (_, __) => const TradesScreen()),
+    // Book is the start destination and every other screen sits on it: a
+    // `go` to any of them, or a link from outside the app, builds Book
+    // underneath, so back always ends on Book before it leaves the app.
     GoRoute(
-      path: AppRoute.addOrder,
-      builder: (context, state) {
-        final type = state.uri.queryParameters['type'] ?? 'sell';
-        return AddOrderScreen(orderType: type);
-      },
-    ),
-    GoRoute(
-      path: AppRoute.myOrder,
-      builder:
-          (context, state) =>
-              MyOrderScreen(orderId: state.pathParameters['orderId']!),
-    ),
-    GoRoute(
-      path: AppRoute.takeSell,
-      builder:
-          (context, state) => TakeOrderScreen(
-            orderId: state.pathParameters['orderId']!,
-            isBuying: true, // taker is buying BTC (taking a sell order)
-          ),
-    ),
-    GoRoute(
-      path: AppRoute.takeBuy,
-      builder:
-          (context, state) => TakeOrderScreen(
-            orderId: state.pathParameters['orderId']!,
-            isBuying: false, // taker is selling BTC (taking a buy order)
-          ),
-    ),
-    GoRoute(
-      path: AppRoute.payInvoice,
-      builder:
-          (context, state) => PayLightningInvoiceScreen(
-            orderId: state.pathParameters['orderId']!,
-          ),
-    ),
-    GoRoute(
-      path: AppRoute.payBond,
-      builder:
-          (context, state) =>
-              PayBondInvoiceScreen(orderId: state.pathParameters['orderId']!),
-    ),
-    GoRoute(
-      path: AppRoute.bondPayout,
-      builder:
-          (context, state) => BondPayoutInvoiceScreen(
-            orderId: state.pathParameters['orderId']!,
-          ),
-    ),
-    GoRoute(
-      path: AppRoute.addInvoice,
-      builder:
-          (context, state) => AddLightningInvoiceScreen(
-            orderId: state.pathParameters['orderId']!,
-          ),
-    ),
-    GoRoute(
-      path: AppRoute.tradeDetail,
-      builder:
-          (context, state) =>
-              TradeDetailScreen(orderId: state.pathParameters['orderId']!),
-    ),
-    GoRoute(
-      path: AppRoute.chatList,
-      builder: (_, __) => const ChatRoomsScreen(),
-    ),
-    GoRoute(
-      path: AppRoute.chatRoom,
-      builder:
-          (context, state) =>
-              ChatRoomScreen(orderId: state.pathParameters['orderId']!),
-    ),
-    GoRoute(
-      path: AppRoute.keyManagement,
-      builder: (_, __) => const AccountScreen(),
-    ),
-    GoRoute(
-      path: AppRoute.settings,
-      builder: (_, __) => const SettingsScreen(),
-    ),
-    GoRoute(
-      path: AppRoute.about,
-      builder: (_, __) => const AboutScreen(),
+      path: AppRoute.home,
+      builder: (_, __) => const HomeScreen(),
       routes: [
-        GoRoute(
-          path: 'technical',
-          builder: (_, __) => const NodeTechnicalDataScreen(),
+        _onHome(AppRoute.orderBook, builder: (_, __) => const TradesScreen()),
+        _onHome(
+          AppRoute.addOrder,
+          builder: (context, state) {
+            final type = state.uri.queryParameters['type'] ?? 'sell';
+            return AddOrderScreen(orderType: type);
+          },
+        ),
+        _onHome(
+          AppRoute.myOrder,
+          builder:
+              (context, state) =>
+                  MyOrderScreen(orderId: state.pathParameters['orderId']!),
+        ),
+        _onHome(
+          AppRoute.takeSell,
+          builder:
+              (context, state) => TakeOrderScreen(
+                orderId: state.pathParameters['orderId']!,
+                isBuying: true, // taker is buying BTC (taking a sell order)
+              ),
+        ),
+        _onHome(
+          AppRoute.takeBuy,
+          builder:
+              (context, state) => TakeOrderScreen(
+                orderId: state.pathParameters['orderId']!,
+                isBuying: false, // taker is selling BTC (taking a buy order)
+              ),
+        ),
+        _onHome(
+          AppRoute.payInvoice,
+          builder:
+              (context, state) => PayLightningInvoiceScreen(
+                orderId: state.pathParameters['orderId']!,
+              ),
+        ),
+        _onHome(
+          AppRoute.payBond,
+          builder:
+              (context, state) => PayBondInvoiceScreen(
+                orderId: state.pathParameters['orderId']!,
+              ),
+        ),
+        _onHome(
+          AppRoute.bondPayout,
+          builder:
+              (context, state) => BondPayoutInvoiceScreen(
+                orderId: state.pathParameters['orderId']!,
+              ),
+        ),
+        _onHome(
+          AppRoute.addInvoice,
+          builder:
+              (context, state) => AddLightningInvoiceScreen(
+                orderId: state.pathParameters['orderId']!,
+              ),
+        ),
+        _onHome(
+          AppRoute.tradeDetail,
+          builder:
+              (context, state) =>
+                  TradeDetailScreen(orderId: state.pathParameters['orderId']!),
+        ),
+        _onHome(AppRoute.chatList, builder: (_, __) => const ChatRoomsScreen()),
+        _onHome(
+          AppRoute.chatRoom,
+          builder:
+              (context, state) =>
+                  ChatRoomScreen(orderId: state.pathParameters['orderId']!),
+        ),
+        _onHome(
+          AppRoute.keyManagement,
+          builder: (_, __) => const AccountScreen(),
+        ),
+        _onHome(AppRoute.settings, builder: (_, __) => const SettingsScreen()),
+        _onHome(
+          AppRoute.about,
+          builder: (_, __) => const AboutScreen(),
+          routes: [
+            GoRoute(
+              path: 'technical',
+              builder: (_, __) => const NodeTechnicalDataScreen(),
+            ),
+          ],
+        ),
+        _onHome(
+          AppRoute.notifications,
+          builder: (_, __) => const NotificationsScreen(),
+        ),
+        _onHome(AppRoute.relays, builder: (_, __) => const RelaysScreen()),
+        // One screen with two states (handoff 10c), so both paths reach it:
+        // the settings row picks by connection state and old deep links
+        // still work.
+        _onHome(
+          AppRoute.walletSettings,
+          builder: (_, __) => const NwcWalletScreen(),
+        ),
+        _onHome(
+          AppRoute.connectWallet,
+          builder: (_, __) => const NwcWalletScreen(),
+        ),
+        _onHome(
+          AppRoute.rateUser,
+          builder:
+              (context, state) => RateCounterpartScreen(
+                orderId: state.pathParameters['orderId']!,
+              ),
+        ),
+        _onHome(
+          AppRoute.disputeDetails,
+          builder:
+              (context, state) => DisputeChatScreen(
+                disputeId: state.pathParameters['disputeId']!,
+              ),
+        ),
+        _onHome(
+          AppRoute.notificationSettings,
+          builder: (_, __) => const NotificationSettingsScreen(),
+        ),
+        _onHome(AppRoute.logs, builder: (_, __) => const LogReportScreen()),
+        _onHome(
+          AppRoute.disputeChat,
+          builder:
+              (context, state) => DisputeChatScreen(
+                disputeId: state.pathParameters['disputeId']!,
+              ),
+        ),
+        _onHome(
+          AppRoute.cashuWallet,
+          builder: (_, __) => const CashuWalletScreen(),
+        ),
+        _onHome(
+          AppRoute.lockEscrow,
+          builder:
+              (context, state) =>
+                  LockEscrowScreen(orderId: state.pathParameters['orderId']!),
         ),
       ],
-    ),
-    GoRoute(
-      path: AppRoute.notifications,
-      builder: (_, __) => const NotificationsScreen(),
-    ),
-    GoRoute(path: AppRoute.relays, builder: (_, __) => const RelaysScreen()),
-    // One screen with two states (handoff 10c), so both paths reach it: the
-    // settings row picks by connection state and old deep links still work.
-    GoRoute(
-      path: AppRoute.walletSettings,
-      builder: (_, __) => const NwcWalletScreen(),
-    ),
-    GoRoute(
-      path: AppRoute.connectWallet,
-      builder: (_, __) => const NwcWalletScreen(),
-    ),
-    GoRoute(
-      path: AppRoute.rateUser,
-      builder:
-          (context, state) =>
-              RateCounterpartScreen(orderId: state.pathParameters['orderId']!),
-    ),
-    GoRoute(
-      path: AppRoute.disputeDetails,
-      builder:
-          (context, state) =>
-              DisputeChatScreen(disputeId: state.pathParameters['disputeId']!),
-    ),
-    GoRoute(
-      path: AppRoute.notificationSettings,
-      builder: (_, __) => const NotificationSettingsScreen(),
-    ),
-    GoRoute(path: AppRoute.logs, builder: (_, __) => const LogReportScreen()),
-    GoRoute(
-      path: AppRoute.disputeChat,
-      builder:
-          (context, state) =>
-              DisputeChatScreen(disputeId: state.pathParameters['disputeId']!),
-    ),
-    GoRoute(
-      path: AppRoute.cashuWallet,
-      builder: (_, __) => const CashuWalletScreen(),
-    ),
-    GoRoute(
-      path: AppRoute.lockEscrow,
-      builder:
-          (context, state) =>
-              LockEscrowScreen(orderId: state.pathParameters['orderId']!),
     ),
   ],
 );

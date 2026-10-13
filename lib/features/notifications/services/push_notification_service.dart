@@ -18,10 +18,14 @@ import 'package:mostro/src/rust/api/push.dart' as push_api;
 import 'package:mostro/src/rust/api/types.dart';
 
 /// Where a tap on an OS notification lands: Notifications, the one screen a
-/// payload-free push can name (docs/PUSH_NOTIFICATIONS.md §7.2).
+/// payload-free push can name (docs/PUSH_NOTIFICATIONS.md §7.2), on Book.
+///
+/// A tap enters the app from outside, like a link, so it replaces the stack
+/// instead of growing it: back from Notifications is Book, not whatever the
+/// user had open before, and a second tap does not stack a second copy.
 @visibleForTesting
 void openNotificationsOnTap(GoRouter router) =>
-    router.push(AppRoute.notifications);
+    router.go(AppRoute.notifications);
 
 /// The device side of push notifications: Firebase, the OS permission, and
 /// the device token, which is handed to Rust and nothing else.
