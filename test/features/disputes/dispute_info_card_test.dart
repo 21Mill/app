@@ -606,6 +606,25 @@ void main() {
       expect(tester.getRect(outcome).top, greaterThan(latest.bottom));
       expect(tester.getRect(closed).bottom, lessThanOrEqualTo(800));
     });
+
+    // With no history nothing jumps to a latest message, and on a short
+    // screen the info card alone pushes the outcome below the fold.
+    testWidgets('no messages on a short screen still opens on the outcome', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        dispute: _dispute(
+          status: DisputeStatus.resolved,
+          resolution: DisputeResolution.fundsToBuyer,
+        ),
+        size: const Size(400, 420),
+      );
+
+      final closed = find.text(_en.disputeChatClosed);
+      expect(closed, findsOneWidget);
+      expect(tester.getRect(closed).bottom, lessThanOrEqualTo(420));
+    });
   });
 
   // Measured with the app's fonts: the test engine's em squares would put
