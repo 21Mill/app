@@ -413,7 +413,7 @@ OrderShareInfo {
 ---
 
 ### resolve_order_link(link: String) → OrderLinkTarget
-**Module**: `rust/src/api/order_link.rs`
+**Module**: `rust/src/api/order_link.rs` — see `docs/DEEP_LINKS.md`.
 
 Find the order a `mostro:` link points at. The link is what a node writes into
 a pending order's Kind 38383 `source` tag:
