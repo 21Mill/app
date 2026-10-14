@@ -4497,4 +4497,115 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get orderLinkUnknownNodeWarning =>
       'This node isn\'t in your list. Change to it only if you trust whoever sent you the link: the node you trade on settles your trades and resolves their disputes.';
+
+  @override
+  String get reputationNodeDoesNotExport =>
+      'This Mostro does not export reputation.';
+
+  @override
+  String get reputationNodeDoesNotImport =>
+      'This Mostro does not import reputation.';
+
+  @override
+  String get reputationIdentityRequired =>
+      'Reputation can only be moved from an account that keeps its reputation. Turn off full privacy mode and try again.';
+
+  @override
+  String get reputationNotEligible =>
+      'Your account cannot export its reputation yet: it needs at least 10 completed trades and 5 ratings received.';
+
+  @override
+  String get reputationBoundToOtherIdentity =>
+      'Your reputation there is already bound to another identity. Authorize the move from the identity it is bound to.';
+
+  @override
+  String get reputationInvalidRebind =>
+      'The authorization to move your reputation is invalid or has expired. Create a new one.';
+
+  @override
+  String get reputationExpiredAttestation =>
+      'This reputation has expired. Request it again from its source.';
+
+  @override
+  String get reputationUntrustedIssuer =>
+      'This Mostro does not accept reputation from that source.';
+
+  @override
+  String get reputationIdentityMismatch =>
+      'This reputation was issued for another identity than the one you are using.';
+
+  @override
+  String get reputationAlreadyImported =>
+      'This reputation was already imported on this Mostro.';
+
+  @override
+  String get reputationInvalidAttestation =>
+      'This is not a valid reputation. Request it again from its source.';
+
+  @override
+  String get reputationImportTitle => 'Import reputation';
+
+  @override
+  String get reputationImportIntro =>
+      'Bring the reputation you earned on lnp2pBot or on another Mostro to this one. Importing links the two accounts: the source and this Mostro learn they belong to the same person.';
+
+  @override
+  String get reputationOpenLnp2pbot => 'Get it from lnp2pBot';
+
+  @override
+  String get reputationPasteHint => 'Paste the reputation you received';
+
+  @override
+  String get reputationCheck => 'Check';
+
+  @override
+  String get reputationImported => 'Your reputation was imported.';
+
+  @override
+  String get reputationImportConfirm => 'Import into this Mostro';
+
+  @override
+  String reputationFigures(int reviews, String rating, int days) {
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
+    final String reviewsString = reviewsNumberFormat.format(reviews);
+    final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String daysString = daysNumberFormat.format(days);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      reviews,
+      locale: localeName,
+      other: '$reviewsString ratings received',
+      one: '1 rating received',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'trading for $daysString days',
+      one: 'trading for 1 day',
+    );
+    return '$_temp0, $rating on average, $_temp1';
+  }
+
+  @override
+  String get reputationFiguresNote =>
+      'Imported reputation is added to the one you have here; your counterparties see them merged.';
+
+  @override
+  String get reputationOpenLnp2pbotFailed =>
+      'Telegram could not be opened. Open lnp2pBot in Telegram yourself and paste here what it sends you.';
+
+  @override
+  String get reputationIdentityHint =>
+      'Before confirming in lnp2pBot, check that it shows this same public key:';
+
+  @override
+  String get reputationUnavailable =>
+      'Unable to check whether reputation can be imported. Try again.';
+
+  @override
+  String get reputationIdentityChanged =>
+      'Your identity changed. Check the public key shown here before trying again.';
 }

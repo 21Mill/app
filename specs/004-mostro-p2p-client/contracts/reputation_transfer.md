@@ -30,6 +30,13 @@ retracts an older answer, so both read `None` until the node is fetched again.
 
 ---
 
+### reputation_identity_npub(identity_hex: String) → String *(sync)*
+Encode a hex public key as npub in Rust. The import screen displays the complete,
+selectable value for comparison with lnp2pBot's confirmation. The bot link uses
+that same hex key; no private key is exposed. Invalid hex returns `InvalidPubkey`.
+
+---
+
 ### parse_reputation_attestation(json: String) → ReputationAttestationInfo  *(sync)*
 Verify a pasted or received attestation locally, without sending anything:
 signature, kind, tags, clock and lifetime. Whether a node trusts its issuer is
@@ -61,6 +68,19 @@ before anything is sent), `PrivacyModeEnabled`, `InvalidPubkey`,
 `InvalidReputationAttestation`, the node's `CantDoReason` by name, and
 `NoIdentity` when the identity was deleted or replaced before the answer
 arrived (nothing is stored).
+
+---
+
+### check_reputation_import(attestation_json: String) → ReputationAttestationInfo
+Run every local check `import_reputation` makes, without sending anything: the
+node advertises `reputation_import_issuers`, privacy mode is off, and the
+attestation verifies, names the user's identity and is signed by a key the
+node trusts. The import screen calls it on Check, so a refusal shows before
+the user commits to the import.
+
+**Errors**: `ReputationImportUnsupported`, `PrivacyModeEnabled`,
+`InvalidReputationAttestation`, `ExpiredReputationAttestation`,
+`ReputationIdentityMismatch`, `UntrustedReputationIssuer`.
 
 ---
 
@@ -134,3 +154,36 @@ created_at: i64
 expiration: i64
 json: String         # the event JSON as received, to import unchanged
 ```
+
+## Import screen
+
+`/import_reputation` is a route inside the persistent home shell. Its Settings
+entry is delivered separately. It imports into the active node and discloses
+that importing links the source and destination accounts.
+
+- Actions stay disabled while privacy and identity are loading, on read failure,
+  in full privacy mode, or when `import_issuers` is absent. A localized notice
+  explains the refusal and Retry rereads the state. An empty issuer list means
+  that no issuer is trusted yet; Check rejects every attestation in that case.
+- The full identity npub is selectable beside the bot action. The user compares
+  it with the key shown by lnp2pBot before confirming the binding there.
+  The Telegram URL uses `rep_` plus the same key encoded as 43 unpadded base64url
+  characters. Before opening it, the screen rereads identity, privacy and node
+  support. A different identity is displayed for review without opening the bot;
+  leaving the route cancels the handoff. A failed launch shows a localized error.
+- A pending exported attestation prefills an empty field and is checked
+  locally. A user paste can contain surrounding prose; only the JSON object is
+  passed to Rust. Check verifies signature, kind, tags, expiry, destination and
+  the node's issuer trust list without publishing. Failures are localized.
+- The verified card shows locale-formatted rating, review count and trading
+  age, with plural forms. Checks, refusals and successful imports are announced
+  to screen readers as live regions. Editing the field withdraws the card and confirmation; an answer
+  to Check that arrives for different text is discarded.
+- Import sends exactly the checked event JSON. Its field and actions are disabled
+  while awaiting the reply. Rust repeats all checks before sending, then the
+  daemon accepts or refuses; only an accepted reply shows success. A refusal or
+  timeout remains an error, and retries use the same checked attestation. Pending
+  state is cleared by Rust only when its event id matches the imported event.
+
+Automation identifiers: `reputation.import.identity`, `.open_bot`, `.input`,
+`.check`, `.figures`, and `.confirm` (each suffix follows `reputation.import`).
