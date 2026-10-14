@@ -9,7 +9,7 @@ import 'package:mostro/features/trades/providers/trades_providers.dart'
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/shared/widgets/bottom_nav_bar.dart';
 
-Future<void> _pump(WidgetTester tester) async {
+Future<GoRouter> _pump(WidgetTester tester) async {
   GoRoute route(String path) => GoRoute(
     path: path,
     builder:
@@ -23,6 +23,7 @@ Future<void> _pump(WidgetTester tester) async {
       route(AppRoute.home),
       route(AppRoute.orderBook),
       route(AppRoute.chatList),
+      route(AppRoute.chatRoom),
     ],
   );
   addTearDown(router.dispose);
@@ -42,6 +43,7 @@ Future<void> _pump(WidgetTester tester) async {
     ),
   );
   await tester.pumpAndSettle();
+  return router;
 }
 
 void main() {
@@ -82,5 +84,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('route ${AppRoute.orderBook}'), findsOneWidget);
+  });
+
+  testWidgets('lights the destination of the screen shown, however it was '
+      'reached', (tester) async {
+    final router = await _pump(tester);
+    Color? colorOf(String label) =>
+        tester.widget<Text>(find.text(label)).style?.color;
+
+    // The drawer, a back step and a notification all navigate without the
+    // bar.
+    router.go(AppRoute.orderBook);
+    await tester.pumpAndSettle();
+    expect(colorOf('Trades'), OrderBookPalette.dark.limeText);
+    expect(colorOf('Book'), OrderBookPalette.dark.textTertiary);
+
+    router.go(AppRoute.chatRoomPath('o1'));
+    await tester.pumpAndSettle();
+    expect(colorOf('Chat'), OrderBookPalette.dark.limeText);
+
+    await tester.tap(find.text('Trades'));
+    await tester.pumpAndSettle();
+    router.go(AppRoute.home);
+    await tester.pumpAndSettle();
+    expect(colorOf('Book'), OrderBookPalette.dark.limeText);
   });
 }

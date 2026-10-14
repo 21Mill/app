@@ -853,6 +853,31 @@ impl OrderBook {
     /// claim of the new identity's — and is dropped when finished, like any
     /// stranger's.
     pub(crate) async fn apply_ingested_order(&self, ingested: IngestedOrder, publish: Publish) {
+        self.apply_ingested_order_by(ingested, publish, None).await;
+    }
+
+    /// [`Self::apply_ingested_order`] for an order fetched outside the live
+    /// subscription (an order link): applied only while `author` is still the
+    /// active node, and decided under the book's lock. A node switch sets the
+    /// new key before it clears the book under this same lock, so the old
+    /// node's order either lands before the clear and leaves with it, or is
+    /// not filed at all. `false` when the node was no longer the active one.
+    pub(crate) async fn apply_ingested_order_from_active(
+        &self,
+        ingested: IngestedOrder,
+        publish: Publish,
+        author: &str,
+    ) -> bool {
+        self.apply_ingested_order_by(ingested, publish, Some(author))
+            .await
+    }
+
+    async fn apply_ingested_order_by(
+        &self,
+        ingested: IngestedOrder,
+        publish: Publish,
+        author: Option<&str>,
+    ) -> bool {
         let IngestedOrder {
             order,
             wire,
@@ -861,6 +886,11 @@ impl OrderBook {
         } = ingested;
         let (touched, changed) = {
             let mut book = self.orders.write().await;
+            if let Some(author) = author {
+                if !author.eq_ignore_ascii_case(&active_mostro_pubkey()) {
+                    return false;
+                }
+            }
             let (order, ours) = if book.ownership_epoch == epoch {
                 (order, ours)
             } else {
@@ -887,6 +917,7 @@ impl OrderBook {
         if let Some(order_id) = touched {
             crate::api::trade_touch::touch_trade(&order_id);
         }
+        true
     }
 
     pub(crate) fn subscribe(&self) -> broadcast::Receiver<Vec<OrderInfo>> {
@@ -2198,7 +2229,8 @@ fn trade_row_from_small_order(
         cooperative_cancel_state: None,
         timeout_at: None,
         // The list dates a trade by this: a replayed row is as old as its
-        // order, not as the replay that rebuilt it.
+        // order, not as the replay that rebuilt it. Right for a maker; the DM
+        // rebuild re-dates its taker rows (#592), the restore's do not yet (#591).
         started_at: order.created_at.filter(|&t| t > 0).unwrap_or(now),
         completed_at: None,
         outcome: None,
@@ -2433,7 +2465,20 @@ async fn rebuild_trade_from_dm(
             kind.action,
             mostro_core::message::Action::AdminSettled | mostro_core::message::Action::AdminCanceled
         );
+    // A taker's trade began at the take, not when the order was published:
+    // an order that sat in the book would make a trade just taken look old
+    // enough for the stale sweep to wipe it (#592). So a taker row is dated
+    // by the message that rebuilt it — for a row the sweep examines, that is
+    // the waiting step's own message — clamped to the local clock. A maker's
+    // trade did begin with its order; its gap in the sweep's age gate is a
+    // different one (#628).
+    let started_at = if is_mine {
+        trade.started_at
+    } else {
+        occurred_at.min(crate::rt::unix_now())
+    };
     let trade = crate::api::types::TradeInfo {
+        started_at,
         completed_at: completed.then(|| occurred_at.min(crate::rt::unix_now())),
         ..trade
     };
@@ -8960,12 +9005,6 @@ fn dispute_id_from_payload(payload: Option<&mostro_core::message::Payload>) -> O
     }
 }
 
-/// Parse a Kind 38383 event and upsert it into the order book, applying
-/// maker-order reconciliation (is_mine detection, local→daemon id bridging,
-/// trade-status sync).
-///
-/// Shared by the live subscription loop and the node-switch refetch so both
-/// paths populate the book identically.
 /// When an ingested event reaches subscribers.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Publish {
@@ -8976,11 +9015,44 @@ pub(crate) enum Publish {
     WhenBatchEnds,
 }
 
+/// Parse a Kind 38383 event and upsert it into the order book, applying
+/// maker-order reconciliation (is_mine detection, local→daemon id bridging,
+/// trade-status sync).
+///
+/// Shared by the live subscription loop, the node-switch refetch and an
+/// opened order link ([`ingest_order_event_from_active_node`]), so every path
+/// populates the book identically. The caller checks that the active node
+/// authored `event`.
 async fn ingest_order_event(event: &nostr_sdk::prelude::Event) {
     ingest_order_event_with(event, Publish::Coalesced).await;
 }
 
+/// An order event fetched outside the live subscription — an order link —
+/// filed through the same path, but only while its author is the active node:
+/// checked first, then again under the book's lock
+/// ([`OrderBook::apply_ingested_order_from_active`]), so a node switch landing
+/// during the lookup cannot leave it in the new node's book. `false` when its
+/// author is not, or no longer, the active node.
+pub(crate) async fn ingest_order_event_from_active_node(event: &nostr_sdk::prelude::Event) -> bool {
+    let author = event.pubkey.to_hex();
+    if !author.eq_ignore_ascii_case(&active_mostro_pubkey()) {
+        return false;
+    }
+    ingest_order_event_by(event, Publish::Coalesced, Some(&author)).await
+}
+
 async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Publish) {
+    ingest_order_event_by(event, publish, None).await;
+}
+
+/// The ingest behind both: `only_from`, when set, is the author that must
+/// still be the active node when the order is filed. `false` only when it is
+/// not; an older revision skipped, or an event the parser rejects, is `true`.
+async fn ingest_order_event_by(
+    event: &nostr_sdk::prelude::Event,
+    publish: Publish,
+    only_from: Option<&str>,
+) -> bool {
     log::debug!(
         "[orders] event kind={} author={}",
         event.kind,
@@ -8997,7 +9069,7 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
             // Held to the end: the classification below writes the trade row
             // and the wire note, and an older revision must reach neither.
             let Some(_revision) = claim_book_revision(&info.id, event).await else {
-                return;
+                return true;
             };
             let book = order_book();
             let revision_at = event.created_at.as_secs() as i64;
@@ -9008,10 +9080,23 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
             let public_success = (ingested.ours
                 && ingested.wire.status == OrderStatus::Success)
                 .then(|| ingested.wire.id.clone());
-            book.apply_ingested_order(ingested, publish).await;
+            let filed = match only_from {
+                Some(author) => {
+                    book.apply_ingested_order_from_active(ingested, publish, author)
+                        .await
+                }
+                None => {
+                    book.apply_ingested_order(ingested, publish).await;
+                    true
+                }
+            };
+            if !filed {
+                return false;
+            }
             if let Some(order_id) = public_success {
                 note_public_success(&order_id, revision_at).await;
             }
+            true
         }
         None => {
             log::warn!(
@@ -9024,6 +9109,7 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
                     .map(|t| t.as_slice().first().map(|s| s.as_str()).unwrap_or("?"))
                     .collect::<Vec<_>>()
             );
+            true
         }
     }
 }
@@ -11049,6 +11135,45 @@ mod tests {
 
         pending_requests().lock().unwrap().remove(&hex);
         crate::nostr::subscriptions::teardown(&nostr_sdk::prelude::Client::default(), &hex).await;
+    }
+
+    /// Codex review of #805: an order link's event is filed only while its
+    /// author is the active node, and that is decided under the book's lock,
+    /// where a node switch clears the book after setting the new key.
+    #[tokio::test]
+    async fn a_linked_order_is_filed_only_while_its_node_is_active() {
+        let book = OrderBook::new();
+        let order = dummy_order_info(&format!("linked-{}", uuid::Uuid::new_v4()));
+        let switched_from = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+
+        let refused = book
+            .apply_ingested_order_from_active(
+                current(&book, order.clone(), false).await,
+                Publish::WhenBatchEnds,
+                &switched_from,
+            )
+            .await;
+        assert!(!refused, "a node that is no longer active files nothing");
+        assert!(book.get_order(&order.id).await.is_none());
+
+        let filed = book
+            .apply_ingested_order_from_active(
+                current(&book, order.clone(), false).await,
+                Publish::WhenBatchEnds,
+                &active_mostro_pubkey(),
+            )
+            .await;
+        assert!(filed);
+        assert!(book.get_order(&order.id).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_linked_order_from_another_node_never_reaches_the_book() {
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let event = book_event_by(&order_id, "pending", &nostr_sdk::prelude::Keys::generate());
+
+        assert!(!ingest_order_event_from_active_node(&event).await);
+        assert!(order_book().get_order(&order_id).await.is_none());
     }
 
     /// Nothing ever displays a stranger's finished order — the book filters to
@@ -13144,10 +13269,12 @@ mod tests {
         }
     }
 
-    /// A rebuilt row is dated by its order, not by the moment of the replay
-    /// that rebuilt it: the trade list shows `started_at`.
+    /// The shared builder dates a row by its order, not by the moment of the
+    /// message that built it: the trade list shows `started_at`, and a
+    /// maker's trade began with its order. The DM rebuild re-dates its taker
+    /// rows (#592), the restore's do not yet (#591).
     #[test]
-    fn a_rebuilt_row_starts_when_its_order_was_created() {
+    fn the_shared_builder_dates_a_row_by_its_order() {
         let mut order = mostro_core::order::SmallOrder::default();
         order.kind = Some(mostro_core::order::Kind::Sell);
         order.fiat_code = "ARS".into();
@@ -19239,6 +19366,198 @@ mod tests {
             drain_updates(&mut rx, &order_id),
             vec![crate::api::types::OrderStatus::WaitingBuyerInvoice],
         );
+    }
+
+    /// Rebuilds a trade row of a sell order published at `order_created_at`
+    /// from one `action` dated `message_at`, on a fresh trade key, and returns
+    /// the row as persisted. The payload names our key as the seller when
+    /// `as_seller` (the maker); otherwise it names nobody and the action's
+    /// addressee is the side (`AddInvoice`: the buyer, a taker).
+    ///
+    /// The row is read back before its order reaches the book: until then a
+    /// sweep running in a parallel test has no public status for it (no
+    /// pool, so no relay lookup) and keeps it.
+    async fn rebuild_dated_row(
+        action: mostro_core::message::Action,
+        status: mostro_core::order::Status,
+        as_seller: bool,
+        order_created_at: i64,
+        message_at: i64,
+    ) -> crate::api::types::TradeInfo {
+        use mostro_core::message::Payload;
+
+        let path =
+            std::env::temp_dir().join(format!("mostro_rebuild_dated_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+
+        let my_hex = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let so = mostro_core::order::SmallOrder::new(
+            Some(order_uuid),
+            Some(mostro_core::order::Kind::Sell),
+            Some(status),
+            6_307,
+            "EUR".to_string(),
+            None,
+            None,
+            50,
+            "SEPA".to_string(),
+            0,
+            None,
+            as_seller.then(|| my_hex.clone()),
+            None,
+            Some(order_created_at),
+            None,
+        );
+        dispatch_mostro_message(
+            daemon_message(
+                order_uuid,
+                action,
+                Some(Payload::Order(so)),
+                message_at as u64,
+            ),
+            &format!("test-rebuild-dated-{order_id}"),
+            &my_hex,
+            21,
+        )
+        .await;
+
+        crate::db::app_db::db()
+            .expect("store initialised")
+            .get_trade_by_order_id(&order_id)
+            .await
+            .expect("lookup")
+            .expect("row rebuilt from the DM")
+    }
+
+    /// Puts a rebuilt sell order in the book as `pending`: a book that has
+    /// not caught up with the take, which the sweep reads instead of asking
+    /// the relays.
+    async fn seed_stale_book(row: &crate::api::types::TradeInfo) {
+        let mut in_book = dummy_order_info(&row.id);
+        in_book.kind = crate::api::types::OrderKind::Sell;
+        in_book.status = crate::api::types::OrderStatus::Pending;
+        in_book.created_at = row.order.created_at;
+        order_book().upsert_order(in_book).await;
+    }
+
+    /// #592: a taker row rebuilt from a late take reply is dated by the
+    /// message that rebuilt it, not by its order. An order that sat in the
+    /// book for a day must not make a trade taken a minute ago look old
+    /// enough for the sweep to wipe it on a book that still says `pending`.
+    #[tokio::test]
+    async fn a_rebuilt_taker_row_of_an_old_order_survives_the_sweep() {
+        // Arrange
+        let now = crate::rt::unix_now();
+        let row = rebuild_dated_row(
+            mostro_core::message::Action::AddInvoice,
+            mostro_core::order::Status::WaitingBuyerInvoice,
+            false,
+            now - 86_400,
+            now - 60,
+        )
+        .await;
+        assert!(!row.order.is_mine, "the buyer of a sell order is its taker");
+        seed_stale_book(&row).await;
+
+        // Act
+        run_stale_sweep_once().await;
+
+        // Assert
+        let row = crate::db::app_db::db()
+            .expect("store initialised")
+            .get_trade_by_order_id(&row.id)
+            .await
+            .expect("lookup")
+            .expect("a trade taken a minute ago was wiped as stale");
+        assert_eq!(row.started_at, now - 60, "dated by the take reply");
+        assert_eq!(
+            row.order.created_at,
+            now - 86_400,
+            "the order keeps its own age"
+        );
+    }
+
+    /// #592: dating the rebuilt row from its message does not switch the
+    /// sweep off. A take reply older than the sweep's age gate, on a book
+    /// that still says `pending`, is the stale trade the sweep exists for.
+    #[tokio::test]
+    async fn a_rebuilt_taker_row_past_the_age_gate_is_still_swept() {
+        // Arrange
+        let now = crate::rt::unix_now();
+        let row = rebuild_dated_row(
+            mostro_core::message::Action::AddInvoice,
+            mostro_core::order::Status::WaitingBuyerInvoice,
+            false,
+            now - 86_400,
+            now - SWEEP_MIN_AGE_SECS - 60,
+        )
+        .await;
+        seed_stale_book(&row).await;
+
+        // Act
+        run_stale_sweep_once().await;
+
+        // Assert
+        assert!(
+            crate::db::app_db::db()
+                .expect("store initialised")
+                .get_trade_by_order_id(&row.id)
+                .await
+                .expect("lookup")
+                .is_none(),
+            "a take older than the gate on a pending book is stale"
+        );
+    }
+
+    /// #592: a daemon clock running ahead of ours — within the skew the
+    /// transport accepts — cannot date a rebuilt taker row in the future.
+    #[tokio::test]
+    async fn a_rebuilt_taker_row_is_never_dated_after_now() {
+        // Arrange
+        let now = crate::rt::unix_now();
+        let ahead = crate::nostr::transport::MAX_CLOCK_SKEW_SECS as i64 / 2;
+
+        // Act
+        let row = rebuild_dated_row(
+            mostro_core::message::Action::AddInvoice,
+            mostro_core::order::Status::WaitingBuyerInvoice,
+            false,
+            now - 86_400,
+            now + ahead,
+        )
+        .await;
+
+        // Assert
+        assert!(
+            (now..=crate::rt::unix_now()).contains(&row.started_at),
+            "dated by the message, clamped to the local clock: {}",
+            row.started_at
+        );
+    }
+
+    /// #592: a maker's trade did begin with its order, so a rebuilt maker
+    /// row keeps the order's creation as its date. No book entry: a maker
+    /// row a day old on a `pending` book is one a parallel sweep resyncs.
+    #[tokio::test]
+    async fn a_rebuilt_maker_row_is_dated_by_its_order() {
+        // Arrange
+        let now = crate::rt::unix_now();
+
+        // Act: our key is the seller of a sell order, so the row is ours.
+        let row = rebuild_dated_row(
+            mostro_core::message::Action::PayInvoice,
+            mostro_core::order::Status::WaitingPayment,
+            true,
+            now - 86_400,
+            now - 60,
+        )
+        .await;
+
+        // Assert
+        assert!(row.order.is_mine, "the seller of a sell order is its maker");
+        assert_eq!(row.started_at, now - 86_400);
     }
 
     /// A redelivered `pay-bond-invoice` (startup replay, reconnect backlog)
