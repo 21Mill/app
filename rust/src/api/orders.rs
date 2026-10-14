@@ -9206,6 +9206,8 @@ async fn forget_own_key_nodes(own_keys: &std::collections::HashSet<String>) {
         if !crate::mostro::trade_node::forget_own_key_node(&mut trade, is_own_key) {
             continue;
         }
+        #[cfg(test)]
+        own_key_node_test_pause().await;
         match persist_trade_row(db, &trade).await {
             Ok(()) => crate::api::logging::blog_info(
                 "orders",
@@ -9222,6 +9224,33 @@ async fn forget_own_key_nodes(own_keys: &std::collections::HashSet<String>) {
                 ),
             ),
         }
+    }
+}
+
+/// The gate and the "reached" flag of an armed [`own_key_node_test_pause`].
+#[cfg(test)]
+type OwnKeyNodePause = (
+    std::sync::Arc<tokio::sync::Notify>,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+);
+
+#[cfg(test)]
+thread_local! {
+    /// The armed pause, if any, for the next own-key node reset on this
+    /// thread to reach its write.
+    static OWN_KEY_NODE_PAUSE: std::cell::RefCell<Option<OwnKeyNodePause>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The test seam that holds [`forget_own_key_nodes`] right before it writes a
+/// row, so a test can commit another write in between. Test builds only:
+/// the call is a `#[cfg(test)]` statement, so the cleanup carries none of it.
+#[cfg(test)]
+async fn own_key_node_test_pause() {
+    let armed = OWN_KEY_NODE_PAUSE.with(|pause| pause.borrow_mut().take());
+    if let Some((gate, reached)) = armed {
+        reached.store(true, std::sync::atomic::Ordering::SeqCst);
+        gate.notified().await;
     }
 }
 
