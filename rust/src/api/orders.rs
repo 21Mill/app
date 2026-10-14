@@ -10590,7 +10590,7 @@ pub(crate) async fn ask_daemon(
         sender_keys,
         mostro_pubkey,
         request_id,
-        event_json,
+        publish_event_json(event_json),
         label,
         is_reply,
         crate::rt::time::Duration::from_secs(5),
@@ -10599,15 +10599,15 @@ pub(crate) async fn ask_daemon(
     .await
 }
 
-/// [`ask_daemon`] with the reply window and the log category the caller
-/// chooses: a request the user waits for, with no fallback, can afford a
-/// longer window than the restore's.
+/// [`ask_daemon`] with a deferred publication, reply window and log category.
+/// `publish` is polled only after the reply subscription is live, so callers
+/// can validate request-specific state at the publication boundary.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn ask_daemon_with(
     sender_keys: &nostr_sdk::prelude::Keys,
     mostro_pubkey: &nostr_sdk::prelude::PublicKey,
     request_id: u64,
-    event_json: &str,
+    publish: impl std::future::Future<Output = Result<()>>,
     label: &str,
     is_reply: fn(&mostro_core::message::MessageKind, u64) -> bool,
     reply_window: crate::rt::time::Duration,
@@ -10662,7 +10662,7 @@ pub(crate) async fn ask_daemon_with(
     // relay-side auto-close starts — so both give up together.
     let start = crate::rt::time::Instant::now();
 
-    publish_event_json(event_json).await?;
+    publish.await?;
     crate::api::logging::blog_info(log_category, format!("{label} published — waiting for daemon"));
 
     loop {

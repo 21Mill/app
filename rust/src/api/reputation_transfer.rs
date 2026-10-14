@@ -355,6 +355,16 @@ fn same_identity(asked: Option<u64>, now: Option<u64>) -> Result<()> {
     }
 }
 
+/// Deferred publication of a reputation request, separate from subscription
+/// setup and the reply wait so its state checks can be tested without relays.
+pub(crate) async fn publish_request(
+    _generation: Option<u64>,
+    _privacy_mode: impl FnOnce() -> bool,
+    publish: impl std::future::Future<Output = Result<()>>,
+) -> Result<()> {
+    publish.await
+}
+
 /// Send one reputation request from a fresh trade key with the identity
 /// proof, and wait for the node's answer to it. `generation` is the one taken
 /// before `identity` was read.
@@ -389,7 +399,11 @@ async fn ask(
         &trade_keys,
         &mostro_pubkey,
         request_id,
-        &event_json,
+        publish_request(
+            generation,
+            crate::api::reputation::get_privacy_mode,
+            crate::api::orders::publish_event_json(&event_json),
+        ),
         &label,
         is_reply,
         crate::rt::time::Duration::from_secs(REPLY_WINDOW_SECS),
