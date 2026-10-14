@@ -189,6 +189,13 @@ Future<void> _pumpRoutedTradeDetail(
               body: Text('dispute ${state.pathParameters['disputeId']}'),
             ),
       ),
+      GoRoute(
+        path: AppRoute.addInvoice,
+        builder:
+            (_, state) => Scaffold(
+              body: Text('add invoice ${state.pathParameters['orderId']}'),
+            ),
+      ),
     ],
   );
   addTearDown(router.dispose);
@@ -579,6 +586,50 @@ void main() {
       expect(find.byWidgetPredicate((w) => w is FilledButton), findsNothing);
       expect(_outlinedButtonWithText(_en.cancel), findsOneWidget);
       expect(_outlinedButtonWithText(_en.openDisputeButton), findsOneWidget);
+    });
+
+    // mostrod takes a replacement invoice while the escrow is settled and no
+    // payout is in flight. The buyer still waits, so it is not lime.
+    testWidgets('payout pending: the buyer can give a new invoice, outlined', (
+      tester,
+    ) async {
+      await _pumpTradeDetail(
+        tester,
+        orderId: 'order-8d-payout',
+        isBuyer: true,
+        status: OrderStatus.settledHoldInvoice,
+      );
+
+      expect(find.text(_en.tradeChipWaiting), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w is FilledButton), findsNothing);
+      expect(
+        _outlinedButtonWithText(_en.addLightningInvoiceButton),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('payout pending: the new invoice opens the payout screen', (
+      tester,
+    ) async {
+      const orderId = 'order-8d-payout-route';
+      await _pumpRoutedTradeDetail(
+        tester,
+        orderId: orderId,
+        status: OrderStatus.settledHoldInvoice,
+        loadTrades:
+            () async => [
+              fakeTrade(
+                id: 'payout-route',
+                orderId: orderId,
+                status: OrderStatus.settledHoldInvoice,
+              ),
+            ],
+      );
+
+      await tester.tap(_outlinedButtonWithText(_en.addLightningInvoiceButton));
+      await _finishPageTransition(tester);
+
+      expect(find.text('add invoice $orderId'), findsOneWidget);
     });
 
     /// Releasing is the one action of the screen that asks first: the sheet
@@ -1534,6 +1585,39 @@ void main() {
         });
       }
     }
+
+    // DS-A11Y-4: payout pending gained the buyer's Add invoice, a full-width
+    // secondary action that must stay on screen and tappable.
+    testWidgets('the payout-pending bar in German, 320dp, 2x text', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 760);
+      tester.view.devicePixelRatio = 1.0;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await _pumpTradeDetail(
+        tester,
+        orderId: 'order-de-payout',
+        isBuyer: true,
+        status: OrderStatus.settledHoldInvoice,
+        locale: const Locale('de'),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find
+            .text(
+              lookupAppLocalizations(
+                const Locale('de'),
+              ).addLightningInvoiceButton,
+            )
+            .hitTestable(),
+        findsOneWidget,
+      );
+    });
 
     // DS-A11Y-4: the disputed bar gained the buyer's Cancel; the seller's
     // carries Release and Cancel side by side under View dispute.
