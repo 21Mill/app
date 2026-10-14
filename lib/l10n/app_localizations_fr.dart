@@ -982,6 +982,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get aboutFiatCurrenciesLabel => 'Devises fiat';
 
   @override
+  String get aboutPriceSourceLabel => 'Source';
+
+  @override
+  String get aboutPriceSection => 'Prix';
+
+  @override
+  String get aboutPriceSourcesFootnote =>
+      'Les sources de prix sont les fournisseurs des taux que le nœud publie en ce moment ; un fournisseur en panne ou écarté n\'apparaît pas.';
+
+  @override
   String get aboutMostroVersionLabel => 'Version Mostro';
 
   @override
@@ -1493,6 +1503,22 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeTimerExpiryCancelled => 'S\'il expire, l\'ordre est annulé.';
+
+  @override
+  String get tradeTimerEscrowCancels =>
+      'Temps approximatif. S\'il s\'écoule, Mostro annule l\'échange.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Temps approximatif. S\'il s\'écoule, Mostro ouvre un litige.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'Mostro est sur le point d\'annuler l\'échange et de retourner les sats au vendeur.';
+
+  @override
+  String get tradeTimerEscrowDisputing =>
+      'Un litige est sur le point d\'être ouvert.';
 
   @override
   String get tradeStepOrderTaken => 'Ordre pris';
@@ -2356,10 +2382,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Temps restant';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'S\'il vous faut plus de temps, convenez-en dans le chat avant l\'expiration.';
 
   @override
   String get tradeRoleBuyer => 'Acheteur';

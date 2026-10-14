@@ -980,6 +980,16 @@ class AppLocalizationsNl extends AppLocalizations {
   String get aboutFiatCurrenciesLabel => 'Fiatvaluta';
 
   @override
+  String get aboutPriceSourceLabel => 'Bron';
+
+  @override
+  String get aboutPriceSection => 'Prijs';
+
+  @override
+  String get aboutPriceSourcesFootnote =>
+      'De prijsbronnen zijn de aanbieders achter de koersen die de node nu publiceert; een aanbieder die faalde of werd weggelaten, staat er niet bij.';
+
+  @override
   String get aboutMostroVersionLabel => 'Mostro-versie';
 
   @override
@@ -1488,6 +1498,21 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get tradeTimerExpiryCancelled =>
       'Verloopt de tijd, dan wordt de order geannuleerd.';
+
+  @override
+  String get tradeTimerEscrowCancels =>
+      'Geschatte tijd. Is die om, dan annuleert Mostro de trade.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Geschatte tijd. Is die om, dan opent Mostro een dispuut.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'Mostro annuleert zo de trade en geeft de sats terug aan de verkoper.';
+
+  @override
+  String get tradeTimerEscrowDisputing => 'Er wordt zo een dispuut geopend.';
 
   @override
   String get tradeStepOrderTaken => 'Order geaccepteerd';
@@ -2349,10 +2374,6 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Resterende tijd';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'Heb je meer tijd nodig, overleg dat in de chat voordat de tijd om is.';
 
   @override
   String get tradeRoleBuyer => 'Koper';

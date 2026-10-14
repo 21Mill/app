@@ -656,10 +656,12 @@ and delivery coverage are computed from one source and cannot drift.
 | **Web**, tab focused | `onMessage` | as Foreground. |
 | **Web**, tab open but hidden, or closed | the service worker's push event | the worker shows the OS notification (`trade_update`: the server's block; `chat_wake`: its own content-free "New message"); a tap focuses or opens the app at `/app/#/notifications`; the tab's `hidden → resumed` (or cold start) resyncs. Nothing is written by the worker. |
 
-Tap routing: with no payload to route on, a tap opens the app on **`/notifications`**
-(cold) or brings it to the foreground (warm); the in-app notifications list — fed by the
-resync — is where the specific event appears. `routeFromPayload` and `_typeFromString`
-are deleted.
+Tap routing: with no payload to route on, a tap opens the app on **`/notifications`**,
+cold or warm; the in-app notifications list — fed by the resync — is where the specific
+event appears. The tap replaces the stack (`go`, `openNotificationsOnTap`) instead of
+pushing onto it: back from Notifications is the Order Book, never the screens the user
+had open before, and a second tap does not stack a second copy. `routeFromPayload` and
+`_typeFromString` are deleted.
 
 ### 7.3 Flow 3 — Waking a peer after a chat message
 

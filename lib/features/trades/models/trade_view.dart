@@ -20,14 +20,19 @@ enum TradePrimaryAction {
 }
 
 /// Lower-hierarchy actions of the action bar.
-enum TradeSecondaryAction { cancel, dispute, release }
+///
+/// [addInvoice] here is the buyer's replacement invoice while the payout is
+/// pending: something they may do, not a step they owe, so never primary.
+enum TradeSecondaryAction { cancel, dispute, release, addInvoice }
 
 /// Whose clock the countdown is: sets the `You have` / `They have` label.
 enum TradeTimerOwner { none, user, counterpart, order }
 
 /// The note under the countdown bar. [stepOutcome] is what expiry does to
 /// the order, which depends on who owes the step (`stepExpiry`).
-enum TradeTimerNote { none, stepOutcome, coordinateInChat, leavesBook }
+/// [escrowOutcome] is what mostrod's escrow deadline does to the trade:
+/// cancel it while `active`, open a dispute once `fiat-sent`.
+enum TradeTimerNote { none, stepOutcome, escrowOutcome, leavesBook }
 
 /// Number of steps on the timeline.
 const kTradeStepCount = 5;
@@ -234,7 +239,7 @@ class TradeView {
               isBuyer ? TradePrimaryAction.fiatSent : TradePrimaryAction.none,
           secondary: cancelOrDispute,
           timer: isBuyer ? TradeTimerOwner.user : TradeTimerOwner.counterpart,
-          note: TradeTimerNote.coordinateInChat,
+          note: TradeTimerNote.escrowOutcome,
           isCompleted: false,
         );
       case TradeStatus.fiatSent:
@@ -247,18 +252,24 @@ class TradeView {
               isBuyer ? TradePrimaryAction.none : TradePrimaryAction.release,
           secondary: cancelOrDispute,
           timer: isBuyer ? TradeTimerOwner.counterpart : TradeTimerOwner.user,
-          note: TradeTimerNote.none,
+          note: TradeTimerNote.escrowOutcome,
           isCompleted: false,
           showsReleaseWarning: !isBuyer,
         );
+      // mostrod takes a replacement invoice while the escrow is settled and
+      // no payout is in flight (`pay_new_invoice`): one that will not work
+      // can be swapped before the payout fails, and after a restore it is the
+      // way back to a payout that already failed, whose `add-invoice` the
+      // restored status hides.
       case TradeStatus.payoutPending:
-        return const TradeView(
+        return TradeView(
           step: 3,
           chip: TradeChip.waiting,
           showsChat: true,
           showsReputation: false,
           primary: TradePrimaryAction.none,
-          secondary: [],
+          secondary:
+              isBuyer ? const [TradeSecondaryAction.addInvoice] : const [],
           timer: TradeTimerOwner.none,
           note: TradeTimerNote.none,
           isCompleted: false,

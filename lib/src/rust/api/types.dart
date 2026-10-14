@@ -1996,6 +1996,19 @@ class TradeInfo {
   final PlatformInt64? timeoutAt;
   final PlatformInt64 startedAt;
   final PlatformInt64? completedAt;
+
+  /// Unix seconds (the node's clock) when the seller's hold invoice was
+  /// accepted: the `created_at` of the daemon message that moved the order
+  /// out of `waiting-payment`. The escrow deadline guardian counts from
+  /// there. The oldest candidate is kept, so a replayed or re-sent message
+  /// never moves it. `None` until recorded, and on rows written before the
+  /// field existed (`#[serde(default)]`).
+  final PlatformInt64? escrowLockedAt;
+
+  /// The node (hex pubkey) that sent the message [`Self::escrow_locked_at`]
+  /// was taken from: its info event says how far the deadline is, whichever
+  /// node is active now.
+  final String? escrowNode;
   final TradeOutcome? outcome;
 
   /// Counterparty (taker) reputation snapshot from the daemon's follow-up
@@ -2081,6 +2094,8 @@ class TradeInfo {
     this.timeoutAt,
     required this.startedAt,
     this.completedAt,
+    this.escrowLockedAt,
+    this.escrowNode,
     this.outcome,
     this.peerRating,
     this.peerReviews,
@@ -2110,6 +2125,8 @@ class TradeInfo {
       timeoutAt.hashCode ^
       startedAt.hashCode ^
       completedAt.hashCode ^
+      escrowLockedAt.hashCode ^
+      escrowNode.hashCode ^
       outcome.hashCode ^
       peerRating.hashCode ^
       peerReviews.hashCode ^
@@ -2141,6 +2158,8 @@ class TradeInfo {
           timeoutAt == other.timeoutAt &&
           startedAt == other.startedAt &&
           completedAt == other.completedAt &&
+          escrowLockedAt == other.escrowLockedAt &&
+          escrowNode == other.escrowNode &&
           outcome == other.outcome &&
           peerRating == other.peerRating &&
           peerReviews == other.peerReviews &&

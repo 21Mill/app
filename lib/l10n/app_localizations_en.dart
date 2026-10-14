@@ -971,6 +971,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutFiatCurrenciesLabel => 'Fiat Currencies';
 
   @override
+  String get aboutPriceSourceLabel => 'Source';
+
+  @override
+  String get aboutPriceSection => 'Price';
+
+  @override
+  String get aboutPriceSourcesFootnote =>
+      'Price sources are the providers behind the rates the node publishes now; one that failed or was set aside is not listed.';
+
+  @override
   String get aboutMostroVersionLabel => 'Mostro Version';
 
   @override
@@ -1476,6 +1486,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get tradeTimerExpiryCancelled =>
       'If it expires, the order is cancelled.';
+
+  @override
+  String get tradeTimerEscrowCancels =>
+      'Approximate time. If it runs out, Mostro cancels the trade.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Approximate time. If it runs out, Mostro opens a dispute.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'Mostro is about to cancel the trade and return the sats to the seller.';
+
+  @override
+  String get tradeTimerEscrowDisputing => 'A dispute is about to be opened.';
 
   @override
   String get tradeStepOrderTaken => 'Order taken';
@@ -2332,10 +2357,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Time left';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'If you need more time, coordinate in the chat before it expires.';
 
   @override
   String get tradeRoleBuyer => 'Buyer';

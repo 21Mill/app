@@ -284,6 +284,9 @@
   "aboutNodeRetry": "Opnieuw",
   "aboutLightningNetworkSection": "Lightning Network",
   "aboutFiatCurrenciesLabel": "Fiatvaluta",
+  "aboutPriceSourceLabel": "Bron",
+  "aboutPriceSection": "Prijs",
+  "aboutPriceSourcesFootnote": "De prijsbronnen zijn de aanbieders achter de koersen die de node nu publiceert; een aanbieder die faalde of werd weggelaten, staat er niet bij.",
   "aboutMostroVersionLabel": "Mostro-versie",
   "aboutMostroCommitLabel": "Mostro-commit",
   "aboutHoldInvoiceExpLabel": "Verlooptijd hold invoice",
@@ -432,6 +435,10 @@
   "tradeTimerPendingConsequence": "Verloopt de tijd, dan gaat de order uit het orderboek. Dat raakt je reputatie niet.",
   "tradeTimerExpiryBackToBook": "Verloopt de tijd, dan komt de order terug in het orderboek.",
   "tradeTimerExpiryCancelled": "Verloopt de tijd, dan wordt de order geannuleerd.",
+  "tradeTimerEscrowCancels": "Geschatte tijd. Is die om, dan annuleert Mostro de trade.",
+  "tradeTimerEscrowDisputes": "Geschatte tijd. Is die om, dan opent Mostro een dispuut.",
+  "tradeTimerEscrowCancelling": "Mostro annuleert zo de trade en geeft de sats terug aan de verkoper.",
+  "tradeTimerEscrowDisputing": "Er wordt zo een dispuut geopend.",
   "tradeStepOrderTaken": "Order geaccepteerd",
   "tradeStepInvoiceBuyer": "De verkoper zet de sats vast",
   "tradeStepInvoiceSeller": "Jij zet de sats vast",
@@ -733,10 +740,6 @@
   "tradeTimerOrderHas": "Resterende tijd",
   "@tradeTimerOrderHas": {
     "description": "Countdown label of a pending order's time in the book"
-  },
-  "tradeTimerNoteCoordinate": "Heb je meer tijd nodig, overleg dat in de chat voordat de tijd om is.",
-  "@tradeTimerNoteCoordinate": {
-    "description": "Note under the countdown of an active trade"
   },
   "tradeRoleBuyer": "Koper",
   "@tradeRoleBuyer": {

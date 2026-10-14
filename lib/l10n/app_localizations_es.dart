@@ -983,6 +983,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get aboutFiatCurrenciesLabel => 'Monedas fiat';
 
   @override
+  String get aboutPriceSourceLabel => 'Fuente';
+
+  @override
+  String get aboutPriceSection => 'Precio';
+
+  @override
+  String get aboutPriceSourcesFootnote =>
+      'Las fuentes de precio son los proveedores de las tasas que el nodo publica ahora; uno que falló o se descartó no aparece.';
+
+  @override
   String get aboutMostroVersionLabel => 'Versión de Mostro';
 
   @override
@@ -1490,6 +1500,22 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tradeTimerExpiryCancelled => 'Si expira, la orden se cancela.';
+
+  @override
+  String get tradeTimerEscrowCancels =>
+      'Tiempo aproximado. Si se agota, Mostro cancela la operación.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Tiempo aproximado. Si se agota, Mostro abre una disputa.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'Mostro está a punto de cancelar la operación y devolver los sats al vendedor.';
+
+  @override
+  String get tradeTimerEscrowDisputing =>
+      'Está a punto de abrirse una disputa.';
 
   @override
   String get tradeStepOrderTaken => 'Orden tomada';
@@ -2351,10 +2377,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Queda';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'Si necesitan más tiempo, coordínenlo por el chat antes de que expire.';
 
   @override
   String get tradeRoleBuyer => 'Comprador';

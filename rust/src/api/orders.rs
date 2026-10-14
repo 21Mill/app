@@ -861,6 +861,31 @@ impl OrderBook {
     /// claim of the new identity's — and is dropped when finished, like any
     /// stranger's.
     pub(crate) async fn apply_ingested_order(&self, ingested: IngestedOrder, publish: Publish) {
+        self.apply_ingested_order_by(ingested, publish, None).await;
+    }
+
+    /// [`Self::apply_ingested_order`] for an order fetched outside the live
+    /// subscription (an order link): applied only while `author` is still the
+    /// active node, and decided under the book's lock. A node switch sets the
+    /// new key before it clears the book under this same lock, so the old
+    /// node's order either lands before the clear and leaves with it, or is
+    /// not filed at all. `false` when the node was no longer the active one.
+    pub(crate) async fn apply_ingested_order_from_active(
+        &self,
+        ingested: IngestedOrder,
+        publish: Publish,
+        author: &str,
+    ) -> bool {
+        self.apply_ingested_order_by(ingested, publish, Some(author))
+            .await
+    }
+
+    async fn apply_ingested_order_by(
+        &self,
+        ingested: IngestedOrder,
+        publish: Publish,
+        author: Option<&str>,
+    ) -> bool {
         let IngestedOrder {
             order,
             wire,
@@ -869,6 +894,11 @@ impl OrderBook {
         } = ingested;
         let (touched, changed) = {
             let mut book = self.orders.write().await;
+            if let Some(author) = author {
+                if !author.eq_ignore_ascii_case(&active_mostro_pubkey()) {
+                    return false;
+                }
+            }
             let (order, ours) = if book.ownership_epoch == epoch {
                 (order, ours)
             } else {
@@ -895,6 +925,7 @@ impl OrderBook {
         if let Some(order_id) = touched {
             crate::api::trade_touch::touch_trade(&order_id);
         }
+        true
     }
 
     pub(crate) fn subscribe(&self) -> broadcast::Receiver<Vec<OrderInfo>> {
@@ -1134,6 +1165,15 @@ fn order_book() -> &'static OrderBook {
 /// Public API: get filtered orders.
 pub async fn get_orders(filters: Option<OrderFilters>) -> Result<Vec<OrderInfo>> {
     Ok(order_book().get_orders(filters).await)
+}
+
+/// Public API: the sats the node pays the buyer of `order_id`, the amount the
+/// payout invoice must carry. `None` until it is known.
+///
+/// Only `add-invoice` and `hold-invoice-payment-accepted` say it: never the
+/// order amount, which the book entry and the row hold.
+pub async fn payout_amount(order_id: String) -> Result<Option<u64>> {
+    Ok(crate::api::invoice::payout_amount_of(&order_id).await)
 }
 
 /// Public API: get a single order by ID.
@@ -1461,6 +1501,8 @@ async fn create_order_once(params: NewOrderParams) -> Result<OrderInfo> {
         timeout_at: None,
         started_at: now,
         completed_at: None,
+        escrow_locked_at: None,
+        escrow_node: None,
         outcome: None,
         peer_rating: None,
         peer_reviews: None,
@@ -1884,6 +1926,8 @@ fn trade_row_for_accepted_take(
         timeout_at: if waiting_bond { None } else { Some(now + 900) },
         started_at: now,
         completed_at: None,
+        escrow_locked_at: None,
+        escrow_node: None,
         outcome: None,
         peer_rating: None,
         peer_reviews: None,
@@ -2245,9 +2289,12 @@ fn trade_row_from_small_order(
         cooperative_cancel_state: None,
         timeout_at: None,
         // The list dates a trade by this: a replayed row is as old as its
-        // order, not as the replay that rebuilt it.
+        // order, not as the replay that rebuilt it. Right for a maker; the DM
+        // rebuild re-dates its taker rows (#592), the restore's do not yet (#591).
         started_at: order.created_at.filter(|&t| t > 0).unwrap_or(now),
         completed_at: None,
+        escrow_locked_at: None,
+        escrow_node: None,
         outcome: None,
         peer_rating: None,
         peer_reviews: None,
@@ -2514,7 +2561,20 @@ fn dm_trade_row(
     // it (#642) — never by an admin verdict, which gets no chat window.
     let completed = status == OrderStatus::Success
         && !matches!(kind.action, Action::AdminSettled | Action::AdminCanceled);
+    // A taker's trade began at the take, not when the order was published:
+    // an order that sat in the book would make a trade just taken look old
+    // enough for the stale sweep to wipe it (#592). So a taker row is dated
+    // by the message that rebuilt it — for a row the sweep examines, that is
+    // the waiting step's own message — clamped to the local clock. A maker's
+    // trade did begin with its order; its gap in the sweep's age gate is a
+    // different one (#628).
+    let started_at = if is_mine {
+        trade.started_at
+    } else {
+        occurred_at.min(crate::rt::unix_now())
+    };
     Some(crate::api::types::TradeInfo {
+        started_at,
         completed_at: completed.then(|| occurred_at.min(crate::rt::unix_now())),
         ..trade
     })
@@ -3192,6 +3252,56 @@ fn cant_do_message(reason: &str) -> String {
     }
 }
 
+/// Record `trade`'s escrow lock time from a daemon message dated `event_ts`,
+/// sent by `node`, when the message dates it
+/// ([`crate::mostro::status::dates_escrow_lock`]) and is older than the time
+/// already held: the oldest wins, so a re-send or a replay never moves it.
+async fn record_escrow_lock(
+    order_id: &str,
+    trade: &crate::api::types::TradeInfo,
+    kind: &mostro_core::message::MessageKind,
+    event_ts: i64,
+    node: &str,
+) {
+    if !crate::mostro::status::dates_escrow_lock(&kind.action, &kind.payload, &trade.order.kind) {
+        return;
+    }
+    if trade.escrow_locked_at.is_some_and(|held| held <= event_ts) {
+        return;
+    }
+    // A message dated beyond the tolerated skew is not a trustworthy start,
+    // and one dated at or before the epoch is no date at all: kept as the
+    // oldest, it would expire the deadline for good.
+    let horizon =
+        crate::rt::unix_now().saturating_add(crate::nostr::transport::MAX_CLOCK_SKEW_SECS as i64);
+    if event_ts <= 0 || event_ts > horizon {
+        return;
+    }
+    let Some(db) = crate::db::app_db::db() else {
+        return;
+    };
+    match db.mark_escrow_locked(order_id, event_ts, node).await {
+        Ok(()) => {
+            crate::api::logging::blog_info(
+                "orders",
+                format!(
+                    "escrow locked order={} at={event_ts} src={:?}",
+                    crate::api::logging::short_id(order_id),
+                    kind.action,
+                ),
+            );
+            crate::api::trade_touch::touch_trade(order_id);
+        }
+        Err(e) => crate::api::logging::blog_warn(
+            "orders",
+            format!(
+                "escrow lock not recorded order={}: {e}",
+                crate::api::logging::short_id(order_id),
+            ),
+        ),
+    }
+}
+
 /// Dispatch a Mostro `Message` recovered from a kind-14 NIP-44 reply.
 ///
 /// The caller recovers the `UnwrappedMessage` via
@@ -3522,6 +3632,18 @@ async fn dispatch_mostro_message(
                     )
                     .await;
                 }
+                // A taker-buyer's payout amount arrives in this reply alone.
+                if kind.action == Action::AddInvoice {
+                    if let Some((_, Some(sats))) = add_invoice_sync(&kind.payload) {
+                        crate::api::invoice::record_payout_amount(
+                            &order_id.to_string(),
+                            sats,
+                            event_ts,
+                            trade_index,
+                        )
+                        .await;
+                    }
+                }
             }
             if let Some(tx) = pending.tx.take() {
                 // Hand THIS dispatcher's per-order guard to the woken
@@ -3728,6 +3850,14 @@ async fn dispatch_mostro_message(
                 }
             }
         }
+    }
+
+    // The escrow deadline counts from the message that moved the order out of
+    // `waiting-payment`. Recorded whatever the arms below decide about the
+    // status: a replayed message older than the stored status is exactly
+    // the one that dates the lock.
+    if let (Some(order_id), Some(trade)) = (&kind.id, row_state.trade()) {
+        record_escrow_lock(&order_id.to_string(), trade, kind, event_ts, &sender_hex).await;
     }
 
     match &kind.action {
@@ -4083,6 +4213,23 @@ async fn dispatch_mostro_message(
             // re-created by `take_order` (lifting the tombstone), and the wipe
             // handed the book entry back to the public view — `pending`, or no
             // entry at all — so the local status it reads passes.
+            //
+            // The buyer's copy carries the payout amount, recorded before the
+            // gate like `add-invoice`'s. The seller's `buyer-took-order`
+            // carries what the seller pays, which is not a payout.
+            if kind.action == Action::HoldInvoicePaymentAccepted {
+                if let Some(mostro_core::message::Payload::Order(o)) = &kind.payload {
+                    if let Ok(sats) = u64::try_from(o.amount) {
+                        crate::api::invoice::record_payout_amount(
+                            &order_id,
+                            sats,
+                            event_ts,
+                            trade_index,
+                        )
+                        .await;
+                    }
+                }
+            }
             if status_write_blocked(&order_id, &kind.action, event_ts).await {
                 return;
             }
@@ -4173,6 +4320,12 @@ async fn dispatch_mostro_message(
                 }
                 return;
             };
+            // Before the status gate: a replay older than a restore has its
+            // status refused, and its amount is still the payout's only source.
+            if let Some(sats) = amount {
+                crate::api::invoice::record_payout_amount(&order_id, sats, event_ts, trade_index)
+                    .await;
+            }
             if status_write_blocked(&order_id, &kind.action, event_ts).await {
                 return;
             }
@@ -5089,6 +5242,8 @@ fn restored_bond_row(
         timeout_at: None,
         started_at: now,
         completed_at: None,
+        escrow_locked_at: None,
+        escrow_node: None,
         outcome: None,
         peer_rating: None,
         peer_reviews: None,
@@ -6277,21 +6432,29 @@ pub async fn request_bond_invoice_again(
 /// ([`resync_republished_maker_order`]) and, when that message never landed
 /// or was refused as stale, the sweep's `SyncPending`. Both end the step, so
 /// both clear it; anything that learns of it in future must call this too.
+///
+/// The payout amount goes with it: the maker's next take arrives on the same
+/// index, so a stale amount would read as that take's until its own
+/// `add-invoice` lands, and a market-priced order is priced again.
 async fn clear_maker_step_start(db: &impl Storage, order_id: &str) -> bool {
-    if let Err(e) = db
-        .delete_setting(&crate::db::settings_keys::invoice_step_start(order_id))
-        .await
-    {
-        crate::api::logging::blog_warn(
-            "orders",
-            format!(
-                "step start not cleared for republished order={}: {e}",
-                crate::api::logging::short_id(order_id),
-            ),
-        );
-        return false;
+    let keys = [
+        ("step start", crate::db::settings_keys::invoice_step_start(order_id)),
+        ("payout amount", crate::db::settings_keys::payout_amount(order_id)),
+    ];
+    let mut cleared = true;
+    for (what, key) in keys {
+        if let Err(e) = db.delete_setting(&key).await {
+            crate::api::logging::blog_warn(
+                "orders",
+                format!(
+                    "{what} not cleared for republished order={}: {e}",
+                    crate::api::logging::short_id(order_id),
+                ),
+            );
+            cleared = false;
+        }
     }
-    true
+    cleared
 }
 
 /// The statuses a maker's order can be republished out of: a waiting step
@@ -6317,9 +6480,24 @@ fn is_maker_waiting_step(status: &OrderStatus) -> bool {
 /// next take on the same trade index inherits its deadline, because
 /// `next_step_start` keeps the older timestamp for a step it cannot tell
 /// apart.
+///
+/// The escrow lock is cleared before `Pending` for the same reason. On a buy
+/// order it is recorded in `waiting-buyer-invoice`, which a taker can still
+/// leave (mostrod refunds the seller and republishes), and a stranded lock
+/// would refuse the next take's as newer and date its deadline from this one.
 async fn write_maker_step_end(db: &impl Storage, order_id: &str) -> bool {
     if !clear_maker_step_start(db, order_id).await {
         // Writing `Pending` now would strand the key above.
+        return false;
+    }
+    if let Err(e) = db.clear_escrow_lock(order_id).await {
+        crate::api::logging::blog_warn(
+            "orders",
+            format!(
+                "escrow lock not cleared for republished order={}: {e}",
+                crate::api::logging::short_id(order_id),
+            ),
+        );
         return false;
     }
     if let Err(e) = db
@@ -6860,6 +7038,16 @@ async fn wipe_trade_row(
         crate::api::logging::blog_warn(
             "orders",
             format!("step start not cleared for order={order_id}: {e}"),
+        );
+    }
+    // The payout amount belongs to the same row, for the same reason.
+    if let Err(e) = db
+        .delete_setting(&crate::db::settings_keys::payout_amount(order_id))
+        .await
+    {
+        crate::api::logging::blog_warn(
+            "orders",
+            format!("payout amount not cleared for order={order_id}: {e}"),
         );
     }
     release_finished_trade_subscriptions(order_id, Some(wiped_index));
@@ -9065,12 +9253,6 @@ fn dispute_id_from_payload(payload: Option<&mostro_core::message::Payload>) -> O
     }
 }
 
-/// Parse a Kind 38383 event and upsert it into the order book, applying
-/// maker-order reconciliation (is_mine detection, local→daemon id bridging,
-/// trade-status sync).
-///
-/// Shared by the live subscription loop and the node-switch refetch so both
-/// paths populate the book identically.
 /// When an ingested event reaches subscribers.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Publish {
@@ -9081,11 +9263,44 @@ pub(crate) enum Publish {
     WhenBatchEnds,
 }
 
+/// Parse a Kind 38383 event and upsert it into the order book, applying
+/// maker-order reconciliation (is_mine detection, local→daemon id bridging,
+/// trade-status sync).
+///
+/// Shared by the live subscription loop, the node-switch refetch and an
+/// opened order link ([`ingest_order_event_from_active_node`]), so every path
+/// populates the book identically. The caller checks that the active node
+/// authored `event`.
 async fn ingest_order_event(event: &nostr_sdk::prelude::Event) {
     ingest_order_event_with(event, Publish::Coalesced).await;
 }
 
+/// An order event fetched outside the live subscription — an order link —
+/// filed through the same path, but only while its author is the active node:
+/// checked first, then again under the book's lock
+/// ([`OrderBook::apply_ingested_order_from_active`]), so a node switch landing
+/// during the lookup cannot leave it in the new node's book. `false` when its
+/// author is not, or no longer, the active node.
+pub(crate) async fn ingest_order_event_from_active_node(event: &nostr_sdk::prelude::Event) -> bool {
+    let author = event.pubkey.to_hex();
+    if !author.eq_ignore_ascii_case(&active_mostro_pubkey()) {
+        return false;
+    }
+    ingest_order_event_by(event, Publish::Coalesced, Some(&author)).await
+}
+
 async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Publish) {
+    ingest_order_event_by(event, publish, None).await;
+}
+
+/// The ingest behind both: `only_from`, when set, is the author that must
+/// still be the active node when the order is filed. `false` only when it is
+/// not; an older revision skipped, or an event the parser rejects, is `true`.
+async fn ingest_order_event_by(
+    event: &nostr_sdk::prelude::Event,
+    publish: Publish,
+    only_from: Option<&str>,
+) -> bool {
     log::debug!(
         "[orders] event kind={} author={}",
         event.kind,
@@ -9102,7 +9317,7 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
             // Held to the end: the classification below writes the trade row
             // and the wire note, and an older revision must reach neither.
             let Some(_revision) = claim_book_revision(&info.id, event).await else {
-                return;
+                return true;
             };
             let book = order_book();
             let revision_at = event.created_at.as_secs() as i64;
@@ -9113,10 +9328,23 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
             let public_success = (ingested.ours
                 && ingested.wire.status == OrderStatus::Success)
                 .then(|| ingested.wire.id.clone());
-            book.apply_ingested_order(ingested, publish).await;
+            let filed = match only_from {
+                Some(author) => {
+                    book.apply_ingested_order_from_active(ingested, publish, author)
+                        .await
+                }
+                None => {
+                    book.apply_ingested_order(ingested, publish).await;
+                    true
+                }
+            };
+            if !filed {
+                return false;
+            }
             if let Some(order_id) = public_success {
                 note_public_success(&order_id, revision_at).await;
             }
+            true
         }
         None => {
             log::warn!(
@@ -9129,6 +9357,7 @@ async fn ingest_order_event_with(event: &nostr_sdk::prelude::Event, publish: Pub
                     .map(|t| t.as_slice().first().map(|s| s.as_str()).unwrap_or("?"))
                     .collect::<Vec<_>>()
             );
+            true
         }
     }
 }
@@ -11157,6 +11386,45 @@ mod tests {
 
         pending_requests().lock().unwrap().remove(&hex);
         crate::nostr::subscriptions::teardown(&nostr_sdk::prelude::Client::default(), &hex).await;
+    }
+
+    /// Codex review of #805: an order link's event is filed only while its
+    /// author is the active node, and that is decided under the book's lock,
+    /// where a node switch clears the book after setting the new key.
+    #[tokio::test]
+    async fn a_linked_order_is_filed_only_while_its_node_is_active() {
+        let book = OrderBook::new();
+        let order = dummy_order_info(&format!("linked-{}", uuid::Uuid::new_v4()));
+        let switched_from = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+
+        let refused = book
+            .apply_ingested_order_from_active(
+                current(&book, order.clone(), false).await,
+                Publish::WhenBatchEnds,
+                &switched_from,
+            )
+            .await;
+        assert!(!refused, "a node that is no longer active files nothing");
+        assert!(book.get_order(&order.id).await.is_none());
+
+        let filed = book
+            .apply_ingested_order_from_active(
+                current(&book, order.clone(), false).await,
+                Publish::WhenBatchEnds,
+                &active_mostro_pubkey(),
+            )
+            .await;
+        assert!(filed);
+        assert!(book.get_order(&order.id).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_linked_order_from_another_node_never_reaches_the_book() {
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let event = book_event_by(&order_id, "pending", &nostr_sdk::prelude::Keys::generate());
+
+        assert!(!ingest_order_event_from_active_node(&event).await);
+        assert!(order_book().get_order(&order_id).await.is_none());
     }
 
     /// Nothing ever displays a stranger's finished order — the book filters to
@@ -13252,10 +13520,12 @@ mod tests {
         }
     }
 
-    /// A rebuilt row is dated by its order, not by the moment of the replay
-    /// that rebuilt it: the trade list shows `started_at`.
+    /// The shared builder dates a row by its order, not by the moment of the
+    /// message that built it: the trade list shows `started_at`, and a
+    /// maker's trade began with its order. The DM rebuild re-dates its taker
+    /// rows (#592), the restore's do not yet (#591).
     #[test]
-    fn a_rebuilt_row_starts_when_its_order_was_created() {
+    fn the_shared_builder_dates_a_row_by_its_order() {
         let mut order = mostro_core::order::SmallOrder::default();
         order.kind = Some(mostro_core::order::Kind::Sell);
         order.fiat_code = "ARS".into();
@@ -14739,6 +15009,17 @@ mod tests {
         async fn mark_trade_completed(&self, _order_id: &str, _completed_at: i64) -> Result<()> {
             unimplemented!()
         }
+        async fn mark_escrow_locked(
+            &self,
+            _order_id: &str,
+            _locked_at: i64,
+            _node: &str,
+        ) -> Result<()> {
+            unimplemented!()
+        }
+        async fn clear_escrow_lock(&self, _order_id: &str) -> Result<()> {
+            unimplemented!()
+        }
         async fn set_cooperative_cancel_state(
             &self,
             _order_id: &str,
@@ -14977,6 +15258,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -15404,6 +15687,10 @@ mod tests {
         db.set_setting(&key, "WaitingBuyerInvoice:1000:1")
             .await
             .expect("record a step start");
+        let payout = crate::db::settings_keys::payout_amount(&order_id);
+        db.set_setting(&payout, "311:1000:1")
+            .await
+            .expect("record a payout amount");
 
         // Act
         wipe_trade_row(db, &order_id, 1, 1).await.expect("wipe");
@@ -15413,6 +15700,11 @@ mod tests {
             db.get_setting(&key).await.expect("read back"),
             None,
             "the step start outlived the row it describes"
+        );
+        assert_eq!(
+            db.get_setting(&payout).await.expect("read back"),
+            None,
+            "the payout amount outlived the row it describes"
         );
     }
 
@@ -16286,6 +16578,116 @@ mod tests {
         .await;
     }
 
+    /// [`dispatch_daemon_action_at`] with a payload.
+    async fn dispatch_daemon_message_at(
+        order_uuid: uuid::Uuid,
+        action: mostro_core::message::Action,
+        payload: Option<mostro_core::message::Payload>,
+        at: u64,
+    ) {
+        use mostro_core::message::Message;
+        let sender = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())
+            .expect("valid mostro pubkey");
+        dispatch_mostro_message(
+            mostro_core::transport::UnwrappedMessage {
+                message: Message::new_order(Some(order_uuid), None, None, action, payload),
+                signature: None,
+                sender,
+                identity: sender,
+                created_at: nostr_sdk::prelude::Timestamp::from(at),
+            },
+            &format!("test-escrow-lock-{order_uuid}-{at}"),
+            "ff00ff22",
+            1,
+        )
+        .await;
+    }
+
+    /// A trade row of `kind` waiting for the seller's payment.
+    async fn waiting_payment_row(kind: crate::api::types::OrderKind) -> (uuid::Uuid, String) {
+        let db = crate::db::app_db::db().expect("store initialised");
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let mut order = wire_order(&order_id, OrderStatus::WaitingPayment);
+        order.kind = kind;
+        db.save_trade(&cancel_test_row(order))
+            .await
+            .expect("save the trade row");
+        (order_uuid, order_id)
+    }
+
+    async fn escrow_lock_of(order_id: &str) -> (Option<i64>, Option<String>) {
+        let trade = crate::db::app_db::db()
+            .expect("store initialised")
+            .get_trade_by_order_id(order_id)
+            .await
+            .expect("read the trade row")
+            .expect("the row survives");
+        (trade.escrow_locked_at, trade.escrow_node)
+    }
+
+    /// The escrow lock is dated by the message that moved the order out of
+    /// `waiting-payment`, whichever way it arrives: on a sell order the
+    /// `waiting-buyer-invoice` of the take does not count; on a buy order the
+    /// lock is the `add-invoice` and the later re-sent `hold-invoice-payment-
+    /// accepted` does not move it; and a history replayed newest-first lands
+    /// on the same time.
+    #[tokio::test]
+    async fn the_escrow_lock_is_dated_by_the_message_that_left_waiting_payment() {
+        use crate::api::types::OrderKind;
+        use mostro_core::message::{Action, Payload};
+        use mostro_core::order::Status;
+
+        let path =
+            std::env::temp_dir().join(format!("mostro_escrow_lock_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let node = active_mostro_pubkey();
+        let add_invoice = || {
+            Some(Payload::Order(small_order_with(
+                Status::WaitingBuyerInvoice,
+                1_000,
+            )))
+        };
+
+        // Sell order: the buyer's step comes at the take, before the payment.
+        let (uuid, order_id) = waiting_payment_row(OrderKind::Sell).await;
+        dispatch_daemon_message_at(uuid, Action::WaitingBuyerInvoice, None, 1_000).await;
+        assert_eq!(escrow_lock_of(&order_id).await, (None, None));
+        dispatch_daemon_message_at(uuid, Action::HoldInvoicePaymentAccepted, None, 2_000).await;
+        assert_eq!(
+            escrow_lock_of(&order_id).await,
+            (Some(2_000), Some(node.clone()))
+        );
+        // Later steps keep it.
+        dispatch_daemon_message_at(uuid, Action::FiatSentOk, None, 4_000).await;
+        assert_eq!(escrow_lock_of(&order_id).await.0, Some(2_000));
+
+        // Buy order without the buyer's invoice: locked at the add-invoice,
+        // not at the confirmation re-sent once the invoice arrives.
+        let (uuid, order_id) = waiting_payment_row(OrderKind::Buy).await;
+        dispatch_daemon_message_at(uuid, Action::AddInvoice, add_invoice(), 3_000).await;
+        dispatch_daemon_message_at(uuid, Action::HoldInvoicePaymentAccepted, None, 9_000).await;
+        assert_eq!(
+            escrow_lock_of(&order_id).await,
+            (Some(3_000), Some(node.clone()))
+        );
+
+        // A message dated at the epoch is no date: it is not kept, so it
+        // cannot stand as the oldest over the real one.
+        let (uuid, order_id) = waiting_payment_row(OrderKind::Sell).await;
+        dispatch_daemon_message_at(uuid, Action::HoldInvoicePaymentAccepted, None, 0).await;
+        assert_eq!(escrow_lock_of(&order_id).await, (None, None));
+        dispatch_daemon_message_at(uuid, Action::HoldInvoicePaymentAccepted, None, 2_500).await;
+        assert_eq!(escrow_lock_of(&order_id).await.0, Some(2_500));
+
+        // The seller's side of it, replayed newest-first.
+        let (uuid, order_id) = waiting_payment_row(OrderKind::Buy).await;
+        dispatch_daemon_message_at(uuid, Action::BuyerTookOrder, None, 9_000).await;
+        assert_eq!(escrow_lock_of(&order_id).await.0, Some(9_000));
+        dispatch_daemon_message_at(uuid, Action::WaitingBuyerInvoice, None, 3_000).await;
+        assert_eq!(escrow_lock_of(&order_id).await, (Some(3_000), Some(node)));
+    }
+
     /// An active take, its public `in-progress` noted by the d-tag path.
     async fn noted_active_take() -> (uuid::Uuid, String) {
         let db = crate::db::app_db::db().expect("store initialised");
@@ -16483,6 +16885,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -16608,6 +17012,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -16728,6 +17134,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -17224,6 +17632,7 @@ mod tests {
             7,
         )
         .await;
+        crate::api::invoice::record_payout_amount(&order_id, 311, first_take, 7).await;
         // The daemon put it back on the book; the DM never got through.
         order_info.status = crate::api::types::OrderStatus::Pending;
         order_book().upsert_order(order_info).await;
@@ -17233,9 +17642,14 @@ mod tests {
 
         // Assert
         assert_eq!(
-            crate::api::invoice::trade_step_started_at(order_id).await,
+            crate::api::invoice::trade_step_started_at(order_id.clone()).await,
             None,
             "the previous take's start survived the sweep"
+        );
+        assert_eq!(
+            payout_amount(order_id).await.unwrap(),
+            None,
+            "the previous take's payout amount survived the sweep"
         );
     }
 
@@ -17354,6 +17768,95 @@ mod tests {
         );
     }
 
+    /// A buy order's escrow locks in `waiting-buyer-invoice`, and the seller
+    /// who took it can still cancel there: mostrod refunds them and puts the
+    /// order back on the book. The next take's lock is later than the first,
+    /// so unless the republish forgets the first one, the oldest-wins rule
+    /// keeps it and the escrow deadline counts from a take that is gone.
+    #[tokio::test]
+    async fn a_republished_maker_order_takes_the_next_take_s_escrow_lock() {
+        use mostro_core::message::{Action, Message, Payload};
+
+        // Arrange: a buyer's own buy order in `waiting-buyer-invoice`, its
+        // escrow locked by the first take.
+        let path =
+            std::env::temp_dir().join(format!("mostro_maker_escrow_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let mut order_info = dummy_order_info(&order_id);
+        order_info.kind = crate::api::types::OrderKind::Buy;
+        order_info.status = crate::api::types::OrderStatus::WaitingBuyerInvoice;
+        order_info.is_mine = true;
+        order_book().upsert_order(order_info.clone()).await;
+        let mut row = cancel_test_row(order_info);
+        row.trade_key_index = 7;
+        db.save_trade(&row).await.expect("save the maker's row");
+        let node = active_mostro_pubkey();
+        let first_take = crate::rt::unix_now() - 600;
+        db.mark_escrow_locked(&order_id, first_take, &node)
+            .await
+            .expect("record the first take's lock");
+
+        let sender = nostr_sdk::prelude::PublicKey::from_hex(&node).expect("valid mostro pubkey");
+        let daemon = |action: Action, payload: Option<Payload>, ts: i64| {
+            mostro_core::transport::UnwrappedMessage {
+                message: Message::new_order(Some(order_uuid), None, None, action, payload),
+                signature: None,
+                sender,
+                identity: sender,
+                created_at: nostr_sdk::prelude::Timestamp::from(ts as u64),
+            }
+        };
+        let order_in = |status| {
+            let mut order = crate::mostro::test_fixtures::small_order_with(status, 1000);
+            order.id = Some(order_uuid);
+            order.kind = Some(mostro_core::order::Kind::Buy);
+            Payload::Order(order)
+        };
+
+        // Act: the seller cancels, the daemon republishes, and a new seller
+        // takes and pays — the buyer is asked for an invoice again.
+        let republish_ts = first_take + 60;
+        dispatch_mostro_message(
+            daemon(
+                Action::NewOrder,
+                Some(order_in(mostro_core::order::Status::Pending)),
+                republish_ts,
+            ),
+            "test-maker-escrow-republish",
+            "ff00ff07",
+            7,
+        )
+        .await;
+        let second_take = republish_ts + 60;
+        dispatch_mostro_message(
+            daemon(
+                Action::AddInvoice,
+                Some(order_in(mostro_core::order::Status::WaitingBuyerInvoice)),
+                second_take,
+            ),
+            "test-maker-escrow-retake",
+            "ff00ff07",
+            7,
+        )
+        .await;
+
+        // Assert
+        let trade = db
+            .get_trade_by_order_id(&order_id)
+            .await
+            .expect("read the row")
+            .expect("the maker's row");
+        assert_eq!(
+            trade.escrow_locked_at,
+            Some(second_take),
+            "the escrow deadline still counts from the take that left"
+        );
+    }
+
     /// A release must know whether it leaves a remainder: a missing trade
     /// row is an error, a fixed order or a taker's trade is `None`, and only
     /// a range order this client sold names a key.
@@ -17389,6 +17892,8 @@ mod tests {
                 timeout_at: None,
                 started_at: 1,
                 completed_at: None,
+                escrow_locked_at: None,
+                escrow_node: None,
                 outcome: None,
                 peer_rating: None,
                 peer_reviews: None,
@@ -18310,6 +18815,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -18591,6 +19098,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -19372,6 +19881,198 @@ mod tests {
             drain_updates(&mut rx, &order_id),
             vec![crate::api::types::OrderStatus::WaitingBuyerInvoice],
         );
+    }
+
+    /// Rebuilds a trade row of a sell order published at `order_created_at`
+    /// from one `action` dated `message_at`, on a fresh trade key, and returns
+    /// the row as persisted. The payload names our key as the seller when
+    /// `as_seller` (the maker); otherwise it names nobody and the action's
+    /// addressee is the side (`AddInvoice`: the buyer, a taker).
+    ///
+    /// The row is read back before its order reaches the book: until then a
+    /// sweep running in a parallel test has no public status for it (no
+    /// pool, so no relay lookup) and keeps it.
+    async fn rebuild_dated_row(
+        action: mostro_core::message::Action,
+        status: mostro_core::order::Status,
+        as_seller: bool,
+        order_created_at: i64,
+        message_at: i64,
+    ) -> crate::api::types::TradeInfo {
+        use mostro_core::message::Payload;
+
+        let path =
+            std::env::temp_dir().join(format!("mostro_rebuild_dated_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+
+        let my_hex = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let so = mostro_core::order::SmallOrder::new(
+            Some(order_uuid),
+            Some(mostro_core::order::Kind::Sell),
+            Some(status),
+            6_307,
+            "EUR".to_string(),
+            None,
+            None,
+            50,
+            "SEPA".to_string(),
+            0,
+            None,
+            as_seller.then(|| my_hex.clone()),
+            None,
+            Some(order_created_at),
+            None,
+        );
+        dispatch_mostro_message(
+            daemon_message(
+                order_uuid,
+                action,
+                Some(Payload::Order(so)),
+                message_at as u64,
+            ),
+            &format!("test-rebuild-dated-{order_id}"),
+            &my_hex,
+            21,
+        )
+        .await;
+
+        crate::db::app_db::db()
+            .expect("store initialised")
+            .get_trade_by_order_id(&order_id)
+            .await
+            .expect("lookup")
+            .expect("row rebuilt from the DM")
+    }
+
+    /// Puts a rebuilt sell order in the book as `pending`: a book that has
+    /// not caught up with the take, which the sweep reads instead of asking
+    /// the relays.
+    async fn seed_stale_book(row: &crate::api::types::TradeInfo) {
+        let mut in_book = dummy_order_info(&row.id);
+        in_book.kind = crate::api::types::OrderKind::Sell;
+        in_book.status = crate::api::types::OrderStatus::Pending;
+        in_book.created_at = row.order.created_at;
+        order_book().upsert_order(in_book).await;
+    }
+
+    /// #592: a taker row rebuilt from a late take reply is dated by the
+    /// message that rebuilt it, not by its order. An order that sat in the
+    /// book for a day must not make a trade taken a minute ago look old
+    /// enough for the sweep to wipe it on a book that still says `pending`.
+    #[tokio::test]
+    async fn a_rebuilt_taker_row_of_an_old_order_survives_the_sweep() {
+        // Arrange
+        let now = crate::rt::unix_now();
+        let row = rebuild_dated_row(
+            mostro_core::message::Action::AddInvoice,
+            mostro_core::order::Status::WaitingBuyerInvoice,
+            false,
+            now - 86_400,
+            now - 60,
+        )
+        .await;
+        assert!(!row.order.is_mine, "the buyer of a sell order is its taker");
+        seed_stale_book(&row).await;
+
+        // Act
+        run_stale_sweep_once().await;
+
+        // Assert
+        let row = crate::db::app_db::db()
+            .expect("store initialised")
+            .get_trade_by_order_id(&row.id)
+            .await
+            .expect("lookup")
+            .expect("a trade taken a minute ago was wiped as stale");
+        assert_eq!(row.started_at, now - 60, "dated by the take reply");
+        assert_eq!(
+            row.order.created_at,
+            now - 86_400,
+            "the order keeps its own age"
+        );
+    }
+
+    /// #592: dating the rebuilt row from its message does not switch the
+    /// sweep off. A take reply older than the sweep's age gate, on a book
+    /// that still says `pending`, is the stale trade the sweep exists for.
+    #[tokio::test]
+    async fn a_rebuilt_taker_row_past_the_age_gate_is_still_swept() {
+        // Arrange
+        let now = crate::rt::unix_now();
+        let row = rebuild_dated_row(
+            mostro_core::message::Action::AddInvoice,
+            mostro_core::order::Status::WaitingBuyerInvoice,
+            false,
+            now - 86_400,
+            now - SWEEP_MIN_AGE_SECS - 60,
+        )
+        .await;
+        seed_stale_book(&row).await;
+
+        // Act
+        run_stale_sweep_once().await;
+
+        // Assert
+        assert!(
+            crate::db::app_db::db()
+                .expect("store initialised")
+                .get_trade_by_order_id(&row.id)
+                .await
+                .expect("lookup")
+                .is_none(),
+            "a take older than the gate on a pending book is stale"
+        );
+    }
+
+    /// #592: a daemon clock running ahead of ours — within the skew the
+    /// transport accepts — cannot date a rebuilt taker row in the future.
+    #[tokio::test]
+    async fn a_rebuilt_taker_row_is_never_dated_after_now() {
+        // Arrange
+        let now = crate::rt::unix_now();
+        let ahead = crate::nostr::transport::MAX_CLOCK_SKEW_SECS as i64 / 2;
+
+        // Act
+        let row = rebuild_dated_row(
+            mostro_core::message::Action::AddInvoice,
+            mostro_core::order::Status::WaitingBuyerInvoice,
+            false,
+            now - 86_400,
+            now + ahead,
+        )
+        .await;
+
+        // Assert
+        assert!(
+            (now..=crate::rt::unix_now()).contains(&row.started_at),
+            "dated by the message, clamped to the local clock: {}",
+            row.started_at
+        );
+    }
+
+    /// #592: a maker's trade did begin with its order, so a rebuilt maker
+    /// row keeps the order's creation as its date. No book entry: a maker
+    /// row a day old on a `pending` book is one a parallel sweep resyncs.
+    #[tokio::test]
+    async fn a_rebuilt_maker_row_is_dated_by_its_order() {
+        // Arrange
+        let now = crate::rt::unix_now();
+
+        // Act: our key is the seller of a sell order, so the row is ours.
+        let row = rebuild_dated_row(
+            mostro_core::message::Action::PayInvoice,
+            mostro_core::order::Status::WaitingPayment,
+            true,
+            now - 86_400,
+            now - 60,
+        )
+        .await;
+
+        // Assert
+        assert!(row.order.is_mine, "the seller of a sell order is its maker");
+        assert_eq!(row.started_at, now - 86_400);
     }
 
     /// A redelivered `pay-bond-invoice` (startup replay, reconnect backlog)
@@ -22743,6 +23444,248 @@ mod tests {
             order_lock_is_free(&order_id),
             "a failed handoff must release the lock, not strand it"
         );
+    }
+
+    // ── The payout amount ───────────────────────────────────────────────
+    //
+    // The node pays the buyer `amount - fee` and asks for exactly that in
+    // `add-invoice` and `hold-invoice-payment-accepted`. The order's Kind 38383
+    // events and the restore's `orders` reply carry the order amount instead.
+
+    /// The order amount, as Kind 38383 and the restore's `orders` reply carry it.
+    const ORDER_SATS: u64 = 313;
+    /// What the node pays the buyer: the order amount minus the buyer's fee.
+    const PAYOUT_SATS: u64 = 311;
+
+    fn payout_test_order(
+        order_uuid: uuid::Uuid,
+        status: mostro_core::order::Status,
+        amount: u64,
+        buyer: Option<&str>,
+        seller: Option<&str>,
+    ) -> mostro_core::order::SmallOrder {
+        mostro_core::order::SmallOrder::new(
+            Some(order_uuid),
+            Some(mostro_core::order::Kind::Sell),
+            Some(status),
+            amount as i64,
+            "CUP".to_string(),
+            None,
+            None,
+            200,
+            "Saldo".to_string(),
+            0,
+            buyer.map(str::to_string),
+            seller.map(str::to_string),
+            None,
+            Some(1_790_000_000),
+            None,
+        )
+    }
+
+    /// The daemon's message `action` for `order_uuid` carrying `so`, sent at `at`.
+    async fn dispatch_payout_message(
+        order_uuid: uuid::Uuid,
+        action: mostro_core::message::Action,
+        so: mostro_core::order::SmallOrder,
+        at: u64,
+    ) {
+        dispatch_mostro_message(
+            daemon_message(
+                order_uuid,
+                action.clone(),
+                Some(mostro_core::message::Payload::Order(so)),
+                at,
+            ),
+            &format!("payout-{order_uuid}-{action:?}-{at}"),
+            "ff00ff7480",
+            1,
+        )
+        .await;
+    }
+
+    /// The `add-invoice` asking the buyer for the payout, with the order in `status`.
+    async fn dispatch_add_invoice(
+        order_uuid: uuid::Uuid,
+        status: mostro_core::order::Status,
+        at: u64,
+    ) {
+        dispatch_payout_message(
+            order_uuid,
+            mostro_core::message::Action::AddInvoice,
+            payout_test_order(order_uuid, status, PAYOUT_SATS, None, None),
+            at,
+        )
+        .await;
+    }
+
+    /// A taker-buyer's trade waiting for its invoice, in the book and the store.
+    async fn waiting_buyer_trade(db: &impl crate::db::Storage, order_id: &str) {
+        let mut taken = wire_order(order_id, OrderStatus::WaitingBuyerInvoice);
+        taken.amount_sats = None;
+        order_book().upsert_order(taken.clone()).await;
+        db.save_trade(&cancel_test_row(taken)).await.unwrap();
+    }
+
+    async fn payout_of(order_id: &str) -> Option<u64> {
+        payout_amount(order_id.to_string()).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn the_book_feed_leaves_the_payout_amount_alone() {
+        let db = bond_test_db().await;
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        waiting_buyer_trade(db, &order_id).await;
+        dispatch_add_invoice(order_uuid, mostro_core::order::Status::WaitingBuyerInvoice, 2_000)
+            .await;
+
+        // What a refetch of the book (Refresh user, a node switch) ingests.
+        ingest_order_event_with(
+            &book_event_amt(&order_id, "in-progress", &ORDER_SATS.to_string()),
+            Publish::WhenBatchEnds,
+        )
+        .await;
+
+        assert_eq!(payout_of(&order_id).await, Some(PAYOUT_SATS));
+    }
+
+    #[tokio::test]
+    async fn the_order_subscription_leaves_the_payout_amount_alone() {
+        let db = bond_test_db().await;
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        waiting_buyer_trade(db, &order_id).await;
+        dispatch_add_invoice(order_uuid, mostro_core::order::Status::WaitingBuyerInvoice, 2_000)
+            .await;
+
+        let mut revision = wire_order(&order_id, OrderStatus::InProgress);
+        revision.amount_sats = Some(ORDER_SATS);
+        apply_single_order_update(revision, Some(2_100)).await;
+
+        assert_eq!(payout_of(&order_id).await, Some(PAYOUT_SATS));
+    }
+
+    /// A restore rebuilds the row from the `orders` reply, then the history
+    /// replays the `add-invoice`, older than the restore.
+    #[tokio::test]
+    async fn a_restore_then_the_replayed_add_invoice_gives_the_payout_amount() {
+        use mostro_core::order::Status;
+        let db = bond_test_db().await;
+        let own = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let peer = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let restored = payout_test_order(
+            order_uuid,
+            Status::WaitingBuyerInvoice,
+            ORDER_SATS,
+            Some(&own),
+            Some(&peer),
+        );
+        assert!(persist_restored_trade_row(db, &restored, &own, 1, 3_000).await);
+
+        dispatch_add_invoice(order_uuid, Status::WaitingBuyerInvoice, 2_000).await;
+
+        assert_eq!(payout_of(&order_id).await, Some(PAYOUT_SATS));
+    }
+
+    /// The same restore with the replayed `add-invoice` arriving first.
+    #[tokio::test]
+    async fn the_replayed_add_invoice_then_a_restore_gives_the_payout_amount() {
+        use mostro_core::order::Status;
+        let db = bond_test_db().await;
+        let own = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let peer = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        store_trade_key_index(&order_id, 1).await;
+
+        dispatch_add_invoice(order_uuid, Status::WaitingBuyerInvoice, 2_000).await;
+        let restored = payout_test_order(
+            order_uuid,
+            Status::WaitingBuyerInvoice,
+            ORDER_SATS,
+            Some(&own),
+            Some(&peer),
+        );
+        persist_restored_trade_row(db, &restored, &own, 1, 3_000).await;
+
+        assert_eq!(payout_of(&order_id).await, Some(PAYOUT_SATS));
+    }
+
+    /// After a failed payout the daemon asks for a new invoice while the order
+    /// still reads `settled-hold-invoice`; a restore reports that status.
+    #[tokio::test]
+    async fn a_restore_after_a_failed_payout_gives_the_payout_amount() {
+        use mostro_core::order::Status;
+        let db = bond_test_db().await;
+        let own = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let peer = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let restored = payout_test_order(
+            order_uuid,
+            Status::SettledHoldInvoice,
+            ORDER_SATS,
+            Some(&own),
+            Some(&peer),
+        );
+        assert!(persist_restored_trade_row(db, &restored, &own, 1, 3_000).await);
+
+        dispatch_add_invoice(order_uuid, Status::SettledHoldInvoice, 2_000).await;
+
+        assert_eq!(payout_of(&order_id).await, Some(PAYOUT_SATS));
+    }
+
+    /// A buyer who gave the invoice up front never gets an `add-invoice`: the
+    /// payout amount arrives in `hold-invoice-payment-accepted`.
+    #[tokio::test]
+    async fn hold_invoice_payment_accepted_gives_the_buyer_the_payout_amount() {
+        use mostro_core::order::Status;
+        let db = bond_test_db().await;
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let mut waiting = wire_order(&order_id, OrderStatus::WaitingPayment);
+        waiting.amount_sats = Some(ORDER_SATS);
+        order_book().upsert_order(waiting.clone()).await;
+        db.save_trade(&cancel_test_row(waiting)).await.unwrap();
+
+        dispatch_payout_message(
+            order_uuid,
+            mostro_core::message::Action::HoldInvoicePaymentAccepted,
+            payout_test_order(order_uuid, Status::Active, PAYOUT_SATS, None, None),
+            2_000,
+        )
+        .await;
+
+        assert_eq!(payout_of(&order_id).await, Some(PAYOUT_SATS));
+    }
+
+    /// `buyer-took-order` carries what the seller pays (amount plus fee): it is
+    /// not a payout and must not become one.
+    #[tokio::test]
+    async fn buyer_took_order_is_not_a_payout_amount() {
+        use mostro_core::order::Status;
+        let db = bond_test_db().await;
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let mut waiting = wire_order(&order_id, OrderStatus::WaitingPayment);
+        waiting.amount_sats = None;
+        order_book().upsert_order(waiting.clone()).await;
+        let mut row = cancel_test_row(waiting);
+        row.role = TradeRole::Seller;
+        db.save_trade(&row).await.unwrap();
+
+        dispatch_payout_message(
+            order_uuid,
+            mostro_core::message::Action::BuyerTookOrder,
+            payout_test_order(order_uuid, Status::Active, ORDER_SATS + 2, None, None),
+            2_000,
+        )
+        .await;
+
+        assert_eq!(payout_of(&order_id).await, None);
     }
 }
 

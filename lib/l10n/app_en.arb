@@ -1251,6 +1251,18 @@
   "@aboutFiatCurrenciesLabel": {
     "description": "About screen — Fiat Currencies row label"
   },
+  "aboutPriceSourceLabel": "Source",
+  "@aboutPriceSourceLabel": {
+    "description": "Technical data row, in the Price group: a price provider behind the exchange rates the Mostro node publishes now (Yadio, CoinGecko, El Toque…), as its rates event names them"
+  },
+  "aboutPriceSection": "Price",
+  "@aboutPriceSection": {
+    "description": "Technical data group title: the node's exchange rates, holding the price source row"
+  },
+  "aboutPriceSourcesFootnote": "Price sources are the providers behind the rates the node publishes now; one that failed or was set aside is not listed.",
+  "@aboutPriceSourcesFootnote": {
+    "description": "Technical data footnote, added when the Price group is shown: the sources are the providers of the rates published now, not every provider the node is configured with"
+  },
   "aboutMostroVersionLabel": "Mostro Version",
   "@aboutMostroVersionLabel": {
     "description": "About screen — Mostro Version row label"
@@ -1874,6 +1886,14 @@
   "@tradeTimerExpiryBackToBook": {"description": "Trade screen countdown note on a waiting step the taker owes: mostrod puts the order back in the book when it runs out"},
   "tradeTimerExpiryCancelled": "If it expires, the order is cancelled.",
   "@tradeTimerExpiryCancelled": {"description": "Trade screen countdown note on a waiting step the maker owes: mostrod cancels the order when it runs out"},
+  "tradeTimerEscrowCancels": "Approximate time. If it runs out, Mostro cancels the trade.",
+  "@tradeTimerEscrowCancels": {"description": "Note under the countdown of an active trade: the time is estimated in Bitcoin blocks, and mostrod's escrow deadline guardian cancels the trade when it runs out"},
+  "tradeTimerEscrowDisputes": "Approximate time. If it runs out, Mostro opens a dispute.",
+  "@tradeTimerEscrowDisputes": {"description": "Note under the countdown of a fiat-sent trade: the time is estimated in Bitcoin blocks, and mostrod's escrow deadline guardian opens a dispute when it runs out"},
+  "tradeTimerEscrowCancelling": "Mostro is about to cancel the trade and return the sats to the seller.",
+  "@tradeTimerEscrowCancelling": {"description": "Note under the countdown of an active trade once it reaches zero: mostrod is about to cancel the trade and refund the seller's sats"},
+  "tradeTimerEscrowDisputing": "A dispute is about to be opened.",
+  "@tradeTimerEscrowDisputing": {"description": "Note under the countdown of a fiat-sent trade once it reaches zero: mostrod is about to open a dispute"},
   "tradeStepOrderTaken": "Order taken",
   "@tradeStepOrderTaken": {
     "description": "Timeline step: order taken"
@@ -3039,10 +3059,6 @@
   "tradeTimerOrderHas": "Time left",
   "@tradeTimerOrderHas": {
     "description": "Countdown label of a pending order's time in the book"
-  },
-  "tradeTimerNoteCoordinate": "If you need more time, coordinate in the chat before it expires.",
-  "@tradeTimerNoteCoordinate": {
-    "description": "Note under the countdown of an active trade"
   },
   "tradeRoleBuyer": "Buyer",
   "@tradeRoleBuyer": {

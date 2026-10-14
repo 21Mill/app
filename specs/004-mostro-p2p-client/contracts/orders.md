@@ -145,6 +145,17 @@ from relay.
 
 ---
 
+### payout_amount(order_id: String) → u64?
+The sats the node pays the buyer: `amount - fee`, the amount the payout
+invoice must carry. Only `add-invoice` (the take reply included) and the
+buyer's `hold-invoice-payment-accepted` say it; it is recorded before their
+status gate, so a copy replayed after a restore still sets it. Never the
+order amount, which Kind 38383 and a restore's `orders` reply carry. `None`
+until one of them arrives. Kept per order and trade key generation, cleared
+with the row and when a maker's order goes back to the book.
+
+---
+
 ### create_order(params: NewOrderParams) → OrderInfo
 Publish a new order to the Mostro network.
 
@@ -471,12 +482,12 @@ Get completed trades ordered by completion time (newest first).
 ---
 
 ### share_order(order_id: String) → OrderShareInfo
-Generate a shareable deep link and QR data for an order.
+Generate a shareable deep link and QR data for an order. *Not implemented.*
 
 **Returns**:
 ```text
 OrderShareInfo {
-  deep_link: String     # mostro://order/<id>
+  deep_link: String     # the order's `source` tag: mostro:<id>?relays=…&mostro=<node>
   qr_data: String       # Data to encode in QR code
   order: OrderInfo
 }
@@ -484,9 +495,59 @@ OrderShareInfo {
 
 ---
 
-### resolve_deep_link(uri: String) → String?
-Parse a `mostro://order/<id>` deep link and return the order ID.
-Returns null if URI is not a valid Mostro deep link.
+### resolve_order_link(link: String) → OrderLinkTarget
+**Module**: `rust/src/api/order_link.rs`
+
+Find the order a `mostro:` link points at. The link is what a node writes into
+a pending order's Kind 38383 `source` tag:
+`mostro:<order-id>?relays=<relay>,<relay>&mostro=<node pubkey>`. A link
+without `mostro=` (daemons before mostro#678) is the active node's.
+
+The newest revision of the Kind 38383 event the node signed for that order id
+is looked up on the pool's relays and on the link's, which never join the
+pool. On the active node the event is also filed in the order book, through
+the live subscription's ingest. Nothing else changes: switching to another
+node is the caller's to ask the user, before resolving the link again.
+
+**Returns**:
+```text
+OrderLinkTarget {
+  order: OrderInfo        # newest revision: kind and status decide where it leads
+  node_pubkey: String     # hex, the node that published it
+  on_active_node: bool
+}
+```
+
+**Errors**: `InvalidOrderLink` (not an order link, an id that is not a UUID,
+a `mostro=` that is not a key), `OrderLinkNotFound` (no relay answered with
+the order).
+
+### trade_escrow_deadline(order_id: String) → i64?
+Unix seconds at which mostrod's escrow deadline guardian (mostro#862) is
+estimated to act on the trade: it cancels an `active` trade and opens a
+dispute on a `fiat-sent` one. `api/escrow_deadline.rs`.
+
+    deadline = escrow_locked_at + (hold_invoice_cltv_delta − escrow_deadline_margin_blocks) × 600
+
+Both values come from the newest kind 38385 this app holds for
+`escrow_node` (`mostro::node_info`: the persisted cache or the last
+capability fetch), parsed by `mostro::escrow_deadline::parse_tags`:
+
+| The node's info event | Margin used |
+|---|---|
+| `escrow_deadline_margin_blocks` (mostro#1057) in `18..hold_invoice_cltv_delta` | that value |
+| no margin tag, `mostro_version` ≥ 0.18.3 | 24, mostrod's default |
+| `escrow_mode = cashu`, an older or unreadable version, no CLTV delta, or a value mostrod refuses to start with | none: `None` |
+
+`None` too in any status other than `active` / `fiat-sent` and without a
+recorded lock. An estimate: blocks are counted as ten minutes, and the
+HTLC's real expiry is a few blocks past the delta (the paying node pads
+it), so the guardian acts somewhat after it. The trade screen shows it as
+an approximate countdown (`tradeDeadlineProvider`) and nothing decides on
+it. Out of scope: Cashu (its escrow token's locktime is a different
+deadline, after which the seller *can* reclaim, nothing automatic) and
+disputes (LND cancels the hold invoice at its expiry − `holdexpirydelta`,
+which no tag gives).
 
 ## Streams
 
@@ -681,12 +742,12 @@ what rebuilds sessions after one.
 | Action                             | Payload variant                                     | Effect on the local trade row                                                    |
 |------------------------------------|-----------------------------------------------------|----------------------------------------------------------------------------------|
 | `WaitingBuyerInvoice`              | (status sync)                                       | `status → WaitingBuyerInvoice`                                                   |
-| `AddInvoice`                       | `Payload::Order(small_order)`                       | Maker-buyer path, and a late taker copy right after the prologue rebuilt its row (#566; a live taker copy is consumed by the take interception): `status → WaitingBuyerInvoice` (payload status, fallback `status_for_action`), `amount_sats ← small_order.amount` when > 0 — synced to book **and** DB so `tradeAmountProvider` sees the sats. Keyed by the message's order id (`trade_index` is `None`). The follow-up `AddInvoice` with a `Payload::Peer` (counterparty reputation) is ignored. A payload status of `settled-hold-invoice` is the payout-failure replacement request (mostrod `check_failure_retries`, retries exhausted) and also maps to `WaitingBuyerInvoice` — persisting the settled status would hide the request and strand the payout. |
+| `AddInvoice`                       | `Payload::Order(small_order)`                       | Maker-buyer path, and a late taker copy right after `reconcile_late_take` landed its row (#566; a live taker copy is consumed by the take interception): `status → WaitingBuyerInvoice` (payload status, fallback `status_for_action`), `amount_sats ← small_order.amount` when > 0, synced to book and DB; the same amount is recorded as the payout (`payout_amount`) before the status gate — for a taker's copy, live or late, by the take interception before it hands the reply on — which is what `tradeAmountProvider` reads. Keyed by the message's order id (`trade_index` is `None`). The follow-up `AddInvoice` with a `Payload::Peer` (counterparty reputation) is ignored. A payload status of `settled-hold-invoice` is the payout-failure replacement request (mostrod `check_failure_retries`, retries exhausted) and also maps to `WaitingBuyerInvoice` — persisting the settled status would hide the request and strand the payout. |
 | `InvoiceUpdated`                   | (status sync)                                       | `status → SettledHoldInvoice`: mostrod sends this only from `pay_new_invoice`, when the buyer's replacement payout invoice is accepted on a settled escrow — the payout is pending again on the new invoice |
 | `PayInvoice`                       | `Payload::PaymentRequest(small_order, bolt11, amt)` | `hold_invoice ← bolt11`, `amount_sats ← amt ?? small_order.amount`, `status → WaitingPayment` |
-| `BuyerTookOrder` / `HoldInvoicePaymentAccepted` | `SmallOrder` with `status = active`      | `status → Active` (routed through `map_core_status` kebab-case). The peer reveal happens in the pre-dispatch capture above, not in this arm. |
+| `BuyerTookOrder` / `HoldInvoicePaymentAccepted` | `SmallOrder` with `status = active`      | `status → Active` (routed through `map_core_status` kebab-case). The peer reveal happens in the pre-dispatch capture above, not in this arm. The buyer's `HoldInvoicePaymentAccepted` carries the payout amount (`amount - fee`), recorded before the status gate; the seller's `BuyerTookOrder` carries `amount + fee` and records nothing. |
 | `FiatSentOk`                       | (status sync)                                       | `status → FiatSent`                                                              |
-| `HoldInvoicePaymentSettled` / `Released` | (status sync)                                 | `status → SettledHoldInvoice`: the seller's escrow settled, the buyer payout is still pending; shown as `payout-pending`, not as completion |
+| `HoldInvoicePaymentSettled` / `Released` | (status sync)                                 | `status → SettledHoldInvoice`: the seller's escrow settled, the buyer payout is still pending; shown as `payout-pending`, not as completion. The buyer may give a replacement invoice there (mostrod `pay_new_invoice`): an outlined Add invoice action, not their turn, and the payout screen draws no countdown, since mostrod times no settled escrow |
 | `PurchaseCompleted`                | (status sync)                                       | `status → Success`: the buyer payout completed; only now may either party rate |
 | `CooperativeCancelInitiatedByYou` / `CooperativeCancelInitiatedByPeer` | (none)     | No status change (the protocol has no cancel-requested status): `cooperative_cancel_state → RequestedByMe` / `RequestedByPeer` on the row, and a `TradeUpdate` with the row's **current** status (`Active` or `FiatSent`) and reason `CooperativeCancelRequestedByMe` / `CooperativeCancelRequestedByPeer`, so the trade screen and the Notifications cards announce the request. Gated like a status sync (terminal row, cursor). |
 | `CooperativeCancelAccepted`        | (status sync)                                       | `status → CooperativelyCanceled`                                                 |
@@ -696,6 +757,25 @@ what rebuilds sessions after one.
 | `BondSlashed`                      | `Payload::Order(small_order)`                       | Informational: the payload amount is the **slashed bond**, never written to the order. Marks `bond.state → Slashed` when the row still exists (winning over a provisional `Released`), infers the cause from the row's status, emits `on_bond_slashed`. Exempt from the generation gate |
 | `AddBondInvoice`                   | `Payload::BondPayoutRequest { order, slashed_at }`  | No trade row involved: upserts a payout claim for (`sender`, order) per the §6.4 table (`contracts/bond.md`). Our own `PaymentRequest` echo is ignored |
 | `BondInvoiceAccepted` / `BondPayoutCompleted` | (none)                                   | Claim phase → `Acknowledged` / `Completed` for the sending node's claim; no trade row involved |
+
+**Escrow lock time.** Before the per-action arms, after the row rebuild,
+every message is checked for the time the seller's hold invoice was
+accepted (`mostro::status::dates_escrow_lock`): `BuyerTookOrder` /
+`HoldInvoicePaymentAccepted`, and on a **buy** order `WaitingBuyerInvoice`
+/ an `AddInvoice` whose payload reads `waiting-buyer-invoice` (on a sell
+order that step comes at the take, before the payment; an `AddInvoice`
+reading `settled-hold-invoice` is the payout-failure request). Its
+`created_at` and sender go to `escrow_locked_at` / `escrow_node` when older
+than what the row holds (`Storage::mark_escrow_locked`, oldest wins), then
+`touch_trade`. Not gated by the status rules below: a replayed message
+older than the stored status is exactly the one that dates the lock. A
+message dated beyond the clock-skew tolerance, a row that does not exist
+and `CashuEscrowLocked` record nothing. Oldest within one take: a maker
+order's republish (`write_maker_step_end`) clears both fields before it
+writes `pending` (`Storage::clear_escrow_lock`), because a buy order's lock
+comes in `waiting-buyer-invoice`, which the taker can still cancel out of —
+mostrod refunds the seller and republishes — and the next take's lock,
+being later, would otherwise be refused.
 
 Two rules gate every status sync in the table, and both exist for the
 same reason: the global kind-14 subscription carries no `since`, so every

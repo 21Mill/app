@@ -284,6 +284,9 @@
   "aboutNodeRetry": "Reintentar",
   "aboutLightningNetworkSection": "Red Lightning",
   "aboutFiatCurrenciesLabel": "Monedas fiat",
+  "aboutPriceSourceLabel": "Fuente",
+  "aboutPriceSection": "Precio",
+  "aboutPriceSourcesFootnote": "Las fuentes de precio son los proveedores de las tasas que el nodo publica ahora; uno que falló o se descartó no aparece.",
   "aboutMostroVersionLabel": "Versión de Mostro",
   "aboutMostroCommitLabel": "Commit de Mostro",
   "aboutHoldInvoiceExpLabel": "Vencimiento de hold invoice",
@@ -432,6 +435,10 @@
   "tradeTimerPendingConsequence": "Si expira, la orden se elimina del libro. No afectará tu reputación.",
   "tradeTimerExpiryBackToBook": "Si expira, la orden vuelve al libro.",
   "tradeTimerExpiryCancelled": "Si expira, la orden se cancela.",
+  "tradeTimerEscrowCancels": "Tiempo aproximado. Si se agota, Mostro cancela la operación.",
+  "tradeTimerEscrowDisputes": "Tiempo aproximado. Si se agota, Mostro abre una disputa.",
+  "tradeTimerEscrowCancelling": "Mostro está a punto de cancelar la operación y devolver los sats al vendedor.",
+  "tradeTimerEscrowDisputing": "Está a punto de abrirse una disputa.",
   "tradeStepOrderTaken": "Orden tomada",
   "tradeStepInvoiceBuyer": "El vendedor bloquea los sats",
   "tradeStepInvoiceSeller": "Bloqueas los sats",
@@ -733,10 +740,6 @@
   "tradeTimerOrderHas": "Queda",
   "@tradeTimerOrderHas": {
     "description": "Countdown label of a pending order's time in the book"
-  },
-  "tradeTimerNoteCoordinate": "Si necesitan más tiempo, coordínenlo por el chat antes de que expire.",
-  "@tradeTimerNoteCoordinate": {
-    "description": "Note under the countdown of an active trade"
   },
   "tradeRoleBuyer": "Comprador",
   "@tradeRoleBuyer": {

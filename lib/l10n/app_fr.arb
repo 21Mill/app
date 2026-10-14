@@ -284,6 +284,9 @@
   "aboutNodeRetry": "Réessayer",
   "aboutLightningNetworkSection": "Réseau Lightning",
   "aboutFiatCurrenciesLabel": "Devises fiat",
+  "aboutPriceSourceLabel": "Source",
+  "aboutPriceSection": "Prix",
+  "aboutPriceSourcesFootnote": "Les sources de prix sont les fournisseurs des taux que le nœud publie en ce moment ; un fournisseur en panne ou écarté n'apparaît pas.",
   "aboutMostroVersionLabel": "Version Mostro",
   "aboutMostroCommitLabel": "Commit Mostro",
   "aboutHoldInvoiceExpLabel": "Expiration de la hold invoice",
@@ -432,6 +435,10 @@
   "tradeTimerPendingConsequence": "S'il expire, l'ordre est retiré du carnet. Cela n'affectera pas votre réputation.",
   "tradeTimerExpiryBackToBook": "S'il expire, l'ordre retourne au carnet.",
   "tradeTimerExpiryCancelled": "S'il expire, l'ordre est annulé.",
+  "tradeTimerEscrowCancels": "Temps approximatif. S'il s'écoule, Mostro annule l'échange.",
+  "tradeTimerEscrowDisputes": "Temps approximatif. S'il s'écoule, Mostro ouvre un litige.",
+  "tradeTimerEscrowCancelling": "Mostro est sur le point d'annuler l'échange et de retourner les sats au vendeur.",
+  "tradeTimerEscrowDisputing": "Un litige est sur le point d'être ouvert.",
   "tradeStepOrderTaken": "Ordre pris",
   "tradeStepInvoiceBuyer": "Le vendeur bloque les sats",
   "tradeStepInvoiceSeller": "Vous bloquez les sats",
@@ -733,10 +740,6 @@
   "tradeTimerOrderHas": "Temps restant",
   "@tradeTimerOrderHas": {
     "description": "Countdown label of a pending order's time in the book"
-  },
-  "tradeTimerNoteCoordinate": "S'il vous faut plus de temps, convenez-en dans le chat avant l'expiration.",
-  "@tradeTimerNoteCoordinate": {
-    "description": "Note under the countdown of an active trade"
   },
   "tradeRoleBuyer": "Acheteur",
   "@tradeRoleBuyer": {

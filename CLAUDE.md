@@ -290,6 +290,21 @@ bridged by flutter_rust_bridge.
   means "taken, real state unknown", and a trade's status comes from daemon messages only
   (`wire_status_applies` guards both ingest paths). Treating it as `Active` offers actions the
   daemon rejects with `CantDo` (#203).
+- **The Active / fiat-sent countdown is mostrod's escrow deadline, an estimate.** It counts
+  from `TradeInfo::escrow_locked_at`: the `created_at` of the daemon message that moved the
+  order out of `waiting-payment`, **the oldest one**, never the first to arrive (a replay comes
+  newest-first, and on a buy order `hold-invoice-payment-accepted` is re-sent once the buyer's
+  invoice arrives) — oldest within one take: a maker order's republish clears it, since a buy
+  order's lock comes in `waiting-buyer-invoice`, which a taker can still leave. It adds the window of the node that sent it (`escrow_node`, not the active
+  node): `hold_invoice_cltv_delta − escrow_deadline_margin_blocks` blocks of ten minutes, the
+  margin assumed 24 on mostrod ≥ 0.18.3 without the tag. Never the 38383 `expires_at`, which
+  after the take is the event's retention (~15 days). No lock time, a Cashu node or a node
+  without the guardian means no countdown, never an invented one.
+- **The payout amount is not the order amount.** The node pays the buyer `amount - fee` and says
+  so only in `add-invoice` and the buyer's `hold-invoice-payment-accepted`; Kind 38383 and a
+  restore's `orders` reply carry the order amount. The payout screen reads `payout_amount`,
+  recorded from those two messages before their status gate. Never feed it from `amount_sats`,
+  whose meaning depends on who wrote it last.
 - **A `success` keeps its peer chat for one hour, dated by the completion itself (#642).**
   `completed_at` is written for `success` alone, before that status reaches the trade row, from
   the `created_at` of what carried it — the buyer's `purchase-completed`, the
@@ -329,6 +344,13 @@ bridged by flutter_rust_bridge.
   the Rust core, the database or protocol state (a test reads its imports); it sets
   `push_wake_pending` and may show the content-free chat-wake notice. Every write happens on
   resume, once, in the foreground core.
+- **Every screen route nests under `/` (Book), through `_onHome` in `app_routes.dart`.**
+  Only the first-run pair stays top level. Nested under `/`, a route keeps its URL, and a
+  `go` to it (or a link from outside) builds Book underneath, so back ends on Book before
+  it leaves the app. A new top-level route would bring back Android's back closing the app
+  from a detail screen; `test/core/back_navigation_test.dart` walks every route and fails.
+  An OS notification tap is a `go`, never a `push`: it starts a fresh stack. The bottom bar
+  reads its lit tab from the screen's route, not from state.
 - **Trade screens are pushed, not polled — so every trade write must ring.** Rust's
   `api::trade_touch::touch_trade(order_id)` is the doorbell behind `tradeStatusProvider`, the
   invoice providers (`trade_state_provider.dart`) and the trade list (`rawTradesProvider`, which

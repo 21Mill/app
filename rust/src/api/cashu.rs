@@ -1591,6 +1591,8 @@ mod tests {
             timeout_at: None,
             started_at: 0,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             buyer_trade_pubkey: buyer_trade_pubkey.map(str::to_string),
             seller_trade_pubkey: None,

@@ -984,6 +984,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get aboutFiatCurrenciesLabel => 'Fiat-Währungen';
 
   @override
+  String get aboutPriceSourceLabel => 'Quelle';
+
+  @override
+  String get aboutPriceSection => 'Preis';
+
+  @override
+  String get aboutPriceSourcesFootnote =>
+      'Die Preisquellen sind die Anbieter hinter den Kursen, die der Knoten gerade veröffentlicht; ein ausgefallener oder aussortierter Anbieter fehlt.';
+
+  @override
   String get aboutMostroVersionLabel => 'Mostro-Version';
 
   @override
@@ -1500,6 +1510,22 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get tradeTimerExpiryCancelled =>
       'Bei Ablauf wird die Bestellung storniert.';
+
+  @override
+  String get tradeTimerEscrowCancels =>
+      'Ungefähre Zeit. Läuft sie ab, storniert Mostro den Handel.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Ungefähre Zeit. Läuft sie ab, eröffnet Mostro einen Streitfall.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'Mostro storniert gleich den Handel und gibt die Sats an den Verkäufer zurück.';
+
+  @override
+  String get tradeTimerEscrowDisputing =>
+      'Gleich wird ein Streitfall eröffnet.';
 
   @override
   String get tradeStepOrderTaken => 'Bestellung angenommen';
@@ -2364,10 +2390,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Verbleibend';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'Wenn ihr mehr Zeit braucht, sprecht es im Chat ab, bevor sie abläuft.';
 
   @override
   String get tradeRoleBuyer => 'Käufer';

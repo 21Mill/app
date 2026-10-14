@@ -27,6 +27,7 @@ import 'package:mostro/features/order/widgets/invoice_widgets.dart';
 import 'package:mostro/features/order/widgets/order_detail_cards.dart'
     show OrderIdValue, copyOrderId;
 import 'package:mostro/features/rate/providers/rating_providers.dart';
+import 'package:mostro/features/trades/providers/escrow_deadline_provider.dart';
 import 'package:mostro/features/trades/providers/release_pending_provider.dart';
 import 'package:mostro/features/trades/models/trade_status.dart';
 import 'package:mostro/features/trades/models/trade_view.dart';
@@ -116,9 +117,11 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
     super.initState();
     // The waiting steps run on the daemon's own clock — the message that
     // opened the step plus the node's window — which is what the invoice
-    // screens show. Everything else keeps the order's lifetime below.
+    // screens show. The fiat leg runs on the escrow deadline: the escrow
+    // lock plus the node's guardian window. A pending order keeps its
+    // lifetime below.
     ref.listenManual<AsyncValue<int?>>(
-      invoiceDeadlineProvider(widget.orderId),
+      tradeDeadlineProvider(widget.orderId),
       (_, next) => trackInvoiceDeadline(next.valueOrNull),
       fireImmediately: true,
     );
@@ -144,9 +147,10 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
   /// Falls back to the default [_kCountdownSeconds] when the field is null or
   /// the order is no longer available.
   ///
-  /// Not for the waiting steps: `expires_at` carries the 38383 event's NIP-40
-  /// retention, which the daemon sets ~14 days out once the order is taken —
-  /// never the step's deadline. Those read [invoiceDeadlineProvider] instead.
+  /// Only for a pending order: once the order is taken, `expires_at` carries
+  /// the 38383 event's NIP-40 retention, which the daemon sets ~14 days out —
+  /// never a deadline of the trade. The steps with one read
+  /// [tradeDeadlineProvider] instead.
   ///
   /// The step is checked twice because the first check usually cannot know:
   /// `initState` calls this before `tradeStatusProvider` has emitted, so the
@@ -156,7 +160,7 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
   /// emits one, and its countdown would never load. So the fetch goes ahead
   /// and the result is refused afterwards, once the status is usually known.
   Future<void> _loadExpiresAt() async {
-    if (_isWaitingStep(
+    if (_hasNodeDeadline(
       ref.read(tradeStatusProvider(widget.orderId)).valueOrNull,
     )) {
       return;
@@ -166,7 +170,7 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
       final info = await orders_api.getOrder(orderId: widget.orderId);
       if (!mounted ||
           request != _expiresAtRequest ||
-          _isWaitingStep(
+          _hasNodeDeadline(
             ref.read(tradeStatusProvider(widget.orderId)).valueOrNull,
           )) {
         return;
@@ -581,12 +585,14 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
         : TradeStatus.pendingRating;
   }
 
-  /// The steps mostrod times from the message that opened them: the buyer's
-  /// invoice and the seller's payment. Their deadline is the node's, not the
-  /// order's lifetime.
-  static bool _isWaitingStep(OrderStatus? status) =>
+  /// The steps with a deadline of the node's, not the order's lifetime: the
+  /// buyer's invoice and the seller's payment, timed from the message that
+  /// opened them, and the fiat leg, timed by the escrow deadline guardian.
+  static bool _hasNodeDeadline(OrderStatus? status) =>
       status == OrderStatus.waitingBuyerInvoice ||
-      status == OrderStatus.waitingPayment;
+      status == OrderStatus.waitingPayment ||
+      status == OrderStatus.active ||
+      status == OrderStatus.fiatSent;
 
   /// The step window the node advertises, which sizes the bar while a
   /// waiting step runs.
@@ -595,6 +601,23 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
         ref.watch(mostroNodeProvider).valueOrNull?.expirationSeconds ??
         kDefaultInvoiceStepSeconds,
   );
+
+  /// The whole escrow window the countdown bar fills, from the escrow lock to
+  /// the estimated deadline; null while either is unknown.
+  Duration? get _escrowWindow {
+    final deadline =
+        ref.watch(escrowDeadlineProvider(widget.orderId)).valueOrNull;
+    final lockedAt =
+        ref
+            .watch(tradeInfoProvider(widget.orderId))
+            .valueOrNull
+            ?.escrowLockedAt
+            ?.toInt();
+    if (deadline == null || lockedAt == null || deadline <= lockedAt) {
+      return null;
+    }
+    return Duration(seconds: deadline - lockedAt);
+  }
 
   /// The whole window the countdown bar fills: the node's advertised
   /// expiration when it is known and can contain the remaining time, else
@@ -1175,7 +1198,10 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
         StepExpiry.cancelled => l10n.tradeTimerExpiryCancelled,
         null => null,
       },
-      TradeTimerNote.coordinateInChat => l10n.tradeTimerNoteCoordinate,
+      TradeTimerNote.escrowOutcome =>
+        status == TradeStatus.fiatSent
+            ? l10n.tradeTimerEscrowDisputes
+            : l10n.tradeTimerEscrowCancels,
       TradeTimerNote.leavesBook => l10n.tradeTimerPendingConsequence,
       TradeTimerNote.none => null,
     };
@@ -1206,6 +1232,32 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
                                 buyerStep: status == TradeStatus.waitingInvoice,
                                 kind: kind,
                               )
+                              : note,
+                    ),
+      );
+    }
+    if (status == TradeStatus.active || status == TradeStatus.fiatSent) {
+      final window = _escrowWindow;
+      return ValueListenableBuilder<Duration?>(
+        valueListenable: invoiceRemaining,
+        builder:
+            (context, remaining, _) =>
+                // No recorded escrow lock, or a node without the guardian:
+                // no deadline to count down to, so no countdown.
+                remaining == null
+                    ? const SizedBox.shrink()
+                    : TradeCountdown(
+                      remaining: remaining,
+                      total: window ?? remaining,
+                      label: label,
+                      isWaiting: isWaiting,
+                      // 00:00 is the client's estimate in blocks of ten
+                      // minutes: the note says what mostrod is about to do.
+                      note:
+                          remaining == Duration.zero
+                              ? (status == TradeStatus.fiatSent
+                                  ? l10n.tradeTimerEscrowDisputing
+                                  : l10n.tradeTimerEscrowCancelling)
                               : note,
                     ),
       );
@@ -1446,6 +1498,13 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
               label: l10n.releaseSatsButton,
               automationId: AutomationIds.tradeRelease,
               onPressed: _releaseOrder,
+            ),
+            TradeSecondaryAction.addInvoice => TradeSecondarySpec(
+              label: l10n.addLightningInvoiceButton,
+              automationId: AutomationIds.tradeAddInvoice,
+              onPressed:
+                  () async =>
+                      context.push(AppRoute.addInvoicePath(widget.orderId)),
             ),
           },
     ];

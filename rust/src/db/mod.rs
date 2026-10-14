@@ -216,6 +216,25 @@ pub mod settings_keys {
         format!("{INVOICE_STEP_PREFIX}{order_id}")
     }
 
+    /// Prefix of [`payout_amount`] keys.
+    pub const PAYOUT_AMOUNT_PREFIX: &str = "payout_amount:";
+
+    /// Per-order sats the node pays the buyer (`<sats>:<unix secs>:<trade_index>`),
+    /// the amount the payout invoice must carry: `amount - fee`. Written only
+    /// from the two messages that carry it, `add-invoice` and
+    /// `hold-invoice-payment-accepted`; the order's Kind 38383 events and a
+    /// restore's `orders` reply carry the order amount instead, so neither
+    /// touches it.
+    ///
+    /// Kept out of the status machinery on purpose: an `add-invoice` replayed
+    /// after a restore is older than the status the restore wrote and its
+    /// status is refused, but its amount is still the only one there is.
+    /// `trade_index` is the generation, as in [`invoice_step_start`], and the
+    /// key is deleted with it.
+    pub fn payout_amount(order_id: &str) -> String {
+        format!("{PAYOUT_AMOUNT_PREFIX}{order_id}")
+    }
+
     /// Per-order tombstone marking the trade row as deleted **on purpose** —
     /// by the pre-active cancel wipe (`cancellation_wipes_history`) or by the
     /// stale sweeper — so a daemon message for an order with no row can tell
@@ -244,7 +263,7 @@ pub mod settings_keys {
     /// [`super::Storage::clear_identity_data`] drops it with the rows. What
     /// is left in the store is device preference: the active node, custom
     /// nodes, node caches, push token and toggle, developer overrides.
-    pub const IDENTITY_SCOPED_PREFIXES: [&str; 9] = [
+    pub const IDENTITY_SCOPED_PREFIXES: [&str; 10] = [
         CHAT_CURSOR_PREFIX,
         DISPUTE_ADMIN_PREFIX,
         DISPUTE_ADMIN_AT_PREFIX,
@@ -253,6 +272,7 @@ pub mod settings_keys {
         DISPUTE_KEY_SHARED_PREFIX,
         STATUS_CURSOR_PREFIX,
         INVOICE_STEP_PREFIX,
+        PAYOUT_AMOUNT_PREFIX,
         TRADE_WIPED_PREFIX,
     ];
 
@@ -479,6 +499,19 @@ pub trait Storage: Send + Sync {
     /// peer chat's grace window (issue #642). No-op when no matching trade
     /// exists.
     async fn mark_trade_completed(&self, order_id: &str, completed_at: i64) -> Result<()>;
+
+    /// Record when the escrow of the trade identified by `order.id` locked
+    /// (`$.escrow_locked_at`, unix seconds) and the node that said so
+    /// (`$.escrow_node`), unless the row already holds an older time: the
+    /// oldest wins, so a replayed or re-sent message never moves it. No-op
+    /// when no matching trade exists.
+    async fn mark_escrow_locked(&self, order_id: &str, locked_at: i64, node: &str) -> Result<()>;
+
+    /// Forget the escrow lock of the trade identified by `order.id`
+    /// (`$.escrow_locked_at` and `$.escrow_node` back to null), so the next
+    /// take of a republished maker order records its own. No-op when no
+    /// matching trade exists.
+    async fn clear_escrow_lock(&self, order_id: &str) -> Result<()>;
 
     /// Record who asked to cancel an active trade cooperatively
     /// (`$.cooperative_cancel_state`) on the trade identified by `order.id`.

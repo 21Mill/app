@@ -339,6 +339,41 @@ void main() {
       expect(find.byType(DisputeMessageInput), findsNothing);
     });
 
+    testWidgets('a verdict arriving live is scrolled into view', (
+      tester,
+    ) async {
+      final l10n = AppLocalizationsEn();
+      final updates = StreamController<rust_types.Dispute>();
+      addTearDown(updates.close);
+      await _pumpScreen(
+        tester,
+        dispute: _dispute(),
+        history: [
+          for (var i = 1; i <= 40; i++)
+            _message(id: 'm$i', content: 'ok $i', createdAt: i),
+        ],
+        updates: updates.stream,
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+      expect(find.text('ok 40'), findsOneWidget);
+
+      updates.add(
+        _bridgeDispute(
+          status: rust_types.DisputeStatus.resolved,
+          resolution: rust_types.DisputeResolution.fundsToBuyer,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final closed = find.text(l10n.disputeChatClosed);
+      expect(closed, findsOneWidget);
+      expect(tester.getRect(closed).bottom, lessThanOrEqualTo(800));
+    });
+
     testWidgets('a refresh a live update overtook is dropped', (tester) async {
       final refresh = Completer<rust_types.Dispute?>();
       final updates = StreamController<rust_types.Dispute>();

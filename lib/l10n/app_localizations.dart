@@ -1804,6 +1804,24 @@ abstract class AppLocalizations {
   /// **'Fiat Currencies'**
   String get aboutFiatCurrenciesLabel;
 
+  /// Technical data row, in the Price group: a price provider behind the exchange rates the Mostro node publishes now (Yadio, CoinGecko, El Toque…), as its rates event names them
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get aboutPriceSourceLabel;
+
+  /// Technical data group title: the node's exchange rates, holding the price source row
+  ///
+  /// In en, this message translates to:
+  /// **'Price'**
+  String get aboutPriceSection;
+
+  /// Technical data footnote, added when the Price group is shown: the sources are the providers of the rates published now, not every provider the node is configured with
+  ///
+  /// In en, this message translates to:
+  /// **'Price sources are the providers behind the rates the node publishes now; one that failed or was set aside is not listed.'**
+  String get aboutPriceSourcesFootnote;
+
   /// About screen — Mostro Version row label
   ///
   /// In en, this message translates to:
@@ -2691,6 +2709,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If it expires, the order is cancelled.'**
   String get tradeTimerExpiryCancelled;
+
+  /// Note under the countdown of an active trade: the time is estimated in Bitcoin blocks, and mostrod's escrow deadline guardian cancels the trade when it runs out
+  ///
+  /// In en, this message translates to:
+  /// **'Approximate time. If it runs out, Mostro cancels the trade.'**
+  String get tradeTimerEscrowCancels;
+
+  /// Note under the countdown of a fiat-sent trade: the time is estimated in Bitcoin blocks, and mostrod's escrow deadline guardian opens a dispute when it runs out
+  ///
+  /// In en, this message translates to:
+  /// **'Approximate time. If it runs out, Mostro opens a dispute.'**
+  String get tradeTimerEscrowDisputes;
+
+  /// Note under the countdown of an active trade once it reaches zero: mostrod is about to cancel the trade and refund the seller's sats
+  ///
+  /// In en, this message translates to:
+  /// **'Mostro is about to cancel the trade and return the sats to the seller.'**
+  String get tradeTimerEscrowCancelling;
+
+  /// Note under the countdown of a fiat-sent trade once it reaches zero: mostrod is about to open a dispute
+  ///
+  /// In en, this message translates to:
+  /// **'A dispute is about to be opened.'**
+  String get tradeTimerEscrowDisputing;
 
   /// Timeline step: order taken
   ///
@@ -4023,12 +4065,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Time left'**
   String get tradeTimerOrderHas;
-
-  /// Note under the countdown of an active trade
-  ///
-  /// In en, this message translates to:
-  /// **'If you need more time, coordinate in the chat before it expires.'**
-  String get tradeTimerNoteCoordinate;
 
   /// Counterpart role on the reputation row
   ///
