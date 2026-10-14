@@ -437,7 +437,7 @@
   "tradeTimerExpiryCancelled": "Verloopt de tijd, dan wordt de order geannuleerd.",
   "tradeTimerEscrowCancels": "Geschatte tijd. Is die om, dan annuleert Mostro de trade.",
   "tradeTimerEscrowDisputes": "Geschatte tijd. Is die om, dan opent Mostro een dispuut.",
-  "tradeTimerEscrowCancelling": "De hold invoice wordt zo geannuleerd.",
+  "tradeTimerEscrowCancelling": "Mostro annuleert zo de trade en geeft de sats terug aan de verkoper.",
   "tradeTimerEscrowDisputing": "Er wordt zo een dispuut geopend.",
   "tradeStepOrderTaken": "Order geaccepteerd",
   "tradeStepInvoiceBuyer": "De verkoper zet de sats vast",

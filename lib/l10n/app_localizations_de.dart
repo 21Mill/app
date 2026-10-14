@@ -1521,7 +1521,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeTimerEscrowCancelling =>
-      'Die Hold-Invoice wird gleich storniert.';
+      'Mostro storniert gleich den Handel und gibt die Sats an den Verkäufer zurück.';
 
   @override
   String get tradeTimerEscrowDisputing =>

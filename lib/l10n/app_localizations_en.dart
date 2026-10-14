@@ -1497,7 +1497,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tradeTimerEscrowCancelling =>
-      'The hold invoice is about to be cancelled.';
+      'Mostro is about to cancel the trade and return the sats to the seller.';
 
   @override
   String get tradeTimerEscrowDisputing => 'A dispute is about to be opened.';

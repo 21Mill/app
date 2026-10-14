@@ -2722,10 +2722,10 @@ abstract class AppLocalizations {
   /// **'Approximate time. If it runs out, Mostro opens a dispute.'**
   String get tradeTimerEscrowDisputes;
 
-  /// Note under the countdown of an active trade once it reaches zero: mostrod is about to cancel the seller's hold invoice
+  /// Note under the countdown of an active trade once it reaches zero: mostrod is about to cancel the trade and refund the seller's sats
   ///
   /// In en, this message translates to:
-  /// **'The hold invoice is about to be cancelled.'**
+  /// **'Mostro is about to cancel the trade and return the sats to the seller.'**
   String get tradeTimerEscrowCancelling;
 
   /// Note under the countdown of a fiat-sent trade once it reaches zero: mostrod is about to open a dispute

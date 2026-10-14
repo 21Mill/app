@@ -437,7 +437,7 @@
   "tradeTimerExpiryCancelled": "Bei Ablauf wird die Bestellung storniert.",
   "tradeTimerEscrowCancels": "Ungefähre Zeit. Läuft sie ab, storniert Mostro den Handel.",
   "tradeTimerEscrowDisputes": "Ungefähre Zeit. Läuft sie ab, eröffnet Mostro einen Streitfall.",
-  "tradeTimerEscrowCancelling": "Die Hold-Invoice wird gleich storniert.",
+  "tradeTimerEscrowCancelling": "Mostro storniert gleich den Handel und gibt die Sats an den Verkäufer zurück.",
   "tradeTimerEscrowDisputing": "Gleich wird ein Streitfall eröffnet.",
   "tradeStepOrderTaken": "Bestellung angenommen",
   "tradeStepInvoiceBuyer": "Der Verkäufer sperrt die Sats",

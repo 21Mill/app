@@ -1506,7 +1506,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeTimerEscrowCancels =>
-      'Temps approximatif. S\'il s\'écoule, Mostro annule la transaction.';
+      'Temps approximatif. S\'il s\'écoule, Mostro annule l\'échange.';
 
   @override
   String get tradeTimerEscrowDisputes =>
@@ -1514,7 +1514,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeTimerEscrowCancelling =>
-      'La hold invoice est sur le point d\'être annulée.';
+      'Mostro est sur le point d\'annuler l\'échange et de retourner les sats au vendeur.';
 
   @override
   String get tradeTimerEscrowDisputing =>

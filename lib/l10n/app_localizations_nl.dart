@@ -1509,7 +1509,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get tradeTimerEscrowCancelling =>
-      'De hold invoice wordt zo geannuleerd.';
+      'Mostro annuleert zo de trade en geeft de sats terug aan de verkoper.';
 
   @override
   String get tradeTimerEscrowDisputing => 'Er wordt zo een dispuut geopend.';

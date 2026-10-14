@@ -591,8 +591,9 @@ void main() {
       expect(find.text(_en.tradeTimerEscrowCancels), findsNothing);
     });
 
-    testWidgets('at zero, active says the hold invoice is about to be '
-        'cancelled', (tester) async {
+    testWidgets('at zero, active says the trade is about to be cancelled', (
+      tester,
+    ) async {
       await _pumpTradeDetail(
         tester,
         orderId: 'order-escrow-active-zero',
