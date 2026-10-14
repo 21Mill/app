@@ -2272,10 +2272,12 @@ fn trade_row_from_small_order(
 /// replayed ack of a create whose confirmation timed out is adopted here as
 /// a maker row once no pending record remains to intercept it (review
 /// round 2).
+///
+/// `node` is the daemon that sent the message: the adopted row's node.
 async fn adopt_range_remainder(
     order_id: &str,
     kind: &mostro_core::message::MessageKind,
-    trade_pubkey_hex: &str,
+    node: &str,
     trade_index: u32,
     event_ts: i64,
 ) -> bool {
@@ -2328,7 +2330,7 @@ async fn adopt_range_remainder(
         true,
         trade_index,
         String::new(),
-        trade_pubkey_hex,
+        node,
         OrderStatus::Pending,
     ) else {
         // Unreachable: the role match above already required a kind.
@@ -2377,10 +2379,13 @@ async fn adopt_range_remainder(
 ///
 /// Emits the rebuilt status itself: the arm that follows sees the row
 /// already holding it and skips its own write and update.
+///
+/// `node` is the daemon that sent the message: the rebuilt row's node.
 async fn rebuild_trade_from_dm(
     kind: &mostro_core::message::MessageKind,
     order_id: &str,
     trade_pubkey_hex: &str,
+    node: &str,
     trade_index: u32,
     occurred_at: i64,
 ) -> Option<crate::api::types::TradeInfo> {
@@ -2461,7 +2466,7 @@ async fn rebuild_trade_from_dm(
         is_mine,
         trade_index,
         counterparty,
-        "",
+        node,
         status.clone(),
     )?;
     // A row rebuilt already completed is dated by the message that carried
@@ -2519,11 +2524,12 @@ async fn rebuild_trade_from_dm(
 /// only record of the order there is (#394 step 2). Maker-ness is by
 /// construction (only this attempt's create can echo its request_id), the
 /// role comes from the order kind, and the payload is the published order,
-/// min/max included, so a range order rebuilds whole.
+/// min/max included, so a range order rebuilds whole. `node` is the daemon
+/// that confirmed it: the row's node.
 async fn persist_late_create_confirmation(
     daemon_id: &str,
     kind: &mostro_core::message::MessageKind,
-    trade_pubkey_hex: &str,
+    node: &str,
     trade_index: u32,
     occurred_at: i64,
 ) {
@@ -2559,7 +2565,7 @@ async fn persist_late_create_confirmation(
         true,
         trade_index,
         String::new(),
-        trade_pubkey_hex,
+        node,
         status.clone(),
     ) else {
         return;
@@ -3716,7 +3722,14 @@ async fn dispatch_mostro_message(
             let oid = order_id.to_string();
             if !status_write_blocked(&oid, &kind.action, event_ts).await {
                 if let Some(rebuilt) =
-                    rebuild_trade_from_dm(kind, &oid, trade_pubkey_hex, trade_index, event_ts)
+                    rebuild_trade_from_dm(
+                        kind,
+                        &oid,
+                        trade_pubkey_hex,
+                        &sender_hex,
+                        trade_index,
+                        event_ts,
+                    )
                         .await
                 {
                     row_state = RowState::Exists(Box::new(rebuilt));
@@ -3773,7 +3786,7 @@ async fn dispatch_mostro_message(
                             &daemon_id,
                             &row_state,
                             trade_index,
-                            Some((kind, trade_pubkey_hex)),
+                            Some((kind, sender_hex.as_str())),
                         )
                         .await
                         {
@@ -3811,7 +3824,7 @@ async fn dispatch_mostro_message(
                         persist_late_create_confirmation(
                             &daemon_id,
                             kind,
-                            trade_pubkey_hex,
+                            &sender_hex,
                             pending.trade_index,
                             event_ts,
                         )
@@ -3821,7 +3834,7 @@ async fn dispatch_mostro_message(
                     &daemon_id,
                     &row_state,
                     trade_index,
-                    Some((kind, trade_pubkey_hex)),
+                    Some((kind, sender_hex.as_str())),
                 )
                 .await
                 {
@@ -3834,7 +3847,7 @@ async fn dispatch_mostro_message(
                 } else if adopt_range_remainder(
                     &daemon_id,
                     kind,
-                    trade_pubkey_hex,
+                    &sender_hex,
                     trade_index,
                     event_ts,
                 )
@@ -4801,7 +4814,7 @@ async fn dispatch_mostro_message(
                 handle_create_bond_reply(
                     &order_id,
                     kind,
-                    trade_pubkey_hex,
+                    &sender_hex,
                     claim,
                     &mut order_guard,
                     event_ts,
@@ -5601,6 +5614,8 @@ async fn maker_order_is_published(order_id: &str) -> bool {
 /// key's own `WaitingMakerBond` row — the trade index is the
 /// `(trade pubkey, order id)` match the restart fallback relies on — and
 /// moves it to `Pending` with the bond `Locked`. Returns whether it acted.
+/// `published` is the `new-order` and the node that sent it, when there is
+/// one: a restored placeholder is filled from that order, on that node.
 async fn confirm_maker_bond(
     order_id: &str,
     row_state: &RowState,
@@ -5613,10 +5628,10 @@ async fn confirm_maker_bond(
     // A restored placeholder learns its side, fiat and amounts from the
     // order the daemon just published (§6.5); the lock below then moves it.
     if is_restored_maker_placeholder(trade) {
-        if let Some((kind, creator)) = published {
+        if let Some((kind, node)) = published {
             if let Some(mostro_core::message::Payload::Order(so)) = &kind.payload {
                 if let (Some(filled), Some(db)) =
-                    (fill_restored_maker_row(trade, so, creator), crate::db::app_db::db())
+                    (fill_restored_maker_row(trade, so, node), crate::db::app_db::db())
                 {
                     if let Err(e) = persist_trade_row(db, &filled).await {
                         crate::api::logging::blog_warn(
@@ -5684,11 +5699,12 @@ async fn lock_maker_bond(
 /// maker row is written before anything else queued on the order runs. After
 /// the 10 s timeout the caller already returned `NoDaemonResponse` and
 /// persisted nothing: the row is written here from the payload's order when
-/// it carries one, so the parked order still reaches My Trades.
+/// it carries one, so the parked order still reaches My Trades. `node` is
+/// the daemon that asked for the bond: the row's node.
 async fn handle_create_bond_reply(
     order_id: &str,
     kind: &mostro_core::message::MessageKind,
-    trade_pubkey_hex: &str,
+    node: &str,
     claim: crate::mostro::pending::CreateBondClaim,
     order_guard: &mut Option<tokio::sync::OwnedMutexGuard<()>>,
     event_ts: i64,
@@ -5746,7 +5762,7 @@ async fn handle_create_bond_reply(
         true,
         claim.trade_index,
         String::new(),
-        trade_pubkey_hex,
+        node,
         OrderStatus::WaitingMakerBond,
     ) else {
         return;
