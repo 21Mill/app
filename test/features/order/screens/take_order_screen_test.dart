@@ -687,6 +687,28 @@ void main() {
       });
     });
 
+    testWidgets('dies in place when the node no longer has the order', (
+      tester,
+    ) async {
+      // `CantDo(NotFound)`: the node holds no such order — a pending
+      // revision that outlived it on the relays. Nobody can take it.
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(
+          tester,
+          order: _order(),
+          take:
+              ({required orderId, required role, fiatAmount}) async =>
+                  throw Exception('AnyhowException(CantDo:NotFound)'),
+        );
+
+        await tester.tap(find.text('Take order'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('No longer available'), findsOneWidget);
+        expect(find.text(en.orderNoLongerActive), findsOneWidget);
+      });
+    });
+
     testWidgets('never shows the raw text of an error it cannot map', (
       tester,
     ) async {

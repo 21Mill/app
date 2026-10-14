@@ -89,7 +89,14 @@ pub fn parse_order_event(event: &Event, my_pubkey: Option<&PublicKey>) -> Option
         event,
         get("published_at").or_else(|| get("created_at")).as_deref(),
     );
-    let expires_at: Option<i64> = get("expiration").and_then(|v| v.parse().ok());
+    // The take window ends at mostrod's `expires_at`. NIP-40 `expiration` is
+    // how long relays keep the event: the same value on a pending order from
+    // a current node, its retention (180 days) on an older one, so only the
+    // fallback for a node that writes no `expires_at`.
+    let unix_secs = |name: &str| get(name).and_then(|v| v.parse::<i64>().ok());
+    let expires_at = unix_secs("expires_at")
+        .filter(|exp| *exp > 0)
+        .or_else(|| unix_secs("expiration"));
 
     // is_mine is always false for Kind 38383 events: the event author is the
     // Mostro node, not the maker. Ownership is confirmed later via incoming
@@ -292,6 +299,15 @@ pub fn pending_orders_filter(mostro_pubkey: &PublicKey) -> Filter {
     all_orders_filter(mostro_pubkey).custom_tag(SingleLetterTag::LOWERCASE_S, "pending")
 }
 
+/// Whether `order` is pending past its take window. The node refuses to take
+/// it (mostrod `is_order_take_window_closed`, same bounds) and expires it
+/// within a minute — or never, when it no longer holds the order, and the
+/// pending revision lives on in the relays for as long as they keep it.
+pub(crate) fn is_past_take_window(order: &OrderInfo, now: i64) -> bool {
+    order.status == OrderStatus::Pending
+        && order.expires_at.is_some_and(|exp| exp > 0 && exp <= now)
+}
+
 /// Filter for **all recent** order events (any status) since `since`.
 ///
 /// Complements [`pending_orders_filter`]: it delivers the `in-progress` /
@@ -380,6 +396,35 @@ mod tests {
             Some(value) => order_event_tagged(revision_at, &[("published_at", value)]),
             None => order_event_tagged(revision_at, &[]),
         }
+    }
+
+    /// mostrod's `expires_at` tag ends the take window; NIP-40 `expiration`
+    /// is how long relays keep the event. A current node writes the same
+    /// value in both for a pending order, but an older one wrote its 180-day
+    /// retention in `expiration` — the values below are a ghost order still on
+    /// mostro.network's relays in October 2026, whose take window closed in
+    /// May and which the app showed as expiring in "641 h".
+    #[test]
+    fn the_take_window_ends_at_the_expires_at_tag_not_the_relays_retention() {
+        let ghost = order_event_tagged(
+            1_778_762_486,
+            &[("expires_at", "1778848774"), ("expiration", "1794314486")],
+        );
+
+        let order = parse_order_event(&ghost, None).unwrap();
+
+        assert_eq!(order.expires_at, Some(1_778_848_774));
+    }
+
+    /// A node that writes no `expires_at` still bounds the order by NIP-40.
+    #[test]
+    fn without_expires_at_the_nip40_expiration_bounds_the_order() {
+        let event = order_event_tagged(1_000, &[("expiration", "87400")]);
+
+        assert_eq!(
+            parse_order_event(&event, None).unwrap().expires_at,
+            Some(87_400)
+        );
     }
 
     /// A Cashu order names its escrow mint (mostro#1047); a Lightning order

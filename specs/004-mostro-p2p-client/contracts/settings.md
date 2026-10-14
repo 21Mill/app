@@ -169,7 +169,8 @@ mode), `latest_order_at`, `fee_pct` (the wire `fee` fraction × 100),
 (Cashu only), `bond_required` (`bond_enabled`; `None` on a daemon without
 bonds), `bond_pct` (only when required), `orders_by_fiat` and `total_orders`.
 Orders are counted by the app — never declared by the node — keeping only the
-newest version per (`author`, `d`), `pending`, and not past `expiration`.
+newest version per (`author`, `d`), `pending`, and not past its take window
+(`expires_at`, see `OrderInfo` in `data-model.md`).
 Best-effort like `refresh_mostro_node_metadata`: a node that answered nothing
 is an empty row (the UI shows it as unreachable), never a missing one. The
 kind 38385 events it received refresh the node info cache (below), best effort
