@@ -18034,8 +18034,8 @@ mod tests {
     #[tokio::test]
     async fn seeding_coverage_forgets_a_node_that_is_our_own_trade_key() {
         use crate::api::types::OrderStatus;
-        let path = std::env::temp_dir()
-            .join(format!("mostro_own_key_node_{}.db", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("mostro_own_key_node_{}.db", std::process::id()));
         let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
         let db = crate::db::app_db::db().expect("store initialised");
 
