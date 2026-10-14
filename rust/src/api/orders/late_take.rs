@@ -102,8 +102,15 @@ pub(super) async fn reconcile_late_take(
     } else {
         match take_snapshot_row(&late.pending, kind, order_id, event_ts) {
             Some(trade) => Some((trade, "take record", "#566")),
-            None => dm_trade_row(kind, order_id, trade_pubkey_hex, "", trade_index, event_ts)
-                .map(|trade| (trade, "DM", "#394")),
+            None => dm_trade_row(
+                kind,
+                order_id,
+                trade_pubkey_hex,
+                &late.original.sender.to_hex(),
+                trade_index,
+                event_ts,
+            )
+            .map(|trade| (trade, "DM", "#394")),
         }
     };
     let Some((mut trade, source, issue)) = candidate else {
