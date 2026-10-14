@@ -384,6 +384,10 @@ pub(crate) struct IngestedOrder {
     ours: bool,
     /// [`BookState::ownership_epoch`] when the classification began.
     epoch: u64,
+    /// When the order was held against its take window (unix seconds), so
+    /// that whether it is ours and whether it leaves the book are decided at
+    /// the same instant.
+    judged_at: i64,
 }
 
 impl BookState {
@@ -891,6 +895,7 @@ impl OrderBook {
             wire,
             ours,
             epoch,
+            judged_at,
         } = ingested;
         let (touched, changed) = {
             let mut book = self.orders.write().await;
@@ -909,10 +914,7 @@ impl OrderBook {
             // node refuses to take it, and one that no longer holds the order
             // never publishes its expiry.
             let finished = crate::mostro::status::is_hard_terminal(&order.status)
-                || crate::nostr::order_events::is_past_take_window(
-                    &order,
-                    crate::rt::unix_now(),
-                );
+                || crate::nostr::order_events::is_past_take_window(&order, judged_at);
             if !ours && finished {
                 // The removal is a no-op when the order was never in the
                 // book — the common case, a stranger's order finishing
@@ -9493,19 +9495,25 @@ async fn classify_ingested_order(
     // this layer. What both roles do have is a trade-key binding for
     // the order id, so that is the question asked.
     //
-    // Asked only when the answer can change what happens — a
-    // hard-terminal order — so the firehose of pending updates never
-    // pays for the lookup. It is answered from the in-memory map or the
-    // negative cache in the common case, which also keeps it correct on
-    // web, where the trade store is a stub (#233) and a DB-only test
-    // would call every trade of ours a stranger's.
+    // Asked only when the answer can change what happens — an order a
+    // stranger's book drops: hard-terminal, or pending past its take window
+    // (a taker paying its bond holds an order still published `pending`) —
+    // so the firehose of pending updates never pays for the lookup. It is
+    // answered from the in-memory map or the negative cache in the common
+    // case, which also keeps it correct on web, where the trade store is a
+    // stub (#233) and a DB-only test would call every trade of ours a
+    // stranger's.
+    let judged_at = crate::rt::unix_now();
+    let dropped_for_strangers = is_hard_terminal(&info.status)
+        || crate::nostr::order_events::is_past_take_window(&info, judged_at);
     let ours = info.is_mine
-        || (is_hard_terminal(&info.status) && lookup_trade_key_index(&info.id).await.is_some());
+        || (dropped_for_strangers && lookup_trade_key_index(&info.id).await.is_some());
     IngestedOrder {
         order: info,
         wire,
         ours,
         epoch,
+        judged_at,
     }
 }
 
@@ -11979,6 +11987,7 @@ mod tests {
             order,
             ours,
             epoch,
+            judged_at: crate::rt::unix_now(),
         }
     }
 
@@ -12009,6 +12018,17 @@ mod tests {
         amt: &str,
         author: &nostr_sdk::prelude::Keys,
     ) -> nostr_sdk::prelude::Event {
+        book_event_tagged(order_id, status, amt, author, &[])
+    }
+
+    /// [`book_event_with`] carrying `extra` `(name, value)` tags.
+    fn book_event_tagged(
+        order_id: &str,
+        status: &str,
+        amt: &str,
+        author: &nostr_sdk::prelude::Keys,
+        extra: &[(&str, &str)],
+    ) -> nostr_sdk::prelude::Event {
         use nostr::event::FinalizeEvent;
         use nostr_sdk::prelude::{EventBuilder, Kind, Tag, Timestamp};
         // Strictly increasing, so a test that ingests revisions in order sees
@@ -12020,18 +12040,20 @@ mod tests {
             *last = (*last + 1).max(crate::rt::unix_now() as u64);
             *last
         };
+        let mut tags = vec![
+            Tag::parse(["d", order_id]).unwrap(),
+            Tag::parse(["k", "sell"]).unwrap(),
+            Tag::parse(["s", status]).unwrap(),
+            Tag::parse(["f", "USD"]).unwrap(),
+            Tag::parse(["pm", "cashapp"]).unwrap(),
+            Tag::parse(["premium", "1"]).unwrap(),
+            Tag::parse(["amt", amt]).unwrap(),
+            Tag::parse(["fa", "20"]).unwrap(),
+            Tag::parse(["z", "order"]).unwrap(),
+        ];
+        tags.extend(extra.iter().map(|(name, value)| Tag::parse([*name, *value]).unwrap()));
         EventBuilder::new(Kind::from(38383u16), "")
-            .tags([
-                Tag::parse(["d", order_id]).unwrap(),
-                Tag::parse(["k", "sell"]).unwrap(),
-                Tag::parse(["s", status]).unwrap(),
-                Tag::parse(["f", "USD"]).unwrap(),
-                Tag::parse(["pm", "cashapp"]).unwrap(),
-                Tag::parse(["premium", "1"]).unwrap(),
-                Tag::parse(["amt", amt]).unwrap(),
-                Tag::parse(["fa", "20"]).unwrap(),
-                Tag::parse(["z", "order"]).unwrap(),
-            ])
+            .tags(tags)
             .custom_created_at(Timestamp::from_secs(at))
             .finalize(author)
             .unwrap()
@@ -12119,6 +12141,37 @@ mod tests {
         assert!(
             order_book().get_order(&order_id).await.is_some(),
             "an order we took must stay addressable once it finishes"
+        );
+        order_book().remove_order(&order_id).await;
+    }
+
+    /// A taker paying its bond holds an order the node still publishes as
+    /// `pending` (`WaitingTakerBond`), and arrives with `is_mine == false` like
+    /// any taker. When its take window passes — on a replay after a reconnect,
+    /// or before the node's expiry lands — the entry must stay: the bond's
+    /// cancel copy reads its status from the book (`bond_cancel_reason`).
+    #[tokio::test]
+    async fn an_order_we_took_survives_its_take_window_passing() {
+        // Arrange — in the book as pending, with a trade key of ours bound to it.
+        let order_id = uuid::Uuid::new_v4().to_string();
+        order_book().upsert_order(dummy_order_info(&order_id)).await;
+        store_trade_key_index(&order_id, 7).await;
+        let closed = (crate::rt::unix_now() - 60).to_string();
+        let replay = book_event_tagged(
+            &order_id,
+            "pending",
+            "0",
+            &nostr_sdk::prelude::Keys::generate(),
+            &[("expires_at", &closed)],
+        );
+
+        // Act
+        ingest_order_event_with(&replay, Publish::WhenBatchEnds).await;
+
+        // Assert
+        assert!(
+            order_book().get_order(&order_id).await.is_some(),
+            "a pending order of ours stays, its take window passed or not"
         );
         order_book().remove_order(&order_id).await;
     }
