@@ -17570,6 +17570,95 @@ mod tests {
         );
     }
 
+    /// A buy order's escrow locks in `waiting-buyer-invoice`, and the seller
+    /// who took it can still cancel there: mostrod refunds them and puts the
+    /// order back on the book. The next take's lock is later than the first,
+    /// so unless the republish forgets the first one, the oldest-wins rule
+    /// keeps it and the escrow deadline counts from a take that is gone.
+    #[tokio::test]
+    async fn a_republished_maker_order_takes_the_next_take_s_escrow_lock() {
+        use mostro_core::message::{Action, Message, Payload};
+
+        // Arrange: a buyer's own buy order in `waiting-buyer-invoice`, its
+        // escrow locked by the first take.
+        let path =
+            std::env::temp_dir().join(format!("mostro_maker_escrow_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        let mut order_info = dummy_order_info(&order_id);
+        order_info.kind = crate::api::types::OrderKind::Buy;
+        order_info.status = crate::api::types::OrderStatus::WaitingBuyerInvoice;
+        order_info.is_mine = true;
+        order_book().upsert_order(order_info.clone()).await;
+        let mut row = cancel_test_row(order_info);
+        row.trade_key_index = 7;
+        db.save_trade(&row).await.expect("save the maker's row");
+        let node = active_mostro_pubkey();
+        let first_take = crate::rt::unix_now() - 600;
+        db.mark_escrow_locked(&order_id, first_take, &node)
+            .await
+            .expect("record the first take's lock");
+
+        let sender = nostr_sdk::prelude::PublicKey::from_hex(&node).expect("valid mostro pubkey");
+        let daemon = |action: Action, payload: Option<Payload>, ts: i64| {
+            mostro_core::transport::UnwrappedMessage {
+                message: Message::new_order(Some(order_uuid), None, None, action, payload),
+                signature: None,
+                sender,
+                identity: sender,
+                created_at: nostr_sdk::prelude::Timestamp::from(ts as u64),
+            }
+        };
+        let order_in = |status| {
+            let mut order = crate::mostro::test_fixtures::small_order_with(status, 1000);
+            order.id = Some(order_uuid);
+            order.kind = Some(mostro_core::order::Kind::Buy);
+            Payload::Order(order)
+        };
+
+        // Act: the seller cancels, the daemon republishes, and a new seller
+        // takes and pays — the buyer is asked for an invoice again.
+        let republish_ts = first_take + 60;
+        dispatch_mostro_message(
+            daemon(
+                Action::NewOrder,
+                Some(order_in(mostro_core::order::Status::Pending)),
+                republish_ts,
+            ),
+            "test-maker-escrow-republish",
+            "ff00ff07",
+            7,
+        )
+        .await;
+        let second_take = republish_ts + 60;
+        dispatch_mostro_message(
+            daemon(
+                Action::AddInvoice,
+                Some(order_in(mostro_core::order::Status::WaitingBuyerInvoice)),
+                second_take,
+            ),
+            "test-maker-escrow-retake",
+            "ff00ff07",
+            7,
+        )
+        .await;
+
+        // Assert
+        let trade = db
+            .get_trade_by_order_id(&order_id)
+            .await
+            .expect("read the row")
+            .expect("the maker's row");
+        assert_eq!(
+            trade.escrow_locked_at,
+            Some(second_take),
+            "the escrow deadline still counts from the take that left"
+        );
+    }
+
     /// A release must know whether it leaves a remainder: a missing trade
     /// row is an error, a fixed order or a taker's trade is `None`, and only
     /// a range order this client sold names a key.
