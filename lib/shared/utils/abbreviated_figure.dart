@@ -13,8 +13,21 @@ String abbreviateFigure(num value, String locale, {String billions = 'B'}) {
       NumberFormat.decimalPattern(locale)
         ..minimumFractionDigits = 0
         ..maximumFractionDigits = 1;
-  if (n >= 1e9) return '${fmt.format(n / 1e9)}$billions';
-  if (n >= 1e6) return '${fmt.format(n / 1e6)}M';
-  if (n >= 1e3) return '${fmt.format(n / 1e3)}k';
-  return NumberFormat.decimalPattern(locale).format(n.round());
+  // Each step is a thousand times the last. The suffix is picked from the
+  // figure as shown, so a value that rounds up to the next one reads `1M`,
+  // never `1,000k`.
+  const scales = [1.0, 1e3, 1e6, 1e9];
+  final suffixes = ['', 'k', 'M', billions];
+  var i = scales.lastIndexWhere((s) => n >= s);
+  if (i < 0) i = 0;
+  if (i < scales.length - 1 && _shown(n / scales[i], whole: i == 0) >= 1000) {
+    i++;
+  }
+  if (i == 0) return NumberFormat.decimalPattern(locale).format(n.round());
+  return '${fmt.format(n / scales[i])}${suffixes[i]}';
 }
+
+/// [x] rounded as the figure shows it: whole below a thousand, one decimal
+/// with a suffix.
+double _shown(double x, {required bool whole}) =>
+    whole ? x.roundToDouble() : (x * 10).roundToDouble() / 10;
