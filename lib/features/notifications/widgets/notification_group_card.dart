@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mostro/core/activity_palette.dart';
 import 'package:mostro/core/app_theme.dart';
@@ -18,9 +19,10 @@ import 'package:mostro/l10n/app_localizations.dart';
 /// payment method, from [tradeRow] — and, when the next step is the user's,
 /// the step itself. The latest event shows in full: icon, whole title and
 /// message. Earlier events expand below it as a one-line timeline. A footer
-/// action navigates to the trade (or dispute) detail screen. The card has no
-/// per-event menu: the screen deletes it with a swipe.
-class NotificationGroupCard extends StatefulWidget {
+/// action navigates to the trade (or dispute) detail screen, while there is a
+/// trade to go to. The card has no per-event menu: the screen deletes it with
+/// a swipe.
+class NotificationGroupCard extends ConsumerStatefulWidget {
   const NotificationGroupCard({
     super.key,
     required this.notifications,
@@ -44,10 +46,17 @@ class NotificationGroupCard extends StatefulWidget {
   final bool isDisputeGroup;
 
   @override
-  State<NotificationGroupCard> createState() => _NotificationGroupCardState();
+  ConsumerState<NotificationGroupCard> createState() =>
+      _NotificationGroupCardState();
 }
 
-class _NotificationGroupCardState extends State<NotificationGroupCard> {
+/// A card's corners (DS-CMP-8).
+const _cardRadius = 18.0;
+
+/// The ripple of the footer's inline links.
+const _linkRadius = 8.0;
+
+class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
   bool _expanded = false;
 
   NotificationModel get _latest => widget.notifications.first;
@@ -65,11 +74,19 @@ class _NotificationGroupCardState extends State<NotificationGroupCard> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppColors>();
+    final book = OrderBookPalette.of(context);
     final pal = ActivityPalette.of(context);
     final l10n = AppLocalizations.of(context);
-    final cardBg = colors?.backgroundCard ?? const Color(0xFF1E2230);
     final row = widget.tradeRow;
+    // The trades answered and none is this group's: the trade is gone — a
+    // maker's order canceled before anyone took it loses its row — and Go to
+    // trade would open a screen with nothing to show. No answer yet, or a
+    // failed one, is not an absent row.
+    final tradeGone =
+        !widget.isDisputeGroup &&
+        row == null &&
+        ref.watch(tradeRowsProvider).hasValue;
+    final onGoToTrade = tradeGone ? null : widget.onGoToTrade;
     final needsAction = row?.state.needsAction ?? false;
     final isDispute =
         widget.isDisputeGroup ||
@@ -80,8 +97,8 @@ class _NotificationGroupCardState extends State<NotificationGroupCard> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        color: book.surface,
+        borderRadius: BorderRadius.circular(_cardRadius),
         border: Border.all(
           color:
               isDispute
@@ -89,7 +106,7 @@ class _NotificationGroupCardState extends State<NotificationGroupCard> {
                   : needsAction
                   ? pal.borderAction
                   : _unreadCount > 0
-                  ? Colors.white12
+                  ? book.border
                   : Colors.transparent,
         ),
       ),
@@ -123,14 +140,16 @@ class _NotificationGroupCardState extends State<NotificationGroupCard> {
                 onTap: () => widget.onTapNotification(n),
               ),
           ],
-          const SizedBox(height: AppSpacing.sm),
-          _Footer(
-            earlierCount: _earlier.length,
-            expanded: _expanded,
-            isDisputeGroup: widget.isDisputeGroup,
-            onToggle: () => setState(() => _expanded = !_expanded),
-            onGoToTrade: widget.onGoToTrade,
-          ),
+          if (_earlier.isNotEmpty || onGoToTrade != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _Footer(
+              earlierCount: _earlier.length,
+              expanded: _expanded,
+              isDisputeGroup: widget.isDisputeGroup,
+              onToggle: () => setState(() => _expanded = !_expanded),
+              onGoToTrade: onGoToTrade,
+            ),
+          ],
         ],
       ),
     );
@@ -509,14 +528,16 @@ class _Footer extends StatelessWidget {
   final bool expanded;
   final bool isDisputeGroup;
   final VoidCallback onToggle;
-  final VoidCallback onGoToTrade;
+
+  /// Null when there is no trade to go to: the link is not shown.
+  final VoidCallback? onGoToTrade;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<AppColors>();
+    final book = OrderBookPalette.of(context);
     final l10n = AppLocalizations.of(context);
-    final green = colors?.mostroGreen ?? const Color(0xFF8CC63F);
-    final textSec = colors?.textSecondary ?? const Color(0xFFB0B3C6);
+    final green = book.limeText;
+    final textSec = book.textSecondary;
     final small = Theme.of(context).textTheme.bodySmall!;
 
     return Row(
@@ -529,7 +550,7 @@ class _Footer extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: InkWell(
                       onTap: onToggle,
-                      borderRadius: BorderRadius.circular(AppRadius.chip),
+                      borderRadius: BorderRadius.circular(_linkRadius),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
@@ -561,28 +582,29 @@ class _Footer extends StatelessWidget {
                     ),
                   ),
         ),
-        InkWell(
-          onTap: onGoToTrade,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isDisputeGroup ? l10n.viewDisputeButton : l10n.goToTrade,
-                  style: small.copyWith(
-                    color: green,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+        if (onGoToTrade case final goToTrade?)
+          InkWell(
+            onTap: goToTrade,
+            borderRadius: BorderRadius.circular(_linkRadius),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isDisputeGroup ? l10n.viewDisputeButton : l10n.goToTrade,
+                    style: small.copyWith(
+                      color: green,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 2),
-                Icon(Icons.arrow_forward, size: 14, color: green),
-              ],
+                  const SizedBox(width: 2),
+                  Icon(Icons.arrow_forward, size: 14, color: green),
+                ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }

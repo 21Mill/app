@@ -59,6 +59,7 @@ Future<NotificationsNotifier> _pump(
   WidgetTester tester, {
   required List<NotificationModel> notices,
   List<TradeRow> rows = const [],
+  bool rowsLoaded = true,
 }) async {
   final notifier = NotificationsNotifier();
   for (final n in notices) {
@@ -68,7 +69,9 @@ Future<NotificationsNotifier> _pump(
     ProviderScope(
       overrides: [
         notificationsProvider.overrideWith((_) => notifier),
-        tradeRowsProvider.overrideWithValue(AsyncValue.data(rows)),
+        tradeRowsProvider.overrideWithValue(
+          rowsLoaded ? AsyncValue.data(rows) : const AsyncValue.loading(),
+        ),
         backupReminderProvider.overrideWith(
           (_) => BackupReminderNotifier(initialValue: false),
         ),
@@ -87,6 +90,38 @@ Future<NotificationsNotifier> _pump(
 }
 
 void main() {
+  // A maker's order canceled before anyone took it loses its trade row. Its
+  // "Trade canceled" card still offered Go to trade, which opened a screen
+  // with nothing left to show.
+  group('Go to trade follows the trade row', () {
+    testWidgets('a trade whose row is gone offers none', (tester) async {
+      await _pump(tester, notices: [_status(_longId, 'canceled', 1)]);
+
+      expect(find.text(_en.goToTrade), findsNothing);
+    });
+
+    testWidgets('a trade with its row keeps it', (tester) async {
+      await _pump(
+        tester,
+        notices: [_status(_longId, 'canceled', 1)],
+        rows: [_row(_longId, status: OrderStatus.canceled, isSelling: true)],
+      );
+
+      expect(find.text(_en.goToTrade), findsOneWidget);
+    });
+
+    testWidgets('while the trades load, it stays: no answer is not a gone '
+        'row', (tester) async {
+      await _pump(
+        tester,
+        notices: [_status(_longId, 'canceled', 1)],
+        rowsLoaded: false,
+      );
+
+      expect(find.text(_en.goToTrade), findsOneWidget);
+    });
+  });
+
   testWidgets('one list: no filter tabs, disputes among the rest', (
     tester,
   ) async {

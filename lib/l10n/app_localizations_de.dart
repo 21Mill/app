@@ -836,7 +836,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByMeMessage =>
-      'Du hast die Stornierung dieses Handels angefragt. Er bleibt offen, bis die Gegenpartei ebenfalls storniert. Antwortet sie nicht, kannst du einen Streitfall eröffnen.';
+      'Du hast die Stornierung dieses Trades angefragt. Er bleibt offen, bis die Gegenpartei ebenfalls storniert. Antwortet sie nicht, kannst du einen Streitfall eröffnen.';
 
   @override
   String get tradeCardCancelRequestedByPeerTitle =>
@@ -844,7 +844,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByPeerMessage =>
-      'Sie hat die Stornierung dieses Handels angefragt. Nimm an, um ihn ohne Geldbewegung zu beenden, oder handle weiter.';
+      'Sie hat die Stornierung dieses Trades angefragt. Nimm an, um ihn ohne Geldbewegung zu beenden, oder setze den Trade fort.';
 
   @override
   String get tradeCancelRequestedByMeNotice =>
@@ -1139,7 +1139,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeNoLongerYours =>
-      'Du bist nicht mehr an diesem Handel beteiligt';
+      'Du bist nicht mehr an diesem Trade beteiligt';
 
   @override
   String get sessionTimeoutMessage =>
@@ -3653,7 +3653,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardWaitingBuyerInvoiceMessage =>
-      'Der Handel geht weiter, sobald der Käufer eine Lightning-Rechnung hinzufügt.';
+      'Der Trade geht weiter, sobald der Käufer eine Lightning-Rechnung hinzufügt.';
 
   @override
   String get tradeCardWaitingPaymentTitle =>
@@ -3661,17 +3661,17 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardWaitingPaymentMessage =>
-      'Der Handel geht weiter, sobald der Verkäufer die Hold-Rechnung bezahlt.';
+      'Der Trade geht weiter, sobald der Verkäufer die Hold-Rechnung bezahlt.';
 
   @override
   String get tradeCardWaitingTakerBondTitle => 'Kautionszahlung ausstehend';
 
   @override
   String get tradeCardWaitingTakerBondMessage =>
-      'Die Anti-Missbrauchs-Kaution des Nehmers muss vor Handelsbeginn bezahlt werden.';
+      'Die Anti-Missbrauchs-Kaution des Nehmers muss vor Beginn des Trades bezahlt werden.';
 
   @override
-  String get tradeCardActiveTitle => 'Handel aktiv';
+  String get tradeCardActiveTitle => 'Trade aktiv';
 
   @override
   String get tradeCardActiveMessage =>
@@ -3692,46 +3692,46 @@ class AppLocalizationsDe extends AppLocalizations {
       'Der Verkäufer hat die Sats freigegeben. Die Auszahlung an den Käufer ist unterwegs.';
 
   @override
-  String get tradeCardSuccessTitle => 'Handel abgeschlossen';
+  String get tradeCardSuccessTitle => 'Trade abgeschlossen';
 
   @override
   String get tradeCardSuccessMessage =>
-      'Der Handel wurde erfolgreich abgeschlossen.';
+      'Der Trade wurde erfolgreich abgeschlossen.';
 
   @override
-  String get tradeCardCanceledTitle => 'Handel storniert';
+  String get tradeCardCanceledTitle => 'Trade storniert';
 
   @override
-  String get tradeCardCanceledMessage => 'Der Handel wurde storniert.';
+  String get tradeCardCanceledMessage => 'Der Trade wurde storniert.';
 
   @override
   String get tradeCardExpiredTitle => 'Order abgelaufen';
 
   @override
   String get tradeCardExpiredMessage =>
-      'Die Order ist abgelaufen, bevor der Handel weitergehen konnte.';
+      'Die Order ist abgelaufen, bevor der Trade weitergehen konnte.';
 
   @override
   String get tradeCardCooperativelyCanceledTitle =>
-      'Handel einvernehmlich storniert';
+      'Trade einvernehmlich storniert';
 
   @override
   String get tradeCardCooperativelyCanceledMessage =>
-      'Beide Parteien haben der Stornierung des Handels zugestimmt.';
+      'Beide Parteien haben der Stornierung des Trades zugestimmt.';
 
   @override
   String get tradeCardDisputeTitle => 'Streitfall eröffnet';
 
   @override
   String get tradeCardDisputeMessage =>
-      'Zu diesem Handel wurde ein Streitfall eröffnet.';
+      'Zu diesem Trade wurde ein Streitfall eröffnet.';
 
   @override
   String get tradeCardCanceledByAdminTitle => 'Vom Schlichter storniert';
 
   @override
   String get tradeCardCanceledByAdminMessage =>
-      'Der Streitschlichter hat den Handel storniert.';
+      'Der Streitschlichter hat den Trade storniert.';
 
   @override
   String get tradeCardSettledByAdminTitle => 'Vom Schlichter beigelegt';
@@ -3745,14 +3745,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardCompletedByAdminMessage =>
-      'Der Streitschlichter hat den Handel abgeschlossen.';
+      'Der Streitschlichter hat den Trade abgeschlossen.';
 
   @override
-  String get tradeCardUpdatedTitle => 'Handel aktualisiert';
+  String get tradeCardUpdatedTitle => 'Trade aktualisiert';
 
   @override
   String get tradeCardUpdatedMessage =>
-      'Der Status dieses Handels hat sich geändert.';
+      'Der Status dieses Trades hat sich geändert.';
 
   @override
   String get tradeCardCanceledByMakerMessage =>
