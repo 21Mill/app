@@ -18069,6 +18069,55 @@ mod tests {
         assert_eq!(row.order.node_pubkey, node, "a real node is kept");
     }
 
+    /// The own-key node reset writes a trade row like every other writer:
+    /// under the order's lock, on the row as it is then. Run without it, a
+    /// row wiped while the reset was in flight came back from the copy it had
+    /// listed — and its wipe tombstone was lifted with it.
+    #[tokio::test]
+    async fn the_own_key_node_reset_waits_for_the_order_lock_and_keeps_a_wipe() {
+        use crate::api::types::OrderStatus;
+        let path =
+            std::env::temp_dir().join(format!("mostro_own_key_wipe_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+
+        let own = nostr_sdk::prelude::Keys::generate();
+        ensure_global_dm_coverage(&own, 95).await;
+        let order_id = uuid::Uuid::new_v4().to_string();
+        db.save_trade(&crate::mostro::test_fixtures::trade(
+            &order_id,
+            95,
+            OrderStatus::Active,
+            &own.public_key().to_hex(),
+        ))
+        .await
+        .unwrap();
+
+        let guard = lock_order(&order_id).await;
+        let mut reset = tokio::spawn(seed_global_dm_coverage());
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(200), &mut reset)
+                .await
+                .is_err(),
+            "the reset must wait for the order's lock"
+        );
+        wipe_trade_row(db, &order_id, 1_000, 95).await.unwrap();
+        drop(guard);
+        reset.await.unwrap();
+
+        assert!(
+            db.get_trade_by_order_id(&order_id).await.unwrap().is_none(),
+            "a wiped row stays wiped"
+        );
+        assert!(
+            db.get_setting(&crate::db::settings_keys::trade_wiped(&order_id))
+                .await
+                .unwrap()
+                .is_some(),
+            "and keeps its tombstone"
+        );
+    }
+
     /// PR #252 review (ermeme P1): a create rejected for an unsupported node
     /// protocol must fail BEFORE deriving or persisting anything. The exact
     /// error string pins the ordering: had the preflight run after key
