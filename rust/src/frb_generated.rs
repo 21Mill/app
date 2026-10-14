@@ -53,7 +53,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 911531213;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1838593531;
 
 // Section: executor
 
@@ -7538,6 +7538,44 @@ fn wire__crate__api__orders__take_order_impl(
         },
     )
 }
+fn wire__crate__api__escrow_deadline__trade_escrow_deadline_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "trade_escrow_deadline",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_order_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok(
+                            crate::api::escrow_deadline::trade_escrow_deadline(api_order_id).await,
+                        )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__invoice__trade_step_started_at_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -10105,6 +10143,8 @@ impl SseDecode for crate::api::types::TradeInfo {
         let mut var_timeoutAt = <Option<i64>>::sse_decode(deserializer);
         let mut var_startedAt = <i64>::sse_decode(deserializer);
         let mut var_completedAt = <Option<i64>>::sse_decode(deserializer);
+        let mut var_escrowLockedAt = <Option<i64>>::sse_decode(deserializer);
+        let mut var_escrowNode = <Option<String>>::sse_decode(deserializer);
         let mut var_outcome = <Option<crate::api::types::TradeOutcome>>::sse_decode(deserializer);
         let mut var_peerRating = <Option<f64>>::sse_decode(deserializer);
         let mut var_peerReviews = <Option<u32>>::sse_decode(deserializer);
@@ -10131,6 +10171,8 @@ impl SseDecode for crate::api::types::TradeInfo {
             timeout_at: var_timeoutAt,
             started_at: var_startedAt,
             completed_at: var_completedAt,
+            escrow_locked_at: var_escrowLockedAt,
+            escrow_node: var_escrowNode,
             outcome: var_outcome,
             peer_rating: var_peerRating,
             peer_reviews: var_peerReviews,
@@ -10844,7 +10886,13 @@ fn pde_ffi_dispatcher_primary_impl(
         186 => wire__crate__api__reputation__submit_rating_impl(port, ptr, rust_vec_len, data_len),
         187 => wire__crate__api__orders__subscribe_orders_impl(port, ptr, rust_vec_len, data_len),
         188 => wire__crate__api__orders__take_order_impl(port, ptr, rust_vec_len, data_len),
-        189 => {
+        189 => wire__crate__api__escrow_deadline__trade_escrow_deadline_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        190 => {
             wire__crate__api__invoice__trade_step_started_at_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -12897,6 +12945,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::TradeInfo {
             self.timeout_at.into_into_dart().into_dart(),
             self.started_at.into_into_dart().into_dart(),
             self.completed_at.into_into_dart().into_dart(),
+            self.escrow_locked_at.into_into_dart().into_dart(),
+            self.escrow_node.into_into_dart().into_dart(),
             self.outcome.into_into_dart().into_dart(),
             self.peer_rating.into_into_dart().into_dart(),
             self.peer_reviews.into_into_dart().into_dart(),
@@ -15191,6 +15241,8 @@ impl SseEncode for crate::api::types::TradeInfo {
         <Option<i64>>::sse_encode(self.timeout_at, serializer);
         <i64>::sse_encode(self.started_at, serializer);
         <Option<i64>>::sse_encode(self.completed_at, serializer);
+        <Option<i64>>::sse_encode(self.escrow_locked_at, serializer);
+        <Option<String>>::sse_encode(self.escrow_node, serializer);
         <Option<crate::api::types::TradeOutcome>>::sse_encode(self.outcome, serializer);
         <Option<f64>>::sse_encode(self.peer_rating, serializer);
         <Option<u32>>::sse_encode(self.peer_reviews, serializer);

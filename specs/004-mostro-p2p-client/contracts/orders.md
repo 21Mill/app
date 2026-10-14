@@ -450,6 +450,33 @@ OrderLinkTarget {
 a `mostro=` that is not a key), `OrderLinkNotFound` (no relay answered with
 the order).
 
+### trade_escrow_deadline(order_id: String) → i64?
+Unix seconds at which mostrod's escrow deadline guardian (mostro#862) is
+estimated to act on the trade: it cancels an `active` trade and opens a
+dispute on a `fiat-sent` one. `api/escrow_deadline.rs`.
+
+    deadline = escrow_locked_at + (hold_invoice_cltv_delta − escrow_deadline_margin_blocks) × 600
+
+Both values come from the newest kind 38385 this app holds for
+`escrow_node` (`mostro::node_info`: the persisted cache or the last
+capability fetch), parsed by `mostro::escrow_deadline::parse_tags`:
+
+| The node's info event | Margin used |
+|---|---|
+| `escrow_deadline_margin_blocks` (mostro#1057) in `18..hold_invoice_cltv_delta` | that value |
+| no margin tag, `mostro_version` ≥ 0.18.3 | 24, mostrod's default |
+| `escrow_mode = cashu`, an older or unreadable version, no CLTV delta, or a value mostrod refuses to start with | none: `None` |
+
+`None` too in any status other than `active` / `fiat-sent` and without a
+recorded lock. An estimate: blocks are counted as ten minutes, and the
+HTLC's real expiry is a few blocks past the delta (the paying node pads
+it), so the guardian acts somewhat after it. The trade screen shows it as
+an approximate countdown (`tradeDeadlineProvider`) and nothing decides on
+it. Out of scope: Cashu (its escrow token's locktime is a different
+deadline, after which the seller *can* reclaim, nothing automatic) and
+disputes (LND cancels the hold invoice at its expiry − `holdexpirydelta`,
+which no tag gives).
+
 ## Streams
 
 ### on_orders_updated() → Stream<Vec<OrderInfo>>
@@ -655,6 +682,25 @@ what rebuilds sessions after one.
 | `BondSlashed`                      | `Payload::Order(small_order)`                       | Informational: the payload amount is the **slashed bond**, never written to the order. Marks `bond.state → Slashed` when the row still exists (winning over a provisional `Released`), infers the cause from the row's status, emits `on_bond_slashed`. Exempt from the generation gate |
 | `AddBondInvoice`                   | `Payload::BondPayoutRequest { order, slashed_at }`  | No trade row involved: upserts a payout claim for (`sender`, order) per the §6.4 table (`contracts/bond.md`). Our own `PaymentRequest` echo is ignored |
 | `BondInvoiceAccepted` / `BondPayoutCompleted` | (none)                                   | Claim phase → `Acknowledged` / `Completed` for the sending node's claim; no trade row involved |
+
+**Escrow lock time.** Before the per-action arms, after the row rebuild,
+every message is checked for the time the seller's hold invoice was
+accepted (`mostro::status::dates_escrow_lock`): `BuyerTookOrder` /
+`HoldInvoicePaymentAccepted`, and on a **buy** order `WaitingBuyerInvoice`
+/ an `AddInvoice` whose payload reads `waiting-buyer-invoice` (on a sell
+order that step comes at the take, before the payment; an `AddInvoice`
+reading `settled-hold-invoice` is the payout-failure request). Its
+`created_at` and sender go to `escrow_locked_at` / `escrow_node` when older
+than what the row holds (`Storage::mark_escrow_locked`, oldest wins), then
+`touch_trade`. Not gated by the status rules below: a replayed message
+older than the stored status is exactly the one that dates the lock. A
+message dated beyond the clock-skew tolerance, a row that does not exist
+and `CashuEscrowLocked` record nothing. Oldest within one take: a maker
+order's republish (`write_maker_step_end`) clears both fields before it
+writes `pending` (`Storage::clear_escrow_lock`), because a buy order's lock
+comes in `waiting-buyer-invoice`, which the taker can still cancel out of —
+mostrod refunds the seller and republishes — and the next take's lock,
+being later, would otherwise be refused.
 
 Two rules gate every status sync in the table, and both exist for the
 same reason: the global kind-14 subscription carries no `since`, so every

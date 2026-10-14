@@ -263,10 +263,10 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(TradeStateHeader),
-          matching: find.text(success),
+          matching: find.text(success.toUpperCase()),
         ),
         findsOneWidget,
-        reason: 'the header this panel must agree with',
+        reason: 'the header this panel must agree with: the same chip',
       );
       const panel = _inPanel<TradeInformationTab>;
       expect(panel(find.text(success.toUpperCase())), findsOneWidget);

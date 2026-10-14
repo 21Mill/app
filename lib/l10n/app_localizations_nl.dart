@@ -1500,6 +1500,21 @@ class AppLocalizationsNl extends AppLocalizations {
       'Verloopt de tijd, dan wordt de order geannuleerd.';
 
   @override
+  String get tradeTimerEscrowCancels =>
+      'Geschatte tijd. Is die om, dan annuleert Mostro de trade.';
+
+  @override
+  String get tradeTimerEscrowDisputes =>
+      'Geschatte tijd. Is die om, dan opent Mostro een dispuut.';
+
+  @override
+  String get tradeTimerEscrowCancelling =>
+      'Mostro annuleert zo de trade en geeft de sats terug aan de verkoper.';
+
+  @override
+  String get tradeTimerEscrowDisputing => 'Er wordt zo een dispuut geopend.';
+
+  @override
   String get tradeStepOrderTaken => 'Order geaccepteerd';
 
   @override
@@ -2359,10 +2374,6 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get tradeTimerOrderHas => 'Resterende tijd';
-
-  @override
-  String get tradeTimerNoteCoordinate =>
-      'Heb je meer tijd nodig, overleg dat in de chat voordat de tijd om is.';
 
   @override
   String get tradeRoleBuyer => 'Koper';

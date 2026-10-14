@@ -941,6 +941,32 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
+    async fn mark_escrow_locked(&self, order_id: &str, locked_at: i64, node: &str) -> Result<()> {
+        // Oldest wins: a row that already holds an earlier time keeps it, and
+        // the node travels with the time it came from.
+        let sql = "UPDATE trades SET data = json_set(\
+             data, '$.escrow_locked_at', json(?), '$.escrow_node', ?) \
+             WHERE json_extract(data, '$.order.id') = ? \
+             AND (json_extract(data, '$.escrow_locked_at') IS NULL \
+             OR json_extract(data, '$.escrow_locked_at') > ?)";
+        sqlx::query(sql)
+            .bind(locked_at.to_string())
+            .bind(node)
+            .bind(order_id)
+            .bind(locked_at)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn clear_escrow_lock(&self, order_id: &str) -> Result<()> {
+        let sql = "UPDATE trades SET data = json_set(\
+             data, '$.escrow_locked_at', json('null'), '$.escrow_node', json('null')) \
+             WHERE json_extract(data, '$.order.id') = ?";
+        sqlx::query(sql).bind(order_id).execute(&self.pool).await?;
+        Ok(())
+    }
+
     async fn set_cooperative_cancel_state(
         &self,
         order_id: &str,
@@ -1341,6 +1367,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -1421,6 +1449,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -1545,6 +1575,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -1642,6 +1674,118 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    /// The escrow lock time is a JSON number scoped to one order, and the
+    /// oldest one recorded wins together with its node: a later re-send keeps
+    /// it, an older replay arriving afterwards replaces it.
+    #[tokio::test]
+    async fn mark_escrow_locked_keeps_the_oldest_time_and_its_node() {
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+        storage
+            .save_trade(&trade_row("row-a", "order-a"))
+            .await
+            .unwrap();
+        storage
+            .save_trade(&trade_row("row-b", "order-b"))
+            .await
+            .unwrap();
+
+        storage
+            .mark_escrow_locked("order-a", 1_700_000_500, "node-a")
+            .await
+            .unwrap();
+        storage
+            .mark_escrow_locked("order-a", 1_700_009_999, "node-b")
+            .await
+            .unwrap();
+        let a = storage
+            .get_trade_by_order_id("order-a")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.escrow_locked_at, Some(1_700_000_500));
+        assert_eq!(a.escrow_node.as_deref(), Some("node-a"));
+
+        storage
+            .mark_escrow_locked("order-a", 1_700_000_100, "node-c")
+            .await
+            .unwrap();
+        let a = storage
+            .get_trade_by_order_id("order-a")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.escrow_locked_at, Some(1_700_000_100));
+        assert_eq!(a.escrow_node.as_deref(), Some("node-c"));
+
+        let b = storage
+            .get_trade_by_order_id("order-b")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(b.escrow_locked_at, None);
+        assert_eq!(b.escrow_node, None);
+
+        // No row, no write: the lock never creates a trade.
+        storage
+            .mark_escrow_locked("order-missing", 1_700_000_000, "node-a")
+            .await
+            .unwrap();
+        assert!(storage
+            .get_trade_by_order_id("order-missing")
+            .await
+            .unwrap()
+            .is_none());
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A cleared lock reads back as none, on that order only, and the next
+    /// lock recorded is taken even though it is later than the cleared one.
+    #[tokio::test]
+    async fn clear_escrow_lock_lets_a_later_lock_in() {
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+        for (row, order) in [("row-a", "order-a"), ("row-b", "order-b")] {
+            storage.save_trade(&trade_row(row, order)).await.unwrap();
+            storage
+                .mark_escrow_locked(order, 1_700_000_100, "node-a")
+                .await
+                .unwrap();
+        }
+
+        storage.clear_escrow_lock("order-a").await.unwrap();
+        let a = storage
+            .get_trade_by_order_id("order-a")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.escrow_locked_at, None);
+        assert_eq!(a.escrow_node, None);
+        let b = storage
+            .get_trade_by_order_id("order-b")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(b.escrow_locked_at, Some(1_700_000_100));
+
+        storage
+            .mark_escrow_locked("order-a", 1_700_009_999, "node-b")
+            .await
+            .unwrap();
+        let a = storage
+            .get_trade_by_order_id("order-a")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.escrow_locked_at, Some(1_700_009_999));
+        assert_eq!(a.escrow_node.as_deref(), Some("node-b"));
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
     /// The cooperative-cancel request lives inside the JSON document: written
     /// with `json_set`, read back through serde, scoped to one order.
     #[tokio::test]
@@ -1683,6 +1827,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -1769,6 +1915,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,
@@ -2383,6 +2531,8 @@ mod tests {
                 timeout_at: None,
                 started_at: 1,
                 completed_at: None,
+                escrow_locked_at: None,
+                escrow_node: None,
                 outcome: None,
                 peer_rating: None,
                 peer_reviews: None,

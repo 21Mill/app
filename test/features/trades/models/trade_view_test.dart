@@ -63,7 +63,7 @@ void main() {
       ]);
       expect(v.cancelIsFullWidth, isFalse);
       expect(v.timer, TradeTimerOwner.counterpart);
-      expect(v.note, TradeTimerNote.coordinateInChat);
+      expect(v.note, TradeTimerNote.escrowOutcome);
     });
   });
 
@@ -98,6 +98,7 @@ void main() {
       expect(v.primary, TradePrimaryAction.none);
       expect(v.showsReleaseWarning, isFalse);
       expect(v.timer, TradeTimerOwner.counterpart);
+      expect(v.note, TradeTimerNote.escrowOutcome);
     });
 
     test('payout pending: nothing to do, no clock', () {

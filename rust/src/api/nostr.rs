@@ -702,12 +702,12 @@ pub async fn fetch_mostro_instance_tags(
     )
     .await;
     // Before returning: Dart rereads the cache as soon as this fetch lands.
-    // The Serbero label keeps its own copy: the cache write is best effort,
-    // and the newest revision must decide even when the store refused it
-    // (mostro::serbero).
+    // A copy is kept in memory too: the cache write is best effort, and the
+    // newest revision must decide even when the store refused it
+    // (mostro::node_info).
     if let Some(event) = &event {
         crate::api::node_stats::remember_info_event(event).await;
-        crate::mostro::serbero::set_from_event(event);
+        crate::mostro::node_info::set_from_event(event);
     }
 
     Ok(event.map(|event| {

@@ -8,13 +8,15 @@ import 'package:go_router/go_router.dart';
 import 'package:mostro/core/app_routes.dart';
 import 'package:mostro/core/app_theme.dart';
 import 'package:mostro/core/trade_palette.dart';
+import 'package:mostro/features/chat/models/info_panel_rules.dart';
 import 'package:mostro/features/home/providers/home_order_providers.dart';
 import 'package:mostro/features/order/providers/trade_state_provider.dart';
+import 'package:mostro/features/trades/providers/escrow_deadline_provider.dart';
 import 'package:mostro/features/trades/providers/trades_providers.dart';
+import 'package:mostro/features/trades/widgets/trade_list_chip.dart';
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/shared/utils/countdown.dart';
 import 'package:mostro/shared/widgets/countdown_urgency_announcer.dart';
-import 'package:mostro/shared/widgets/status_chip.dart';
 import 'package:mostro/src/rust/api/orders.dart' as orders_api;
 import 'package:mostro/src/rust/api/types.dart' as rust_types;
 
@@ -79,20 +81,22 @@ class TradeStateHeader extends ConsumerWidget {
     final order = ref.watch(chatTradeOrderProvider(orderId)).valueOrNull;
     if (order == null) return const SizedBox.shrink();
 
-    final colors = Theme.of(context).extension<AppColors>();
+    final book = OrderBookPalette.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    final cardColor = colors?.backgroundCard ?? const Color(0xFF1E2230);
-    final primary = colors?.textPrimary ?? const Color(0xFFFFFFFF);
-    final secondary = colors?.textSecondary ?? const Color(0xFFB0B3C6);
-    final amber = colors?.warningAmber ?? const Color(0xFFE89C3C);
-    final green = colors?.mostroGreen ?? const Color(0xFF8CC63F);
+    final primary = book.textPrimary;
+    final secondary = book.textSecondary;
+    final link = book.limeText;
     final l10n = AppLocalizations.of(context);
 
     // Live status overrides the snapshot baked into the resolved order.
     final liveStatus = ref.watch(tradeStatusProvider(orderId)).valueOrNull;
+
+    // The trade screen's own deadline: the waiting step's, or the escrow's
+    // while the fiat leg runs. Never the order's `expiresAt`, which once the
+    // order is taken is the 38383 event's retention (~15 days).
+    final deadline = ref.watch(tradeDeadlineProvider(orderId)).valueOrNull;
     final statusFilter = orderStatusToFilter(liveStatus ?? order.status);
-    final (pillBg, pillFg) = _statusColors(statusFilter);
 
     // Buyer/seller role: in-memory map → persisted DB → derive from order.
     final isBuyer =
@@ -120,10 +124,13 @@ class TradeStateHeader extends ConsumerWidget {
         0,
       ),
       child: Material(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        color: book.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: book.border),
+        ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.card),
+          borderRadius: BorderRadius.circular(18),
           onTap: () => context.push(AppRoute.tradeDetailPath(orderId)),
           child: Padding(
             padding: const EdgeInsets.symmetric(
@@ -139,10 +146,10 @@ class TradeStateHeader extends ConsumerWidget {
                   runSpacing: AppSpacing.xs,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    StatusChip(
-                      label: statusFilter.localizedLabel(l10n),
-                      background: pillBg,
-                      foreground: pillFg,
+                    // The chat's trade panel shows the same chip.
+                    TradeListChip.status(
+                      kind: tradePanelChipKind(statusFilter),
+                      caption: statusFilter.localizedLabel(l10n),
                     ),
                     dot,
                     Text(
@@ -179,10 +186,12 @@ class TradeStateHeader extends ConsumerWidget {
                         ),
                       ),
                     ],
-                    if (order.expiresAt != null)
+                    if (deadline != null)
                       _CountdownChip(
-                        expiresAt: order.expiresAt!,
-                        color: amber,
+                        expiresAt: DateTime.fromMillisecondsSinceEpoch(
+                          deadline * 1000,
+                        ),
+                        color: TradePalette.of(context).timerWait,
                         separatorColor: secondary,
                         showSeparator: order.paymentMethod.isNotEmpty,
                       ),
@@ -191,13 +200,13 @@ class TradeStateHeader extends ConsumerWidget {
                     Text(
                       l10n.viewOrderLink,
                       style: textTheme.bodySmall?.copyWith(
-                        color: green,
+                        color: link,
                         fontWeight: FontWeight.w600,
                         fontSize: 11,
                       ),
                     ),
                     const SizedBox(width: 2),
-                    Icon(Icons.north_east, size: 11, color: green),
+                    Icon(Icons.north_east, size: 12, color: link),
                   ],
                 ),
               ],
@@ -209,23 +218,6 @@ class TradeStateHeader extends ConsumerWidget {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-
-  /// Maps a [TradeStatusFilter] to (background, foreground) pill colors.
-  static (Color, Color) _statusColors(TradeStatusFilter status) {
-    return switch (status) {
-      TradeStatusFilter.pending => AppColors.statusPending,
-      TradeStatusFilter.waitingInvoice => AppColors.statusWaiting,
-      TradeStatusFilter.waitingPayment => AppColors.statusWaiting,
-      TradeStatusFilter.active => AppColors.statusActive,
-      TradeStatusFilter.fiatSent => AppColors.statusActive,
-      TradeStatusFilter.payoutPending => AppColors.statusWaiting,
-      TradeStatusFilter.success => AppColors.statusSuccess,
-      TradeStatusFilter.canceled => AppColors.statusInactive,
-      TradeStatusFilter.dispute => AppColors.statusDispute,
-      // `all` is a filter sentinel, not a real trade status.
-      TradeStatusFilter.all => AppColors.statusInactive,
-    };
-  }
 
   /// Derives the local user's role from the order itself when no role record
   /// exists: the maker of a buy order buys; the taker of a sell order buys.

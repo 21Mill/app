@@ -1751,8 +1751,8 @@ mod tests {
         let announce = |serbero: &str| vec![vec!["serbero".to_string(), serbero.to_string()]];
 
         // Act
-        crate::mostro::serbero::set_from_tags(&active, &announce(&active_serbero));
-        crate::mostro::serbero::set_from_tags(&other, &announce(&other_serbero));
+        crate::mostro::node_info::set_from_tags(&active, &announce(&active_serbero));
+        crate::mostro::node_info::set_from_tags(&other, &announce(&other_serbero));
 
         // Assert
         let role =
@@ -1775,10 +1775,10 @@ mod tests {
             "no recorded node vouches for anyone"
         );
 
-        crate::mostro::serbero::set_from_tags(&other, &[]);
+        crate::mostro::node_info::set_from_tags(&other, &[]);
         assert_eq!(role(&on_other, &other_serbero).await, SolverRole::Human);
 
-        crate::mostro::serbero::set_from_tags(&active, &[]);
+        crate::mostro::node_info::set_from_tags(&active, &[]);
         for order_id in [&on_active, &on_other] {
             clear_dispute_keys(order_id).await;
         }
@@ -1979,6 +1979,8 @@ mod tests {
             timeout_at: None,
             started_at: 1,
             completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
             outcome: None,
             peer_rating: None,
             peer_reviews: None,

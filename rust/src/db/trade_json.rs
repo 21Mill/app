@@ -102,6 +102,26 @@ pub(crate) fn mark_completed(trade: &mut Value, completed_at: i64) -> Result<()>
     Ok(())
 }
 
+/// `$.escrow_locked_at = locked_at` as a JSON number and `$.escrow_node =
+/// node`, unless the trade already holds an older time: the oldest wins, so a
+/// replayed or re-sent message never moves the escrow deadline.
+pub(crate) fn mark_escrow_locked(trade: &mut Value, locked_at: i64, node: &str) -> Result<()> {
+    let slot = field(trade, &["escrow_locked_at"])?;
+    if slot.as_i64().is_some_and(|held| held <= locked_at) {
+        return Ok(());
+    }
+    *slot = Value::from(locked_at);
+    *field(trade, &["escrow_node"])? = Value::String(node.to_owned());
+    Ok(())
+}
+
+/// `$.escrow_locked_at` and `$.escrow_node` back to null.
+pub(crate) fn clear_escrow_lock(trade: &mut Value) -> Result<()> {
+    *field(trade, &["escrow_locked_at"])? = Value::Null;
+    *field(trade, &["escrow_node"])? = Value::Null;
+    Ok(())
+}
+
 /// `$.cooperative_cancel_state = state`, as serde spells the variant.
 pub(crate) fn set_cooperative_cancel_state(
     trade: &mut Value,
@@ -225,6 +245,38 @@ mod tests {
         assert!(t["completed_at"].is_i64());
         mark_completed(&mut t, 1700009999).unwrap();
         assert_eq!(t["completed_at"], 1700000500);
+    }
+
+    #[test]
+    fn the_oldest_escrow_lock_wins_and_keeps_its_node() {
+        let mut t = trade();
+        mark_escrow_locked(&mut t, 1700000500, "node-a").unwrap();
+        assert!(t["escrow_locked_at"].is_i64());
+        assert_eq!(t["escrow_node"], "node-a");
+
+        // A later message (a re-send, a replay) does not move it.
+        mark_escrow_locked(&mut t, 1700009999, "node-b").unwrap();
+        assert_eq!(t["escrow_locked_at"], 1700000500);
+        assert_eq!(t["escrow_node"], "node-a");
+
+        // An older one, arriving after a newer one, replaces it.
+        mark_escrow_locked(&mut t, 1700000100, "node-c").unwrap();
+        assert_eq!(t["escrow_locked_at"], 1700000100);
+        assert_eq!(t["escrow_node"], "node-c");
+    }
+
+    #[test]
+    fn a_cleared_escrow_lock_takes_a_later_one() {
+        let mut t = trade();
+        mark_escrow_locked(&mut t, 1700000100, "node-a").unwrap();
+
+        clear_escrow_lock(&mut t).unwrap();
+        assert!(t["escrow_locked_at"].is_null());
+        assert!(t["escrow_node"].is_null());
+
+        mark_escrow_locked(&mut t, 1700009999, "node-b").unwrap();
+        assert_eq!(t["escrow_locked_at"], 1700009999);
+        assert_eq!(t["escrow_node"], "node-b");
     }
 
     #[test]
