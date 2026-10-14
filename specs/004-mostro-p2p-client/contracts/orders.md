@@ -5,6 +5,26 @@
 Order browsing, creation, and lifecycle management. Orders are fetched from
 Mostro daemon via Kind 38383 Nostr events and cached locally.
 
+### Where a trade action goes (#810)
+
+A step on an existing trade is sent to the node that issued the trade
+(`order.node_pubkey`), and only while that node is the active one: the step
+depends on what the app keeps for the active node alone (PoW, protocol
+version, escrow mode, fee, bond policy). Every sender takes its destination
+from `mostro::trade_node::trade_action_node`, after the trade-key lookup and
+before any key is derived or anything is published: `send_invoice`,
+`send_fiat_sent`, `release_order`, `cancel_order` (the maker's bond cancel
+included), `request_bond_invoice_again`, `open_dispute`
+([disputes](disputes.md)), `submit_rating` ([reputation](reputation.md)) and
+the Cashu `lock_escrow`. A trade on another node, on none recorded, or with no
+row fails with `TradeOnOtherNode`, publishes nothing and logs
+`trade action refused`; Dart shows a localized message (`tradeOnOtherNode`).
+Acting on it means switching to its node; the Cashu escrow re-sent on
+reconnect (`resubmit_pending_escrows`) waits for that switch too. A static test in `trade_node.rs`
+fails when a new caller of a trade action builder reads the active node
+instead. Bond payout claims are not trade actions: they go to the node that
+issued the claim ([bond](bond.md)).
+
 ### Daemon confirmation & request correlation
 
 Every request that expects a daemon reply (`create_order`, `take_order`,
@@ -402,7 +422,8 @@ A `canceled` with no cancel of this client behind it is the daemon's payment
 deadline (mostro#994): the row is wiped with `Canceled` / `BondExpired`.
 
 **Errors**: no trade-key binding for the order (`no persisted trade key for
-order …`), trade-key or identity load failures, and publish failures. Daemon
+order …`), `TradeOnOtherNode` (see "Where a trade action goes"), trade-key or
+identity load failures, and publish failures. Daemon
 rejections arrive later as `CantDo`; this call does not wait for them, except in
 the maker's bond window (`BondAlreadyLocked`, `MakerCancelRefused`,
 `NoDaemonResponse`, the `CantDo` reason).
@@ -429,7 +450,8 @@ rather than trusting the call's outcome alone.
 the invoice step — the submission may still have been accepted),
 `NotAllowedByStatus` (daemon CantDo: the order no longer waits for an invoice,
 i.e. client and daemon diverged; the screen runs `resync()` to recover the
-missed message and leaves once the status catches up), `TradeNotFound`.
+missed message and leaves once the status catches up), `TradeNotFound`,
+`TradeOnOtherNode` (see "Where a trade action goes").
 
 ---
 
@@ -438,7 +460,7 @@ Seller confirms fiat payment received. Triggers fund release.
 
 **Side effects**: Sends `Release` action to Mostro daemon.
 
-**Errors**: `TradeNotFound`, `NotSeller`, `WrongTradeState`.
+**Errors**: `TradeNotFound`, `NotSeller`, `WrongTradeState`, `TradeOnOtherNode`.
 
 ---
 
@@ -447,7 +469,7 @@ Buyer marks fiat payment as sent.
 
 **Side effects**: Sends `FiatSent` action to Mostro daemon.
 
-**Errors**: `TradeNotFound`, `NotBuyer`, `WrongTradeState`.
+**Errors**: `TradeNotFound`, `NotBuyer`, `WrongTradeState`, `TradeOnOtherNode`.
 
 ---
 
@@ -457,7 +479,7 @@ Request cooperative cancellation of active trade.
 **Side effects**: Sends cooperative cancel request to Mostro daemon.
 Counterparty receives notification.
 
-**Errors**: `TradeNotFound`, `WrongTradeState`, `ProtocolError`.
+**Errors**: `TradeNotFound`, `WrongTradeState`, `ProtocolError`, `TradeOnOtherNode`.
 
 ---
 
