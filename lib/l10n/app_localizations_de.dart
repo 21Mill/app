@@ -313,6 +313,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Es wird noch geprüft, was der ausgewählte Mostro-Node unterstützt. Versuche es gleich noch einmal';
 
   @override
+  String get tradeOnOtherNode =>
+      'Dieser Handel gehört zu einem anderen Mostro-Node. Wechsle zu diesem Node, um ihn fortzusetzen';
+
+  @override
   String get mostroMaintenanceMode =>
       'Der Mostro-Node, mit dem du verbunden bist, wird gerade gewartet. Versuche es später noch einmal oder verbinde dich in den Einstellungen mit einem anderen Mostro-Node';
 

@@ -302,6 +302,7 @@ pub async fn open_dispute(trade_id: String, reason: Option<String>) -> Result<Di
     let trade_index = crate::api::orders::trade_key_for_order(&trade_id)
         .await
         .ok_or_else(|| anyhow!("TradeNotDisputable: no trade key for trade {trade_id}"))?;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&trade_id).await?;
 
     // Correlation nonce for this request. The daemon echoes it in its reply —
     // DisputeInitiatedByYou on acceptance, CantDo on rejection — and only a
@@ -316,9 +317,6 @@ pub async fn open_dispute(trade_id: String, reason: Option<String>) -> Result<Di
             crate::api::identity::get_active_trade_keys(trade_index).await?;
         let identity_keys =
             crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-        let mostro_pubkey =
-            nostr_sdk::prelude::PublicKey::from_hex(&crate::config::active_mostro_pubkey())
-                .map_err(|e| anyhow!("invalid mostro pubkey: {e}"))?;
         let event_json = crate::mostro::actions::dispute(
             &identity_keys,
             &sender_keys,

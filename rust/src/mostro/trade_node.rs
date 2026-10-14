@@ -6,13 +6,49 @@
 //! hold an empty string, which means unknown: this helper never substitutes
 //! the active node — a caller that does (push registration) says so. Every
 //! reader that resolves a row's node goes through [`trade_node`].
+//!
+//! A step on a trade goes to that node, and only while it is the active one:
+//! the step depends on what the app keeps for the active node alone (PoW,
+//! protocol version, escrow mode, fee, bond policy). [`trade_action_node`] is
+//! where every trade action takes its destination from (#810).
 
 use crate::api::types::TradeInfo;
+use nostr_sdk::prelude::PublicKey;
 
 /// The node that issued `trade`, or `None` when the row does not know it.
 pub(crate) fn trade_node(trade: &TradeInfo) -> Option<&str> {
     let node = trade.order.node_pubkey.as_str();
     (!node.is_empty()).then_some(node)
+}
+
+/// The node a step on the trade `order_id` is sent to: the trade's own,
+/// which must be the active node. A trade on another node, on none recorded,
+/// or with no row fails with `TradeOnOtherNode` and nothing is sent.
+pub(crate) async fn trade_action_node(order_id: &str) -> anyhow::Result<PublicKey> {
+    use crate::db::Storage as _;
+    let db = crate::db::app_db::db().ok_or_else(|| anyhow::anyhow!("StorageUnavailable"))?;
+    let trade = db.get_trade_by_order_id(order_id).await?;
+    let node = trade.as_ref().and_then(trade_node);
+    let active = crate::config::active_mostro_pubkey();
+    action_node(node, &active).inspect_err(|_| {
+        crate::api::logging::blog_warn(
+            "orders",
+            format!(
+                "trade action refused for order={}: trade node={} active node={}",
+                crate::api::logging::short_id(order_id),
+                node.map_or("unknown", crate::api::logging::short_id),
+                crate::api::logging::short_id(&active),
+            ),
+        );
+    })
+}
+
+/// `node` when it is the `active` one, else `TradeOnOtherNode`.
+fn action_node(node: Option<&str>, active: &str) -> anyhow::Result<PublicKey> {
+    match node {
+        Some(node) if node.eq_ignore_ascii_case(active) => Ok(PublicKey::from_hex(node)?),
+        _ => Err(anyhow::anyhow!("TradeOnOtherNode")),
+    }
 }
 
 #[cfg(test)]
@@ -31,6 +67,30 @@ mod tests {
     fn an_empty_node_is_unknown() {
         let row = trade("o1", 1, OrderStatus::Active, "");
         assert_eq!(trade_node(&row), None);
+    }
+
+    #[test]
+    fn a_step_goes_to_the_trades_node_when_it_is_the_active_one() {
+        let node = nostr_sdk::prelude::Keys::generate().public_key();
+        let hex = node.to_hex();
+
+        assert_eq!(action_node(Some(&hex), &hex).unwrap(), node);
+        assert_eq!(
+            action_node(Some(&hex.to_uppercase()), &hex).unwrap(),
+            node,
+            "a node is the same node in either case"
+        );
+    }
+
+    #[test]
+    fn a_step_on_another_or_an_unknown_node_is_refused() {
+        let active = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let other = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+
+        for node in [Some(other.as_str()), None] {
+            let err = action_node(node, &active).unwrap_err();
+            assert_eq!(err.to_string(), "TradeOnOtherNode", "node {node:?}");
+        }
     }
 
     /// The message builders of a step on an existing trade (#810).

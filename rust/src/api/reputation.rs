@@ -231,6 +231,7 @@ pub async fn submit_rating(trade_id: String, score: u8) -> Result<()> {
     // network error without hitting AlreadyRated.
     if let Some(trade_index) = crate::api::orders::trade_key_for_order(&trade_id).await {
         let dispatch_result: anyhow::Result<()> = async {
+            let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&trade_id).await?;
             let sender_keys =
                 crate::api::identity::get_active_trade_keys(trade_index).await?;
             // Rating is the one action that must land under the long-lived
@@ -239,9 +240,6 @@ pub async fn submit_rating(trade_id: String, score: u8) -> Result<()> {
             // resolve identity keys unconditionally via the same helper.
             let identity_keys =
                 crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-            let mostro_pubkey =
-                nostr_sdk::prelude::PublicKey::from_hex(&crate::config::active_mostro_pubkey())
-                    .map_err(|e| anyhow::anyhow!("invalid mostro pubkey: {e}"))?;
             let event_json = crate::mostro::actions::rate_user(
                 &identity_keys,
                 &sender_keys,

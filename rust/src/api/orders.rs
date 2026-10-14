@@ -2074,9 +2074,9 @@ pub async fn send_invoice(
         log::warn!("[orders] send_invoice: no persisted trade key for order {order_id}");
         anyhow::anyhow!("TradeNotFound")
     })?;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&order_id).await?;
     let sender_keys = crate::api::identity::get_active_trade_keys(trade_index).await?;
     let identity_keys = crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-    let mostro_pubkey = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())?;
 
     // Correlation nonce for this submission. The daemon echoes it in its
     // reply (progression message or CantDo, e.g. InvalidInvoice); only a
@@ -2189,9 +2189,9 @@ pub async fn send_fiat_sent(order_id: String) -> Result<()> {
     let trade_index = get_trade_key_index(&order_id)
         .await
         .ok_or_else(|| anyhow::anyhow!("no persisted trade key for order {order_id}"))?;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&order_id).await?;
     let sender_keys = crate::api::identity::get_active_trade_keys(trade_index).await?;
     let identity_keys = crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-    let mostro_pubkey = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())?;
     let next_trade = next_trade_for_range_remainder(&order_id, TradeRole::Buyer).await?;
     let event_json = actions::fiat_sent(
         &identity_keys,
@@ -2222,9 +2222,9 @@ pub async fn release_order(order_id: String) -> Result<()> {
     let trade_index = get_trade_key_index(&order_id)
         .await
         .ok_or_else(|| anyhow::anyhow!("no persisted trade key for order {order_id}"))?;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&order_id).await?;
     let sender_keys = crate::api::identity::get_active_trade_keys(trade_index).await?;
     let identity_keys = crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-    let mostro_pubkey = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())?;
     let next_trade = next_trade_for_range_remainder(&order_id, TradeRole::Seller).await?;
     let event_json = actions::release(
         &identity_keys,
@@ -2739,14 +2739,15 @@ pub async fn cancel_order(order_id: String) -> Result<()> {
     if waiting_bond_status(&order_id).await
         == Some(crate::api::types::OrderStatus::WaitingMakerBond)
     {
-        return cancel_maker_bond(&order_id).await;
+        let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&order_id).await?;
+        return cancel_maker_bond(&order_id, &mostro_pubkey).await;
     }
     let trade_index = get_trade_key_index(&order_id)
         .await
         .ok_or_else(|| anyhow::anyhow!("no persisted trade key for order {order_id}"))?;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&order_id).await?;
     let sender_keys = crate::api::identity::get_active_trade_keys(trade_index).await?;
     let identity_keys = crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-    let mostro_pubkey = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())?;
     let event_json = actions::cancel(
         &identity_keys,
         &sender_keys,
@@ -6010,7 +6011,10 @@ const MAKER_BOND_LOCK_POLL: std::time::Duration = std::time::Duration::from_mill
 /// or a daemon without #996: [`settle_refused_maker_cancel`] looks for the
 /// lock and never wipes on a guess. Markers: `NotWaitingBond`,
 /// `BondAlreadyLocked`, `MakerCancelRefused`, `NoDaemonResponse`.
-async fn cancel_maker_bond(order_id: &str) -> Result<()> {
+async fn cancel_maker_bond(
+    order_id: &str,
+    mostro_pubkey: &nostr_sdk::prelude::PublicKey,
+) -> Result<()> {
     use crate::mostro::pending::{
         detach_maker_cancel, register_maker_cancel, remove_maker_cancel, MakerCancelReply,
     };
@@ -6018,7 +6022,6 @@ async fn cancel_maker_bond(order_id: &str) -> Result<()> {
     let trade_index = trade.trade_key_index;
     let sender_keys = crate::api::identity::get_active_trade_keys(trade_index).await?;
     let identity_keys = crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-    let mostro_pubkey = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())?;
     let request_id: u64 = {
         use rand::RngCore;
         rand::rngs::OsRng.next_u64().max(1) // 0 is indistinguishable from "unset"
@@ -6026,7 +6029,7 @@ async fn cancel_maker_bond(order_id: &str) -> Result<()> {
     let event_json = actions::cancel(
         &identity_keys,
         &sender_keys,
-        &mostro_pubkey,
+        mostro_pubkey,
         order_id,
         trade_index,
         Some(request_id),
@@ -6373,8 +6376,8 @@ pub async fn request_bond_invoice_again(
         return Err(anyhow::anyhow!("NotWaitingBond"));
     }
     let trade_index = trade.trade_key_index;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&order_id).await?;
     let sender_keys = crate::api::identity::get_active_trade_keys(trade_index).await?;
-    let mostro_pubkey = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())?;
     let identity_keys = crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
     let ln_address: Option<String> = crate::api::settings::get_settings()
         .await

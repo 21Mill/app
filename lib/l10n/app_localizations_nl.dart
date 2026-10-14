@@ -311,6 +311,10 @@ class AppLocalizationsNl extends AppLocalizations {
       'Nog aan het nagaan wat de gekozen Mostro-node ondersteunt. Probeer het zo weer';
 
   @override
+  String get tradeOnOtherNode =>
+      'Deze trade hoort bij een andere Mostro-node. Schakel over naar die node om verder te gaan';
+
+  @override
   String get mostroMaintenanceMode =>
       'De Mostro-node waarmee je verbonden bent is in onderhoud. Probeer het later opnieuw, of verbind met een andere Mostro-node in de instellingen';
 

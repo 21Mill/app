@@ -29,6 +29,14 @@ void main() {
     }
   });
 
+  // #810: an escrow for a trade on another node is refused before any swap.
+  test('a trade on another node says so', () {
+    expect(
+      cashuErrorMessage(Exception('TradeOnOtherNode'), l10n),
+      l10n.tradeOnOtherNode,
+    );
+  });
+
   test('a unit the app cannot name gets the generic message', () {
     const generic =
         'This wallet only holds sats, and this token is in another unit '

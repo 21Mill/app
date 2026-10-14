@@ -388,6 +388,10 @@
   "@nodeCapabilitiesUnknown": {
     "description": "Error shown when a send fails closed because the selected node's capability fetch (PoW, protocol version) has not completed yet — retrying shortly usually succeeds"
   },
+  "tradeOnOtherNode": "This trade belongs to another Mostro node. Switch to that node to act on it",
+  "@tradeOnOtherNode": {
+    "description": "Error shown when a trade action (cancel, dispute, release, rating, invoice...) is refused before sending because the trade belongs to a Mostro node other than the selected one, or its node is unknown"
+  },
   "mostroMaintenanceMode": "The Mostro node you are connected to is under maintenance. Try again later, or connect to a different Mostro node in Settings",
   "@mostroMaintenanceMode": {
     "description": "Error shown when the selected Mostro node answers CantDo(MaintenanceMode): it is draining (for example before a Lightning node migration) and refuses new orders and takes until it is back"

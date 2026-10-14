@@ -312,6 +312,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Vérification en cours des capacités du nœud Mostro sélectionné. Réessayez dans un instant';
 
   @override
+  String get tradeOnOtherNode =>
+      'Cette opération appartient à un autre nœud Mostro. Passez sur ce nœud pour la poursuivre';
+
+  @override
   String get mostroMaintenanceMode =>
       'Le nœud Mostro auquel vous êtes connecté est en maintenance. Réessayez plus tard ou connectez-vous à un autre nœud Mostro dans les Paramètres';
 

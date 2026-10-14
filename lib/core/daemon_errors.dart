@@ -60,6 +60,11 @@ String localizedDaemonError(
   if (raw.contains('NodeCapabilitiesUnknown')) {
     return l10n.nodeCapabilitiesUnknown;
   }
+  // The trade is on another node than the selected one, or its node is
+  // unknown: nothing was sent (#810). Acting on it means switching to it.
+  if (raw.contains('TradeOnOtherNode')) {
+    return l10n.tradeOnOtherNode;
+  }
   // The node is in maintenance mode (mostro-core 0.14.6 `MaintenanceMode`):
   // it refuses new orders and takes until it comes back. Waiting or picking
   // another node in Settings are the only remedies.

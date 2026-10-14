@@ -847,10 +847,10 @@ pub async fn lock_escrow(order_id: String) -> Result<()> {
     let trade_index = crate::api::orders::trade_key_for_order(&order_id)
         .await
         .ok_or_else(|| anyhow::anyhow!("no persisted trade key for order {order_id}"))?;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&order_id).await?;
+    let mostro_hex = mostro_pubkey.to_hex();
     let seller_keys = crate::api::identity::get_active_trade_keys(trade_index).await?;
     let identity_keys = crate::api::identity::get_transport_identity_keys(&seller_keys).await?;
-    let mostro_hex = crate::config::active_mostro_pubkey();
-    let mostro_pubkey = nostr_sdk::prelude::PublicKey::from_hex(&mostro_hex)?;
 
     let seller_hex = seller_keys.public_key().to_hex();
 

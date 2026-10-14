@@ -598,6 +598,12 @@ abstract class AppLocalizations {
   /// **'Still checking what the selected Mostro node supports. Try again in a moment'**
   String get nodeCapabilitiesUnknown;
 
+  /// Error shown when a trade action (cancel, dispute, release, rating, invoice...) is refused before sending because the trade belongs to a Mostro node other than the selected one, or its node is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'This trade belongs to another Mostro node. Switch to that node to act on it'**
+  String get tradeOnOtherNode;
+
   /// Error shown when the selected Mostro node answers CantDo(MaintenanceMode): it is draining (for example before a Lightning node migration) and refuses new orders and takes until it is back
   ///
   /// In en, this message translates to:

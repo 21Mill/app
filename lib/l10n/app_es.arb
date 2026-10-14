@@ -83,6 +83,7 @@
   "orderAlreadyTaken": "La orden ya fue tomada",
   "nodeProtocolUnsupported": "Este nodo Mostro usa una versión del protocolo que esta app no soporta. Elige otro nodo en Ajustes o busca una actualización de la app",
   "nodeCapabilitiesUnknown": "Aún se está comprobando qué soporta el nodo Mostro seleccionado. Inténtalo de nuevo en un momento",
+  "tradeOnOtherNode": "Esta operación pertenece a otro nodo Mostro. Cambia a ese nodo para continuar con ella",
   "mostroMaintenanceMode": "El nodo Mostro al que estás conectado está en mantenimiento. Inténtalo más tarde o conéctate a otro nodo Mostro desde Ajustes",
   "storageUnavailable": "La app no puede crear ni tomar órdenes mientras su base de datos local no esté disponible. Reinicia la app e inténtalo de nuevo",
   "rangeOrderWithSats": "Una orden de rango no puede tener un monto fijo en sats: se cotiza a precio de mercado al tomarla.",

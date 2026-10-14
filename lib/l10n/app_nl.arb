@@ -83,6 +83,7 @@
   "orderAlreadyTaken": "Deze order is al geaccepteerd",
   "nodeProtocolUnsupported": "Deze Mostro-node spreekt een protocolversie die de app niet ondersteunt. Kies een andere node in de instellingen, of kijk of er een app-update is",
   "nodeCapabilitiesUnknown": "Nog aan het nagaan wat de gekozen Mostro-node ondersteunt. Probeer het zo weer",
+  "tradeOnOtherNode": "Deze trade hoort bij een andere Mostro-node. Schakel over naar die node om verder te gaan",
   "mostroMaintenanceMode": "De Mostro-node waarmee je verbonden bent is in onderhoud. Probeer het later opnieuw, of verbind met een andere Mostro-node in de instellingen",
   "storageUnavailable": "De app kan geen orders plaatsen of accepteren zolang de lokale database niet beschikbaar is. Herstart de app en probeer het opnieuw",
   "rangeOrderWithSats": "Een order met een bereik kan geen vast aantal sats hebben: hij wordt bij het aannemen tegen de marktprijs geprijsd.",
