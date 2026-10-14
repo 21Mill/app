@@ -63,6 +63,30 @@ void main() {
       // the one the flutter job and the web build pin.
       expect(job, contains(r'flutter-version: ${{ env.FLUTTER_VERSION }}'));
     });
+
+    test('falls back to an older CocoaPods cache when the key misses', () {
+      // Arrange
+      final job = iosJob();
+
+      // Act
+      final podsCacheStep = RegExp(
+        r'- name: Cache CocoaPods\n(?:\s{8,}.*\n)*?'
+        r'\s+restore-keys:\s*\|?\s*\n?\s*pods-\$\{\{ runner\.os \}\}-\s*\n',
+      );
+
+      // Assert — on a miss `pod install` git-clones every pod from GitHub,
+      // and one clone that cannot connect fails the job (run 38423181483:
+      // firebase-ios-sdk, port 443 timeout). A push to main misses whenever
+      // the key changed in a pull request, because main cannot read a cache
+      // saved by a pull request's ref. Restoring the newest pods cache of
+      // this ref keeps the clones out unless a pod's version changed.
+      expect(
+        podsCacheStep.hasMatch(job),
+        isTrue,
+        reason: r'the Cache CocoaPods step has no `restore-keys: '
+            r'pods-${{ runner.os }}-`',
+      );
+    });
   });
 
   group('iOS deployment target', () {

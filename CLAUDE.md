@@ -334,6 +334,13 @@ bridged by flutter_rust_bridge.
   the Rust core, the database or protocol state (a test reads its imports); it sets
   `push_wake_pending` and may show the content-free chat-wake notice. Every write happens on
   resume, once, in the foreground core.
+- **Every screen route nests under `/` (Book), through `_onHome` in `app_routes.dart`.**
+  Only the first-run pair stays top level. Nested under `/`, a route keeps its URL, and a
+  `go` to it (or a link from outside) builds Book underneath, so back ends on Book before
+  it leaves the app. A new top-level route would bring back Android's back closing the app
+  from a detail screen; `test/core/back_navigation_test.dart` walks every route and fails.
+  An OS notification tap is a `go`, never a `push`: it starts a fresh stack. The bottom bar
+  reads its lit tab from the screen's route, not from state.
 - **Trade screens are pushed, not polled — so every trade write must ring.** Rust's
   `api::trade_touch::touch_trade(order_id)` is the doorbell behind `tradeStatusProvider`, the
   invoice providers (`trade_state_provider.dart`) and the trade list (`rawTradesProvider`, which

@@ -457,6 +457,10 @@ void main() {
             size: const Size(320, 640),
             textScale: 2,
           );
+          expect(tester.takeException(), isNull);
+          // A resolved dispute opens on its outcome, past the card.
+          _chatPosition(tester).jumpTo(0);
+          await tester.pump();
 
           expect(tester.takeException(), isNull);
           expect(_inCard(find.text(de.orderIdLabel)), findsOneWidget);
@@ -563,6 +567,68 @@ void main() {
         expect(find.text(_en.disputeLostFundsToSeller), findsNothing);
       });
     }
+
+    // The banner says the chat is closed; the list under the messages does
+    // not say it again.
+    for (final resolution in DisputeResolution.values) {
+      testWidgets('${resolution.name}: says once that the chat is closed', (
+        tester,
+      ) async {
+        await _pump(
+          tester,
+          dispute: _dispute(
+            status: DisputeStatus.resolved,
+            resolution: resolution,
+          ),
+        );
+
+        expect(find.text(_en.disputeChatClosed), findsOneWidget);
+      });
+    }
+
+    // The chat opens on its latest message, so the outcome follows it: a
+    // long history still opens on the verdict and the closed chat.
+    testWidgets('a long history opens on the outcome, after the messages', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        dispute: _dispute(
+          status: DisputeStatus.resolved,
+          resolution: DisputeResolution.fundsToBuyer,
+        ),
+        history: [
+          for (var i = 1; i <= 40; i++) _solverMessage('ok $i', createdAt: i),
+        ],
+      );
+
+      final outcome = find.text(_en.disputeSuccessfullyCompleted);
+      final closed = find.text(_en.disputeChatClosed);
+      expect(outcome, findsOneWidget);
+      expect(closed, findsOneWidget);
+      final latest = tester.getRect(find.text('ok 40'));
+      expect(tester.getRect(outcome).top, greaterThan(latest.bottom));
+      expect(tester.getRect(closed).bottom, lessThanOrEqualTo(800));
+    });
+
+    // With no history nothing jumps to a latest message, and on a short
+    // screen the info card alone pushes the outcome below the fold.
+    testWidgets('no messages on a short screen still opens on the outcome', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        dispute: _dispute(
+          status: DisputeStatus.resolved,
+          resolution: DisputeResolution.fundsToBuyer,
+        ),
+        size: const Size(400, 420),
+      );
+
+      final closed = find.text(_en.disputeChatClosed);
+      expect(closed, findsOneWidget);
+      expect(tester.getRect(closed).bottom, lessThanOrEqualTo(420));
+    });
   });
 
   // Measured with the app's fonts: the test engine's em squares would put
