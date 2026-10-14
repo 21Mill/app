@@ -17,6 +17,7 @@ pub mod order_link;
 pub mod orders;
 pub mod push;
 pub mod reputation;
+pub mod reputation_transfer;
 pub mod restore_progress;
 pub mod settings;
 pub mod trade_touch;

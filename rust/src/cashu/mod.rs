@@ -22,7 +22,9 @@ pub mod escrow;
 mod wallet;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use wallet::{stored_balance, token_mint_url, CashuWallet, MintCapabilities};
+pub use wallet::{
+    ensure_receivable, stored_balance, token_mint_url, CashuWallet, MintCapabilities,
+};
 
 // ── WASM stub ────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,12 @@ impl MintCapabilities {
 #[cfg(target_arch = "wasm32")]
 pub async fn stored_balance(_db_path: &str, _mint_url: Option<&str>) -> anyhow::Result<u64> {
     Ok(0)
+}
+
+/// Nothing to refuse on web: every receive fails later, as unsupported.
+#[cfg(target_arch = "wasm32")]
+pub fn ensure_receivable(_encoded: &str) -> anyhow::Result<()> {
+    Ok(())
 }
 
 /// No token decoding on web either: the wallet it would bind cannot run there.

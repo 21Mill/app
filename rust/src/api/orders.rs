@@ -10694,7 +10694,37 @@ pub(crate) async fn ask_daemon(
     label: &str,
     is_reply: fn(&mostro_core::message::MessageKind, u64) -> bool,
 ) -> Result<DaemonAnswer> {
-    use crate::rt::time::{timeout, Duration};
+    // This query, unlike the restore itself, has a fallback (the payload
+    // maximum), so a shorter wait halves the worst-case restore latency
+    // against a silent daemon.
+    ask_daemon_with(
+        sender_keys,
+        mostro_pubkey,
+        request_id,
+        publish_event_json(event_json),
+        label,
+        is_reply,
+        crate::rt::time::Duration::from_secs(5),
+        "restore",
+    )
+    .await
+}
+
+/// [`ask_daemon`] with a deferred publication, reply window and log category.
+/// `publish` is polled only after the reply subscription is live, so callers
+/// can validate request-specific state at the publication boundary.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn ask_daemon_with(
+    sender_keys: &nostr_sdk::prelude::Keys,
+    mostro_pubkey: &nostr_sdk::prelude::PublicKey,
+    request_id: u64,
+    publish: impl std::future::Future<Output = Result<()>>,
+    label: &str,
+    is_reply: fn(&mostro_core::message::MessageKind, u64) -> bool,
+    reply_window: crate::rt::time::Duration,
+    log_category: &str,
+) -> Result<DaemonAnswer> {
+    use crate::rt::time::timeout;
     use nostr_sdk::prelude::{ClientNotification, StreamExt};
 
     let mostro_pubkey = *mostro_pubkey;
@@ -10707,12 +10737,9 @@ pub(crate) async fn ask_daemon(
     // arrive in the gap between subscribe and the first recv.
     let mut rx = client.notifications();
 
-    // This query, unlike the restore itself, has a fallback (the payload
-    // maximum), so a shorter wait halves the worst-case restore latency
-    // against a silent daemon. Shared by the relay-side auto-close and the
-    // outer wait loop — both started at subscribe below, so the two budgets
+    // `reply_window` is shared by the relay-side auto-close and the outer
+    // wait loop — both started at subscribe below, so the two budgets
     // actually run together.
-    const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
     // limit(0): live-only, same rationale as subscribe_daemon_messages — the
     // reply is published after we subscribe, and we never want a replayed
@@ -10735,9 +10762,9 @@ pub(crate) async fn ask_daemon(
     // back to the payload maximum by design).
     let close_opts = nostr_sdk::prelude::SubscribeAutoCloseOptions::default()
         .exit_policy(nostr_sdk::prelude::ReqExitPolicy::WaitDurationAfterEOSE(
-            REPLY_TIMEOUT,
+            reply_window,
         ))
-        .timeout(Some(REPLY_TIMEOUT));
+        .timeout(Some(reply_window));
     if let Err(e) = client.subscribe(filter).close_on(close_opts).await {
         log::warn!("[orders] {label} subscribe failed: {e}");
         return Ok(DaemonAnswer::Silent);
@@ -10746,11 +10773,11 @@ pub(crate) async fn ask_daemon(
     // relay-side auto-close starts — so both give up together.
     let start = crate::rt::time::Instant::now();
 
-    publish_event_json(event_json).await?;
-    crate::api::logging::blog_info("restore", format!("{label} published — waiting for daemon"));
+    publish.await?;
+    crate::api::logging::blog_info(log_category, format!("{label} published — waiting for daemon"));
 
     loop {
-        let remaining = REPLY_TIMEOUT.saturating_sub(start.elapsed());
+        let remaining = reply_window.saturating_sub(start.elapsed());
         if remaining.is_zero() {
             break;
         }

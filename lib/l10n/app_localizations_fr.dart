@@ -4270,6 +4270,24 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ce token n\'a pas pu être vérifié : il ne contient aucune preuve de la signature de la mint, il n\'a donc pas été accepté.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'Ce portefeuille ne contient que des sats, et ce token est dans une autre unité (par exemple des millisats ou des dollars). Il n\'a pas été touché : vous pouvez l\'encaisser dans un portefeuille qui accepte son unité.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'Ce portefeuille ne contient que des sats, et ce token est en $unit. Il n\'a pas été touché : vous pouvez l\'encaisser dans un portefeuille qui accepte cette unité.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'millisats';
+
+  @override
+  String get cashuUnitUsd => 'dollars (USD)';
+
+  @override
+  String get cashuUnitEur => 'euros (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'L\'envoi a échoué et le portefeuille n\'a pas pu confirmer le retour des fonds. Synchronisez avec la mint avant de réessayer.';
 
