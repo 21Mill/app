@@ -380,7 +380,9 @@ fn answers_from_relay(
                 if let Some((asked, mut answers)) = asking.take() {
                     match answers.next().await {
                         Some(event) => return Some((event, (relay, Some((asked, answers))))),
-                        None if !dropped(&relay, asked) => return None,
+                        None if !dropped(asked, relay.status(), relay.stats().success()) => {
+                            return None
+                        }
                         None => {
                             log::debug!("[order-link] {} dropped, asking again", relay.url());
                             if !connected_by(&relay, deadline).await {
@@ -432,18 +434,19 @@ impl Asked {
     }
 }
 
-/// Whether the lookup `relay` ended was cut by a drop rather than answered:
-/// the app bounced the relay (`Terminated` — the resume pass or the liveness
-/// probe, which reconnect it at once), or it was connected when asked and has
-/// lost that connection since, even if it is back already. A relay that was
-/// not up when asked and failed to come up is not waited for: the pool's
-/// lookup never waited for one either.
-fn dropped(relay: &Relay, asked: Asked) -> bool {
-    let status = relay.status();
+/// Whether a relay's lookup, sent while it was `asked` and ended while it is
+/// `status` with `connections` behind it, was cut by a drop rather than
+/// answered: the app bounced the relay (`Terminated` — the resume pass or the
+/// liveness probe, which reconnect it at once), or the connection that carried
+/// the request is gone — the one it had when asked, or one that came up after
+/// it (a cold relay sends a request queued before it connected) — even if it
+/// is back already. A relay that was not up when asked and never came up is
+/// not waited for: the pool's lookup never waited for one either.
+fn dropped(asked: Asked, status: RelayStatus, connections: usize) -> bool {
+    let came_up_since = connections != asked.connections;
     status == RelayStatus::Terminated
-        || (asked.connected
-            && (status != RelayStatus::Connected
-                || relay.stats().success() != asked.connections))
+        || (status != RelayStatus::Connected && (asked.connected || came_up_since))
+        || (asked.connected && came_up_since)
 }
 
 /// Whether `relay` is connected by `deadline`, waiting for it if need be. One
@@ -883,6 +886,36 @@ mod tests {
 
         assert!(found.is_none());
         assert!(started.elapsed() < ANSWER_GRACE, "{:?}", started.elapsed());
+    }
+
+    /// When a relay's lookup ends, whether it was cut by a drop (asked again)
+    /// or answered (final): `(when asked, status now, connections now)`.
+    #[test]
+    fn a_lookup_is_cut_by_a_drop_and_ended_by_anything_else() {
+        use RelayStatus::{Connected, Connecting, Disconnected, Terminated};
+        let warm = Asked {
+            connected: true,
+            connections: 1,
+        };
+        let cold = Asked {
+            connected: false,
+            connections: 0,
+        };
+        let cases = [
+            ("warm, answered", warm, Connected, 1, false),
+            ("warm, lost its connection", warm, Disconnected, 1, true),
+            ("warm, lost it and is back already", warm, Connected, 2, true),
+            ("bounced by the app", cold, Terminated, 0, true),
+            ("cold, came up and answered", cold, Connected, 1, false),
+            // The request went out over the connection that came up, and it
+            // dropped before the relay answered (Codex review on #820).
+            ("cold, came up and dropped", cold, Disconnected, 1, true),
+            ("cold, came up and is reconnecting", cold, Connecting, 1, true),
+            ("cold, never came up", cold, Disconnected, 0, false),
+        ];
+        for (case, asked, status, connections, cut) in cases {
+            assert_eq!(dropped(asked, status, connections), cut, "{case}");
+        }
     }
 
     /// A link shared while the order was pending may be opened after it was
