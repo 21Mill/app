@@ -17818,6 +17818,11 @@ mod tests {
         assert_eq!(row.order.status, crate::api::types::OrderStatus::Pending);
         assert!(row.order.is_mine);
         assert_eq!(row.order.fiat_amount, Some(1000.0));
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "the remainder belongs to the node that sent it, not to our trade key",
+        );
         assert_eq!(get_trade_key_index(&child_id).await, Some(9));
         assert!(rx.try_recv().is_ok(), "the UI learns about the new trade");
 
@@ -19668,6 +19673,11 @@ mod tests {
         );
         assert_eq!(row.order.amount_sats, Some(6_307));
         assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "a rebuilt row belongs to the node that sent the message",
+        );
+        assert_eq!(
             drain_updates(&mut rx, &order_id),
             vec![crate::api::types::OrderStatus::WaitingBuyerInvoice],
         );
@@ -20562,6 +20572,11 @@ mod tests {
             crate::api::types::OrderStatus::WaitingMakerBond
         );
         assert_eq!(row.trade_key_index, 22);
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "the parked row belongs to the node that asked for the bond",
+        );
         // The payload's amount is the bond: it never becomes the order's sats.
         assert_eq!(row.order.amount_sats, None);
         let bond = row.bond.expect("bond persisted");
@@ -22152,6 +22167,11 @@ mod tests {
         assert_eq!(row.order.fiat_amount, Some(250.0));
         assert!(row.order.is_mine);
         assert_eq!(row.trade_key_index, 86);
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "filling the placeholder keeps the node that confirmed it",
+        );
         assert!(!is_restored_maker_placeholder(&row));
         assert_eq!(row.bond.map(|b| b.state), Some(BondState::Locked));
     }
@@ -22298,6 +22318,11 @@ mod tests {
         assert_eq!(row.trade_key_index, 14);
         assert_eq!(row.order.fiat_amount_min, Some(100.0));
         assert_eq!(row.order.fiat_amount_max, Some(500.0));
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "the maker row belongs to the node that confirmed it",
+        );
         assert_eq!(
             get_trade_key_index(&order_id).await,
             Some(14),
