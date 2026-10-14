@@ -45,7 +45,7 @@ A buy or sell offer on the Mostro network.
 | fiat_code | String | ISO 4217 currency code (e.g., "USD", "EUR") |
 | payment_method | String | Fiat payment method description |
 | premium | f64 | Price premium/discount percentage |
-| creator_pubkey | String | Public key of order creator |
+| node_pubkey | String | The Mostro node that issued the order: the Kind 38383 author on a book order, the node that sent the daemon message a trade row was built from. Empty when unknown. Rows persisted before the rename name it `creator_pubkey` |
 | created_at | Timestamp | When order was created: the Kind 38383 `published_at` tag, else the legacy `created_at` tag, else the event's `created_at`; a tag value is capped at the event's `created_at` |
 | expires_at | Timestamp? | Expiration time (null if no expiry) |
 | nostr_event_id | String? | Kind 38383 event ID on relay |

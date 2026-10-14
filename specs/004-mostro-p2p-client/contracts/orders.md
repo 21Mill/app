@@ -213,7 +213,7 @@ On rejection or timeout **nothing is persisted** — no phantom trade, and no
 session: a take that fails never leaves one behind.
 
 The row is created with an **empty `counterparty_pubkey`**: a book
-order's `creator_pubkey` is the Mostro node (the 38383 event author),
+order's `node_pubkey` is the Mostro node (the 38383 event author),
 never the peer, and seeding it there poisons the durable peer record
 (#334). The real peer arrives via the peer-reveal capture (see *Inbound
 Kind 14 actions*), which may already have run on the take's first reply —

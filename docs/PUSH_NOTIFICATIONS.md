@@ -592,7 +592,7 @@ again) and `push_enabled`.
    `now − unwanted_since > GRACE`, unregister, then forget. A key that comes back
    into `wanted` (a restore, a re-taken order on the same key) clears the timestamp.
 4. Every request: 10 s timeout, lowercase hex, `mostro_pubkey` = the **issuing node
-   of that key**, read from the owning row or claim: `order.creator_pubkey` for a
+   of that key**, read from the owning row or claim: `order.node_pubkey` for a
    trade row, `claim.node_pubkey` for a claim. The field only gates the operator's
    whitelist, it does not route — but a registration filed under the wrong node is
    refused, or accepted, under the wrong policy, and a refusal must be recorded
@@ -605,14 +605,16 @@ again) and `push_enabled`.
    explicit "try again" gestures. A refusal survives a restart until one of those;
    nothing else reads or writes the key, so there is no implicit clear.
 
-**The issuing node is on the row.** A taken order's row already carries the node in
-`order.creator_pubkey` (the 38383 author, #334). A maker's row does **not** today:
-`create_order` and the restore placeholder write an empty `creator_pubkey`, and a
-maker trade on node A becomes anonymous after a switch to B — its daemon events are
-then unreachable, push or no push. T1.2 therefore seeds `creator_pubkey` with the
-active node on both paths (consistent with the book, where the user's own order is
-also authored by the node) and treats a legacy row with an empty `creator_pubkey` as
-the active node's. The same value feeds the DM filter's `authors` (next paragraph).
+**The issuing node is on the row.** A taken order's row carries the node in
+`order.node_pubkey` (the 38383 author, #334). A maker's row did **not** before T1.2:
+`create_order` and the restore placeholder wrote an empty value, and a maker trade on
+node A became anonymous after a switch to B — its daemon events were then
+unreachable, push or no push. T1.2 seeds `node_pubkey` with the active node on both
+paths (consistent with the book, where the user's own order is also authored by the
+node), and every row built from a daemon message (range remainder, DM rebuild, late
+create confirmation, late maker bond, restored maker placeholder) records the node
+that sent it (#809). Push treats a legacy row with an empty `node_pubkey` as the
+active node's. The same value feeds the DM filter's `authors` (next paragraph).
 
 **Triggers.** App start (after the DB and identity are up), `set_push_token`,
 `set_push_enabled(true)`, every trade row write that changes `wanted` (take, create
@@ -968,7 +970,7 @@ shows the new status without a restart; the same on web after a throttled tab.
 | Task | Scope | Files |
 |---|---|---|
 | T1.1 | `mostro/push.rs`: `PushRegistration` (with `mostro_pubkey`, `unwanted_since`), `wanted_pubkeys`, `plan`, `backoff`, `notify_allowed`, settings keys; unit tests for every rule in §7.1 (grace from `unwanted_since` and its reset, legacy key with no timestamp, refresh, token change, per-node 403 refusal, node-agnostic wanted set, `mostro_pubkey` from the owning row or claim) | `rust/src/mostro/push.rs`, `rust/src/db/mod.rs` |
-| T1.2 | `api/push.rs`: `PushServer` trait + `reqwest` impl (10 s timeout, lowercase hex, `mostro_pubkey`, `Retry-After`), wasm stub; `reconcile_push` single-flight with the triggers of §7.1 (trade row writes, claim upserts, restore, timer); `set_push_token`, `clear_push_token`, `set_push_enabled`, `get_push_status`, `on_push_status_changed`; `delete_identity` unregisters first; `resync()` calls reconcile. **Issuing node on every row**: `create_order` and the restore placeholder seed `order.creator_pubkey` with the active node, an empty legacy value reads as the active node; **DM filter `authors`** extended with the issuing node of every non-terminal trade row, so a registered key is always one the filter can hear; the JSON mirror of §7.1 written on every reconcile | `rust/src/api/push.rs`, `rust/src/api/orders.rs`, `rust/src/api/bond.rs`, `rust/src/api/identity.rs` |
+| T1.2 | `api/push.rs`: `PushServer` trait + `reqwest` impl (10 s timeout, lowercase hex, `mostro_pubkey`, `Retry-After`), wasm stub; `reconcile_push` single-flight with the triggers of §7.1 (trade row writes, claim upserts, restore, timer); `set_push_token`, `clear_push_token`, `set_push_enabled`, `get_push_status`, `on_push_status_changed`; `delete_identity` unregisters first; `resync()` calls reconcile. **Issuing node on every row**: `create_order` and the restore placeholder seed `order.node_pubkey` with the active node, an empty legacy value reads as the active node; **DM filter `authors`** extended with the issuing node of every non-terminal trade row, so a registered key is always one the filter can hear; the JSON mirror of §7.1 written on every reconcile | `rust/src/api/push.rs`, `rust/src/api/orders.rs`, `rust/src/api/bond.rs`, `rust/src/api/identity.rs` |
 | T1.3 | Dart: `PushNotificationService` reduced to the device side; `set_push_token` on token and refresh; delete `routeFromPayload`, `_typeFromString`, `_isTypeEnabled`, `registerToken`, `unregisterToken`, the in-memory set; push server URL moves to Rust config (`PUSH_SERVER_URL`, default the Fly host — §14 item 1) | `lib/features/notifications/services/push_notification_service.dart`, `rust/src/config.rs` |
 | T1.4 | `contracts/nostr.md`: replace `register_push_token`; new `contracts/push.md`; `data-model.md` settings keys | `specs/004-mostro-p2p-client/` |
 
