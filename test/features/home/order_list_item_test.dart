@@ -116,6 +116,24 @@ void main() {
       );
       expect(find.text('Market price'), findsNothing);
     });
+
+    testWidgets('fixed-sats orders show their price per BTC, not a premium', (
+      tester,
+    ) async {
+      await _pumpCard(
+        tester,
+        fakeOrder(
+          fiatAmount: 100,
+          fiatCode: 'EUR',
+          amountSats: BigInt.from(163400),
+        ),
+      );
+
+      expect(find.text('61.2k EUR/BTC'), findsOneWidget);
+      expect(find.text('price'), findsOneWidget);
+      expect(find.text('premium'), findsNothing);
+      expect(find.textContaining('%'), findsNothing);
+    });
   });
 
   group('OrderListItem rows', () {
