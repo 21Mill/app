@@ -833,7 +833,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByMeMessage =>
-      'Hai chiesto di annullare questo scambio. Resta aperto finché anche l\'altra parte non annulla. Se non risponde, puoi aprire una disputa.';
+      'Hai chiesto di annullare questa operazione. Resta aperta finché anche l\'altra parte non annulla. Se non risponde, puoi aprire una disputa.';
 
   @override
   String get tradeCardCancelRequestedByPeerTitle =>
@@ -841,7 +841,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByPeerMessage =>
-      'Ha chiesto di annullare questo scambio. Accetta per concluderlo senza spostare fondi, oppure continua lo scambio.';
+      'Ha chiesto di annullare questa operazione. Accetta per concluderla senza spostare fondi, oppure continua l\'operazione.';
 
   @override
   String get tradeCancelRequestedByMeNotice =>
@@ -1134,7 +1134,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get orderNoLongerActive => 'Questo ordine non è più attivo';
 
   @override
-  String get tradeNoLongerYours => 'Non partecipi più a questo scambio';
+  String get tradeNoLongerYours => 'Non partecipi più a questa operazione';
 
   @override
   String get sessionTimeoutMessage =>
@@ -3636,7 +3636,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get tradeCardWaitingBuyerInvoiceMessage =>
-      'Lo scambio prosegue quando l\'acquirente aggiunge una fattura Lightning.';
+      'L\'operazione prosegue quando l\'acquirente aggiunge una fattura Lightning.';
 
   @override
   String get tradeCardWaitingPaymentTitle =>
@@ -3644,7 +3644,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get tradeCardWaitingPaymentMessage =>
-      'Lo scambio prosegue quando il venditore paga la fattura hold.';
+      'L\'operazione prosegue quando il venditore paga la fattura hold.';
 
   @override
   String get tradeCardWaitingTakerBondTitle =>
@@ -3652,10 +3652,10 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get tradeCardWaitingTakerBondMessage =>
-      'Il deposito anti-abuso di chi accetta l\'ordine deve essere pagato prima dell\'inizio dello scambio.';
+      'Il deposito anti-abuso di chi accetta l\'ordine deve essere pagato prima dell\'inizio dell\'operazione.';
 
   @override
-  String get tradeCardActiveTitle => 'Scambio attivo';
+  String get tradeCardActiveTitle => 'Operazione attiva';
 
   @override
   String get tradeCardActiveMessage =>
@@ -3676,46 +3676,46 @@ class AppLocalizationsIt extends AppLocalizations {
       'Il venditore ha rilasciato i sats. Il pagamento all\'acquirente è in arrivo.';
 
   @override
-  String get tradeCardSuccessTitle => 'Scambio completato';
+  String get tradeCardSuccessTitle => 'Operazione completata';
 
   @override
   String get tradeCardSuccessMessage =>
-      'Lo scambio si è concluso con successo.';
+      'L\'operazione si è conclusa con successo.';
 
   @override
-  String get tradeCardCanceledTitle => 'Scambio annullato';
+  String get tradeCardCanceledTitle => 'Operazione annullata';
 
   @override
-  String get tradeCardCanceledMessage => 'Lo scambio è stato annullato.';
+  String get tradeCardCanceledMessage => 'L\'operazione è stata annullata.';
 
   @override
   String get tradeCardExpiredTitle => 'Ordine scaduto';
 
   @override
   String get tradeCardExpiredMessage =>
-      'L\'ordine è scaduto prima che lo scambio potesse proseguire.';
+      'L\'ordine è scaduto prima che l\'operazione potesse proseguire.';
 
   @override
   String get tradeCardCooperativelyCanceledTitle =>
-      'Scambio annullato di comune accordo';
+      'Operazione annullata di comune accordo';
 
   @override
   String get tradeCardCooperativelyCanceledMessage =>
-      'Entrambe le parti hanno accettato di annullare lo scambio.';
+      'Entrambe le parti hanno accettato di annullare l\'operazione.';
 
   @override
   String get tradeCardDisputeTitle => 'Disputa aperta';
 
   @override
   String get tradeCardDisputeMessage =>
-      'È stata aperta una disputa su questo scambio.';
+      'È stata aperta una disputa su questa operazione.';
 
   @override
   String get tradeCardCanceledByAdminTitle => 'Annullato dal mediatore';
 
   @override
   String get tradeCardCanceledByAdminMessage =>
-      'Il mediatore della disputa ha annullato lo scambio.';
+      'Il mediatore della disputa ha annullato l\'operazione.';
 
   @override
   String get tradeCardSettledByAdminTitle => 'Risolto dal mediatore';
@@ -3729,14 +3729,14 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get tradeCardCompletedByAdminMessage =>
-      'Il mediatore della disputa ha completato lo scambio.';
+      'Il mediatore della disputa ha completato l\'operazione.';
 
   @override
-  String get tradeCardUpdatedTitle => 'Scambio aggiornato';
+  String get tradeCardUpdatedTitle => 'Operazione aggiornata';
 
   @override
   String get tradeCardUpdatedMessage =>
-      'Lo stato di questo scambio è cambiato.';
+      'Lo stato di questa operazione è cambiato.';
 
   @override
   String get tradeCardCanceledByMakerMessage =>
