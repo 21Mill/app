@@ -3,8 +3,9 @@
 //! A trade row records its issuing node in `order.node_pubkey`: the Kind
 //! 38383 author for a taken book order, the node that answered for a row
 //! built from a daemon message. Rows written before the node was recorded
-//! hold an empty string, which means unknown — never "the active node".
-//! Every reader goes through [`trade_node`] so that rule lives in one place.
+//! hold an empty string, which means unknown: this helper never substitutes
+//! the active node — a caller that does (push registration) says so. Every
+//! reader that resolves a row's node goes through [`trade_node`].
 
 use crate::api::types::TradeInfo;
 
