@@ -361,11 +361,12 @@ async fn answers_from(
 ///
 /// Asked at once, and asked again, once it is back, when it dropped before
 /// answering ([`dropped`]): nostr-sdk ends a lookup the instant its relay
-/// drops, with no answer and no error. A link opened from the background is
-/// looked up just as the resume pass (`api::nostr::resync`) bounces every
-/// relay the OS cut, and an iOS socket the OS closed only fails once written
-/// to. Any other end is the relay's answer — EOSE, `CLOSED`, the deadline, or
-/// a request it refused (never connected, banned, failing) — and is final.
+/// drops, with no answer and no error. A link that brings the app back is
+/// looked up just as `api::nostr::resync` bounces every relay the OS cut: on
+/// resume, and on Android also when the link starts a new engine on a core
+/// still running (`reattach_existing_pool`). Any other end is the relay's
+/// answer — EOSE, `CLOSED`, the deadline, or a request it refused (never
+/// connected, banned, failing) — and is final.
 fn answers_from_relay(
     relay: Relay,
     filter: Filter,
