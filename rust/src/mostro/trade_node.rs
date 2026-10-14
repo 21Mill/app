@@ -15,22 +15,6 @@ pub(crate) fn trade_node(trade: &TradeInfo) -> Option<&str> {
     (!node.is_empty()).then_some(node)
 }
 
-/// Reset `trade`'s node to unknown when it is one of the user's own trade
-/// keys (`is_own_key`). Before #809 the range remainder, the late create
-/// confirmation, the late maker bond and the restored maker placeholder
-/// stored the trade key there; a node is never one. Returns whether it
-/// changed the row.
-pub(crate) fn forget_own_key_node(
-    trade: &mut TradeInfo,
-    is_own_key: impl Fn(&str) -> bool,
-) -> bool {
-    if trade_node(trade).is_some_and(is_own_key) {
-        trade.order.node_pubkey.clear();
-        return true;
-    }
-    false
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -47,21 +31,5 @@ mod tests {
     fn an_empty_node_is_unknown() {
         let row = trade("o1", 1, OrderStatus::Active, "");
         assert_eq!(trade_node(&row), None);
-    }
-
-    #[test]
-    fn an_own_trade_key_is_forgotten_as_a_node() {
-        let mut row = trade("o1", 1, OrderStatus::Active, "aa");
-        assert!(forget_own_key_node(&mut row, |k| k == "aa"));
-        assert_eq!(trade_node(&row), None);
-    }
-
-    #[test]
-    fn a_real_node_or_an_unknown_one_is_left_alone() {
-        let mut row = trade("o1", 1, OrderStatus::Active, "node");
-        assert!(!forget_own_key_node(&mut row, |k| k == "aa"));
-        assert_eq!(trade_node(&row), Some("node"));
-        let mut row = trade("o1", 1, OrderStatus::Active, "");
-        assert!(!forget_own_key_node(&mut row, |_| true));
     }
 }

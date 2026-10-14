@@ -755,6 +755,22 @@ impl Storage for IndexedDbStorage {
         .await
     }
 
+    async fn forget_trade_node(&self, row_id: &str, node: &str) -> Result<bool> {
+        // The whole read-modify-write inside the trades' exclusive section,
+        // like every patch: no write can land between the check and the put.
+        let _section = self.exclusive(TRADES_LOCK).await;
+        let Some(json) = self.get_string(TRADES_STORE, row_id).await? else {
+            return Ok(false);
+        };
+        let mut doc: serde_json::Value = serde_json::from_str(&json)?;
+        if !trade_json::forget_node(&mut doc, node)? {
+            return Ok(false);
+        }
+        self.put_string(TRADES_STORE, row_id, &doc.to_string())
+            .await?;
+        Ok(true)
+    }
+
     async fn update_trade_counterparty(
         &self,
         order_id: &str,

@@ -9164,64 +9164,51 @@ async fn seed_global_dm_coverage() -> Vec<nostr_sdk::prelude::PublicKey> {
 }
 
 /// Reset to unknown the node of every trade row that holds one of the
-/// user's own trade keys there (written by four paths before #809). Saves
-/// only the rows it changes, through [`persist_trade_row`], so a second pass
-/// writes nothing.
+/// user's own trade keys there (written by four paths before #809).
 ///
-/// The listing only finds candidates. Each one is written like every other
-/// trade write: under the order's lock, on the row as it is then, read again
-/// by its own id (an order can hold two rows). A row wiped or moved on since
-/// the listing is never saved back from the stale copy.
+/// The listing only finds candidates. Each one is changed by a conditional,
+/// node-only write ([`Storage::forget_trade_node`]): it checks the node again
+/// inside the write and leaves every other field as stored, so a write that
+/// landed since the listing survives — not every trade writer takes the
+/// order's lock (`submit_rating` does not) — and a row wiped meanwhile stays
+/// wiped, tombstone included. It still runs under the order's lock, in line
+/// with the daemon-message writers. A second pass writes nothing.
 async fn forget_own_key_nodes(own_keys: &std::collections::HashSet<String>) {
     let Some(db) = crate::db::app_db::db() else {
         return;
     };
-    let is_own_key = |node: &str| own_keys.contains(&node.to_lowercase());
-    let candidates: Vec<(String, String)> = match db.list_trades().await {
+    let candidates: Vec<(String, String, String)> = match db.list_trades().await {
         Ok(trades) => trades
             .into_iter()
-            .filter(|t| crate::mostro::trade_node::trade_node(t).is_some_and(is_own_key))
-            .map(|t| (t.id, t.order.id))
+            .filter_map(|t| {
+                let node = crate::mostro::trade_node::trade_node(&t)?.to_owned();
+                own_keys
+                    .contains(&node.to_lowercase())
+                    .then_some((t.id, t.order.id, node))
+            })
             .collect(),
         Err(e) => {
             crate::api::logging::blog_warn("orders", format!("own-key node check skipped: {e}"));
             return;
         }
     };
-    for (row_id, order_id) in candidates {
+    for (row_id, order_id, node) in candidates {
         let _guard = lock_order(&order_id).await;
-        let current = match db.list_trades().await {
-            Ok(trades) => trades.into_iter().find(|t| t.id == row_id),
-            Err(e) => {
-                crate::api::logging::blog_warn(
-                    "orders",
-                    format!("own-key node of order={order_id} not checked: {e}"),
-                );
-                continue;
-            }
-        };
-        let Some(mut trade) = current else {
-            continue;
-        };
-        if !crate::mostro::trade_node::forget_own_key_node(&mut trade, is_own_key) {
-            continue;
-        }
         #[cfg(test)]
         own_key_node_test_pause().await;
-        match persist_trade_row(db, &trade).await {
-            Ok(()) => crate::api::logging::blog_info(
-                "orders",
-                format!(
-                    "order={} held our own trade key as its node — now unknown",
-                    trade.order.id
-                ),
-            ),
+        match db.forget_trade_node(&row_id, &node).await {
+            Ok(true) => {
+                crate::api::logging::blog_info(
+                    "orders",
+                    format!("order={order_id} held our own trade key as its node — now unknown"),
+                );
+                crate::api::trade_touch::touch_trade(&order_id);
+                crate::api::push::request_reconcile();
+            }
+            Ok(false) => {}
             Err(e) => crate::api::logging::blog_warn(
                 "orders",
-                format!(
-                    "could not forget the own-key node of order={}: {e}",
-                    trade.order.id
-                ),
+                format!("could not forget the own-key node of order={order_id}: {e}"),
             ),
         }
     }
@@ -15128,6 +15115,9 @@ mod tests {
         }
 
         async fn mark_trade_rated(&self, _order_id: &str, _rated_at: i64) -> Result<()> {
+            unimplemented!()
+        }
+        async fn forget_trade_node(&self, _row_id: &str, _node: &str) -> Result<bool> {
             unimplemented!()
         }
         async fn mark_trade_completed(&self, _order_id: &str, _completed_at: i64) -> Result<()> {

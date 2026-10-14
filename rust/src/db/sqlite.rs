@@ -1010,6 +1010,26 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
+    async fn forget_trade_node(&self, row_id: &str, node: &str) -> Result<bool> {
+        if node.is_empty() {
+            return Ok(false);
+        }
+        // One statement: the check and the write cannot be split by another
+        // writer, and only the node changes. The legacy name goes in the same
+        // write — serde would read both names as a duplicate field.
+        let sql = "UPDATE trades SET data = json_set(\
+             json_remove(data, '$.order.creator_pubkey'), '$.order.node_pubkey', '') \
+             WHERE id = ? AND lower(coalesce(\
+             json_extract(data, '$.order.node_pubkey'), \
+             json_extract(data, '$.order.creator_pubkey'))) = lower(?)";
+        let done = sqlx::query(sql)
+            .bind(row_id)
+            .bind(node)
+            .execute(&self.pool)
+            .await?;
+        Ok(done.rows_affected() > 0)
+    }
+
     async fn update_trade_counterparty(
         &self,
         order_id: &str,
@@ -2013,6 +2033,93 @@ mod tests {
             .unwrap()
             .expect("order-b survives");
         assert_eq!(b.cooperative_cancel_state, None);
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Forgetting a node (the own-key cleanup, PR #817) is a node-only,
+    /// conditional write: it keeps every other field — a rating committed
+    /// after the caller's read included — moves a legacy `creator_pubkey`
+    /// row to the new name so it still loads, leaves real and unknown nodes
+    /// alone, and never brings a deleted row back.
+    #[tokio::test]
+    async fn forget_trade_node_changes_the_node_and_nothing_else() {
+        use crate::api::types::OrderStatus;
+        use crate::mostro::test_fixtures::trade;
+
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+
+        // A matching node goes; a rating written after the caller read stays.
+        storage
+            .save_trade(&trade("own", 1, OrderStatus::Success, "abcd"))
+            .await
+            .unwrap();
+        storage.mark_trade_rated("own", 1234).await.unwrap();
+        assert!(storage.forget_trade_node("own", "ABCD").await.unwrap());
+        let own = storage.get_trade_by_order_id("own").await.unwrap().unwrap();
+        assert_eq!(own.order.node_pubkey, "");
+        assert_eq!(own.rated_at, Some(1234));
+        assert_eq!(own.order.status, OrderStatus::Success);
+        assert!(
+            !storage.forget_trade_node("own", "abcd").await.unwrap(),
+            "done once"
+        );
+
+        // A row stored under the legacy name: one name left, and it loads.
+        storage
+            .save_trade(&trade("legacy", 2, OrderStatus::Active, "abcd"))
+            .await
+            .unwrap();
+        sqlx::query(
+            "UPDATE trades SET data = json_set(json_remove(data, '$.order.node_pubkey'), \
+             '$.order.creator_pubkey', 'abcd') WHERE id = 'legacy'",
+        )
+        .execute(&storage.pool)
+        .await
+        .unwrap();
+        assert!(storage.forget_trade_node("legacy", "abcd").await.unwrap());
+        let legacy = storage.get_trade_by_order_id("legacy").await.unwrap();
+        assert_eq!(legacy.expect("the row still loads").order.node_pubkey, "");
+        let old_name: Option<String> = sqlx::query_scalar(
+            "SELECT json_type(data, '$.order.creator_pubkey') FROM trades WHERE id = 'legacy'",
+        )
+        .fetch_one(&storage.pool)
+        .await
+        .unwrap();
+        assert_eq!(old_name, None, "the legacy name is gone");
+
+        // Real and unknown nodes are not touched.
+        for (id, node) in [("real", "node"), ("unknown", "")] {
+            storage
+                .save_trade(&trade(id, 3, OrderStatus::Active, node))
+                .await
+                .unwrap();
+        }
+        assert!(!storage.forget_trade_node("real", "abcd").await.unwrap());
+        assert!(!storage.forget_trade_node("unknown", "").await.unwrap());
+        let real = storage
+            .get_trade_by_order_id("real")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(real.order.node_pubkey, "node");
+
+        // A deleted row stays deleted.
+        storage.delete_trade_by_order_id("own").await.unwrap();
+        assert!(!storage.forget_trade_node("own", "").await.unwrap());
+        storage
+            .save_trade(&trade("gone", 4, OrderStatus::Active, "abcd"))
+            .await
+            .unwrap();
+        storage.delete_trade_by_order_id("gone").await.unwrap();
+        assert!(!storage.forget_trade_node("gone", "abcd").await.unwrap());
+        assert!(storage
+            .get_trade_by_order_id("gone")
+            .await
+            .unwrap()
+            .is_none());
 
         drop(storage);
         let _ = std::fs::remove_file(&path);

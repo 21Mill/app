@@ -524,6 +524,14 @@ pub trait Storage: Send + Sync {
         state: crate::api::types::CooperativeCancelState,
     ) -> Result<()>;
 
+    /// Reset to unknown (`""`) the node of the trade row `row_id` when its
+    /// node is still `node` (ignoring case) — read from `order.node_pubkey`,
+    /// else from the legacy `order.creator_pubkey`, which the same write
+    /// drops. Every other field stays as stored, so a write that landed
+    /// since the caller's read survives. A missing row stays missing, and an
+    /// empty `node` matches nothing. Returns whether it changed the row.
+    async fn forget_trade_node(&self, row_id: &str, node: &str) -> Result<bool>;
+
     /// Persist the counterparty's trade pubkey on the trade identified by
     /// `order.id` (issue #334). Written when a daemon message reveals it, for
     /// both roles — the trade row is the durable peer record; the in-memory
