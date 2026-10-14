@@ -382,6 +382,35 @@ mod tests {
         }
     }
 
+    /// mostrod's `expires_at` tag ends the take window; NIP-40 `expiration`
+    /// is how long relays keep the event. A current node writes the same
+    /// value in both for a pending order, but an older one wrote its 180-day
+    /// retention in `expiration` — the values below are a ghost order still on
+    /// mostro.network's relays in October 2026, whose take window closed in
+    /// May and which the app showed as expiring in "641 h".
+    #[test]
+    fn the_take_window_ends_at_the_expires_at_tag_not_the_relays_retention() {
+        let ghost = order_event_tagged(
+            1_778_762_486,
+            &[("expires_at", "1778848774"), ("expiration", "1794314486")],
+        );
+
+        let order = parse_order_event(&ghost, None).unwrap();
+
+        assert_eq!(order.expires_at, Some(1_778_848_774));
+    }
+
+    /// A node that writes no `expires_at` still bounds the order by NIP-40.
+    #[test]
+    fn without_expires_at_the_nip40_expiration_bounds_the_order() {
+        let event = order_event_tagged(1_000, &[("expiration", "87400")]);
+
+        assert_eq!(
+            parse_order_event(&event, None).unwrap().expires_at,
+            Some(87_400)
+        );
+    }
+
     /// A Cashu order names its escrow mint (mostro#1047); a Lightning order
     /// carries no such tag.
     #[test]

@@ -11449,6 +11449,48 @@ mod tests {
         );
     }
 
+    /// A node that no longer holds an order never publishes its expiry, so a
+    /// pending revision outlives its take window on the relays for as long as
+    /// they keep the event. The node refuses to take it, so nobody can.
+    #[tokio::test]
+    async fn a_strangers_order_past_its_take_window_leaves_the_book() {
+        let book = OrderBook::new();
+        let mut order = dummy_order_info("stranger-expired");
+        book.upsert_order(order.clone()).await;
+
+        order.expires_at = Some(crate::rt::unix_now() - 60);
+        book.apply_ingested_order(current(&book, order, false).await, Publish::Coalesced)
+            .await;
+
+        assert!(book.get_order("stranger-expired").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_strangers_order_inside_its_take_window_stays_in_the_book() {
+        let book = OrderBook::new();
+        let mut order = dummy_order_info("stranger-open");
+        order.expires_at = Some(crate::rt::unix_now() + 3_600);
+
+        book.apply_ingested_order(current(&book, order, false).await, Publish::Coalesced)
+            .await;
+
+        assert!(book.get_order("stranger-open").await.is_some());
+    }
+
+    /// Our own order stays whatever its window, as a finished one does: the
+    /// trade screens look it up in the book by id.
+    #[tokio::test]
+    async fn our_order_past_its_take_window_stays_in_the_book() {
+        let book = OrderBook::new();
+        let mut order = dummy_order_info("ours-expired");
+        order.expires_at = Some(crate::rt::unix_now() - 60);
+
+        book.apply_ingested_order(current(&book, order, true).await, Publish::Coalesced)
+            .await;
+
+        assert!(book.get_order("ours-expired").await.is_some());
+    }
+
     // ── Delta broadcast (docs/OPTIMIZATION_PLAN.md PR 3.1) ──
 
     /// Everything a delta subscriber has heard so far, without waiting.

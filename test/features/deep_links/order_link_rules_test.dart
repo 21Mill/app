@@ -10,7 +10,18 @@ const _id = 'e215c07e-b1f9-45b0-9640-0295067ee99a';
 OrderInfo _order({
   OrderKind kind = OrderKind.sell,
   OrderStatus status = OrderStatus.pending,
-}) => fakeTrade(orderId: _id, kind: kind, status: status).order;
+  int? expiresAt,
+}) =>
+    fakeTrade(
+      orderId: _id,
+      kind: kind,
+      status: status,
+      expiresAt: expiresAt,
+    ).order;
+
+/// When the link is opened, in unix seconds.
+const _openedAt = 1778848774;
+final _now = DateTime.fromMillisecondsSinceEpoch(_openedAt * 1000);
 
 void main() {
   group('isOrderLink', () {
@@ -50,14 +61,18 @@ void main() {
   group('orderLinkDestination', () {
     test('a pending sell order is taken by buying', () {
       expect(
-        orderLinkDestination(_order(), participates: false),
+        orderLinkDestination(_order(), participates: false, now: _now),
         AppRoute.takeSellPath(_id),
       );
     });
 
     test('a pending buy order is taken by selling', () {
       expect(
-        orderLinkDestination(_order(kind: OrderKind.buy), participates: false),
+        orderLinkDestination(
+          _order(kind: OrderKind.buy),
+          participates: false,
+          now: _now,
+        ),
         AppRoute.takeBuyPath(_id),
       );
     });
@@ -65,11 +80,54 @@ void main() {
     test('a participant goes to the trade, whatever the order says', () {
       for (final status in [OrderStatus.pending, OrderStatus.active]) {
         expect(
-          orderLinkDestination(_order(status: status), participates: true),
+          orderLinkDestination(
+            _order(status: status),
+            participates: true,
+            now: _now,
+          ),
           AppRoute.tradeDetailPath(_id),
           reason: '$status',
         );
       }
+    });
+
+    // A pending revision can outlive its take window on the relays: a node
+    // that no longer holds the order never publishes its expiry, and refuses
+    // to take it. The take screen would only show a dead button.
+    test('a pending order past its take window leads nowhere', () {
+      for (final expiresAt in [_openedAt, _openedAt - 1]) {
+        expect(
+          orderLinkDestination(
+            _order(expiresAt: expiresAt),
+            participates: false,
+            now: _now,
+          ),
+          isNull,
+          reason: 'expires at $expiresAt',
+        );
+      }
+    });
+
+    test('a pending order inside its take window is taken', () {
+      expect(
+        orderLinkDestination(
+          _order(expiresAt: _openedAt + 1),
+          participates: false,
+          now: _now,
+        ),
+        AppRoute.takeSellPath(_id),
+      );
+    });
+
+    test('a participant goes to the trade past the take window too', () {
+      expect(
+        orderLinkDestination(
+          _order(expiresAt: _openedAt - 1),
+          participates: true,
+          now: _now,
+        ),
+        AppRoute.tradeDetailPath(_id),
+      );
     });
 
     test('an order that left the book leads nowhere for anyone else', () {
@@ -80,7 +138,11 @@ void main() {
         OrderStatus.expired,
       ]) {
         expect(
-          orderLinkDestination(_order(status: status), participates: false),
+          orderLinkDestination(
+            _order(status: status),
+            participates: false,
+            now: _now,
+          ),
           isNull,
           reason: '$status',
         );
