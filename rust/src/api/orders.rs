@@ -17978,6 +17978,49 @@ mod tests {
         assert!(pubkeys.contains(&session.public_key()));
     }
 
+    /// Rows written before #809 by the range remainder, the late create
+    /// confirmation, the late maker bond and the restored maker placeholder
+    /// hold the user's own trade key as their node. Seeding the coverage
+    /// knows every own trade key: such a node is forgotten (unknown), and a
+    /// real node is left alone.
+    #[tokio::test]
+    async fn seeding_coverage_forgets_a_node_that_is_our_own_trade_key() {
+        use crate::api::types::OrderStatus;
+        let path = std::env::temp_dir()
+            .join(format!("mostro_own_key_node_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+
+        let own = nostr_sdk::prelude::Keys::generate();
+        ensure_global_dm_coverage(&own, 93).await;
+        let poisoned = uuid::Uuid::new_v4().to_string();
+        db.save_trade(&crate::mostro::test_fixtures::trade(
+            &poisoned,
+            93,
+            OrderStatus::Active,
+            &own.public_key().to_hex(),
+        ))
+        .await
+        .unwrap();
+        let node = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let sound = uuid::Uuid::new_v4().to_string();
+        db.save_trade(&crate::mostro::test_fixtures::trade(
+            &sound,
+            94,
+            OrderStatus::Active,
+            &node,
+        ))
+        .await
+        .unwrap();
+
+        seed_global_dm_coverage().await;
+
+        let row = db.get_trade_by_order_id(&poisoned).await.unwrap().unwrap();
+        assert_eq!(row.order.node_pubkey, "", "our own trade key is no node");
+        let row = db.get_trade_by_order_id(&sound).await.unwrap().unwrap();
+        assert_eq!(row.order.node_pubkey, node, "a real node is kept");
+    }
+
     /// PR #252 review (ermeme P1): a create rejected for an unsupported node
     /// protocol must fail BEFORE deriving or persisting anything. The exact
     /// error string pins the ordering: had the preflight run after key
