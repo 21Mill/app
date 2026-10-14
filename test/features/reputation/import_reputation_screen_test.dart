@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +16,7 @@ import 'package:mostro/src/rust/api/reputation_transfer.dart';
 final _en = AppLocalizationsEn();
 
 const _json = '{"id":"a","kind":38388}';
+const _npub = 'npub1currentidentity';
 const _otherJson = '{"id":"b","kind":38388}';
 const _identity =
     'ab1db593a4d1196eb07335fdc702a314712ed29c631ceaebd84708a17d3bc2f7';
@@ -45,8 +48,8 @@ class _FakeApi extends ReputationApi {
   });
 
   /// `null`: the node does not import.
-  final List<String>? importIssuers;
-  final bool privacy;
+  List<String>? importIssuers;
+  bool privacy;
   final ReputationAttestationInfo? pendingInfo;
   final int reviews;
 
@@ -62,17 +65,26 @@ class _FakeApi extends ReputationApi {
 
   /// What the launcher answers.
   bool launches = true;
+  Object? launchError;
+  Future<bool> Function()? readPrivacy;
+  Future<String?> Function()? readIdentity;
+  Completer<ReputationAttestationInfo>? importReply;
+  Completer<ReputationAttestationInfo>? checkReply;
+
+  String npub(String identity) => _npub;
 
   @override
   ReputationSupportInfo support() =>
       ReputationSupportInfo(importIssuers: importIssuers);
 
   @override
-  Future<bool> privacyMode() async => privacy;
+  Future<bool> privacyMode() async =>
+      readPrivacy == null ? privacy : await readPrivacy!();
 
   @override
   Future<ReputationAttestationInfo> check(String json) async {
     checked.add(json);
+    if (checkReply != null) return checkReply!.future;
     if (refuseCheck != null) throw refuseCheck!;
     if (json != _json && json != _otherJson) {
       throw Exception('InvalidReputationAttestation: bad');
@@ -84,6 +96,7 @@ class _FakeApi extends ReputationApi {
   Future<ReputationAttestationInfo> import(String json) async {
     if (refuseImport != null) throw refuseImport!;
     imported.add(json);
+    if (importReply != null) return importReply!.future;
     return _info(json: json);
   }
 
@@ -91,11 +104,13 @@ class _FakeApi extends ReputationApi {
   Future<ReputationAttestationInfo?> pending() async => pendingInfo;
 
   @override
-  Future<String?> identity() async => _identity;
+  Future<String?> identity() async =>
+      readIdentity == null ? _identity : await readIdentity!();
 
   @override
   Future<bool> openExternal(Uri uri) async {
     opened.add(uri);
+    if (launchError != null) throw launchError!;
     return launches;
   }
 }
@@ -323,6 +338,122 @@ void main() {
 
     // Assert
     expect(find.textContaining('1 rating received,'), findsOneWidget);
+  });
+
+  testWidgets('shows the full selectable npub for the bot confirmation', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(find.widgetWithText(SelectableText, _npub), findsOneWidget);
+  });
+
+  testWidgets('no action is enabled until privacy has been read', (
+    tester,
+  ) async {
+    final privacy = Completer<bool>();
+    final api = _FakeApi()..readPrivacy = () => privacy.future;
+    await _pump(tester, api: api);
+    expect(_button(tester, _en.reputationOpenLnp2pbot).enabled, isFalse);
+    expect(_button(tester, _en.reputationCheck).enabled, isFalse);
+    privacy.complete(true);
+    await tester.pumpAndSettle();
+    expect(api.opened, isEmpty);
+  });
+
+  testWidgets('a failed privacy read stays blocked and can be retried', (
+    tester,
+  ) async {
+    final api =
+        _FakeApi()..readPrivacy = () async => throw Exception('unavailable');
+    await _pump(tester, api: api);
+    expect(_button(tester, _en.reputationOpenLnp2pbot).enabled, isFalse);
+    expect(_button(tester, _en.reputationCheck).enabled, isFalse);
+    api.readPrivacy = null;
+    await _tap(tester, _en.retry);
+    expect(_button(tester, _en.reputationOpenLnp2pbot).enabled, isTrue);
+  });
+
+  testWidgets('the bot rechecks privacy before disclosing the identity', (
+    tester,
+  ) async {
+    final api = await _pump(tester);
+    api.privacy = true;
+    await _tap(tester, _en.reputationOpenLnp2pbot);
+    expect(api.opened, isEmpty);
+    expect(find.text(_en.reputationIdentityRequired), findsOneWidget);
+  });
+
+  testWidgets('the bot rechecks node support before opening', (tester) async {
+    final api = await _pump(tester);
+    api.importIssuers = null;
+    await _tap(tester, _en.reputationOpenLnp2pbot);
+    expect(api.opened, isEmpty);
+    expect(find.text(_en.reputationNodeDoesNotImport), findsOneWidget);
+  });
+
+  testWidgets('leaving during the identity read never opens Telegram', (
+    tester,
+  ) async {
+    final api = await _pump(tester);
+    final identity = Completer<String?>();
+    api.readIdentity = () => identity.future;
+    await tester.tap(find.text(_en.reputationOpenLnp2pbot));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    identity.complete(_identity);
+    await tester.pumpAndSettle();
+    expect(api.opened, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an identity change requires reviewing the displayed key again', (
+    tester,
+  ) async {
+    final api = await _pump(tester);
+    api.readIdentity = () async => 'cd' * 32;
+    await _tap(tester, _en.reputationOpenLnp2pbot);
+    expect(api.opened, isEmpty);
+  });
+
+  testWidgets('launcher exceptions are shown as a localized failure', (
+    tester,
+  ) async {
+    final api = await _pump(tester);
+    api.launchError = Exception('no handler');
+    await _tap(tester, _en.reputationOpenLnp2pbot);
+    expect(tester.takeException(), isNull);
+    expect(find.text(_en.reputationOpenLnp2pbotFailed), findsOneWidget);
+  });
+
+  testWidgets('the input stays fixed while an import awaits its result', (
+    tester,
+  ) async {
+    final api = await _pump(tester);
+    await _paste(tester, _json);
+    await _tap(tester, _en.reputationCheck);
+    final reply = Completer<ReputationAttestationInfo>();
+    api.importReply = reply;
+    await _tap(tester, _en.reputationImportConfirm);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    reply.complete(_info());
+    await tester.pumpAndSettle();
+    expect(api.imported, [_json]);
+    expect(find.text(_en.reputationImported), findsOneWidget);
+  });
+
+  testWidgets('editing during Check discards the delayed result', (
+    tester,
+  ) async {
+    final api = await _pump(tester);
+    final reply = Completer<ReputationAttestationInfo>();
+    api.checkReply = reply;
+    await _paste(tester, _json);
+    await _tap(tester, _en.reputationCheck);
+    await _paste(tester, _otherJson);
+    reply.complete(_info());
+    await tester.pumpAndSettle();
+    expect(find.text(_en.reputationImportConfirm), findsNothing);
+    expect(api.imported, isEmpty);
   });
 
   // DS-A11Y-4: German, 320 dp wide, text at 2×, both themes.
