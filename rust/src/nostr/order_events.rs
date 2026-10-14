@@ -89,7 +89,14 @@ pub fn parse_order_event(event: &Event, my_pubkey: Option<&PublicKey>) -> Option
         event,
         get("published_at").or_else(|| get("created_at")).as_deref(),
     );
-    let expires_at: Option<i64> = get("expiration").and_then(|v| v.parse().ok());
+    // The take window ends at mostrod's `expires_at`. NIP-40 `expiration` is
+    // how long relays keep the event: the same value on a pending order from
+    // a current node, its retention (180 days) on an older one, so only the
+    // fallback for a node that writes no `expires_at`.
+    let unix_secs = |name: &str| get(name).and_then(|v| v.parse::<i64>().ok());
+    let expires_at = unix_secs("expires_at")
+        .filter(|exp| *exp > 0)
+        .or_else(|| unix_secs("expiration"));
 
     // is_mine is always false for Kind 38383 events: the event author is the
     // Mostro node, not the maker. Ownership is confirmed later via incoming
@@ -290,6 +297,15 @@ pub const RECENT_ORDERS_WINDOW_SECS: u64 = 48 * 3600;
 /// live book, which is orders of magnitude below any such cap.
 pub fn pending_orders_filter(mostro_pubkey: &PublicKey) -> Filter {
     all_orders_filter(mostro_pubkey).custom_tag(SingleLetterTag::LOWERCASE_S, "pending")
+}
+
+/// Whether `order` is pending past its take window. The node refuses to take
+/// it (mostrod `is_order_take_window_closed`, same bounds) and expires it
+/// within a minute — or never, when it no longer holds the order, and the
+/// pending revision lives on in the relays for as long as they keep it.
+pub(crate) fn is_past_take_window(order: &OrderInfo, now: i64) -> bool {
+    order.status == OrderStatus::Pending
+        && order.expires_at.is_some_and(|exp| exp > 0 && exp <= now)
 }
 
 /// Filter for **all recent** order events (any status) since `since`.

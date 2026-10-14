@@ -301,9 +301,10 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
       showOrderDetailSnackBar(context, l10n.orderAlreadyTaken);
       return;
     }
-    if (msg.contains('InvalidOrderStatus')) {
+    if (msg.contains('InvalidOrderStatus') || msg.contains('CantDo:NotFound')) {
       // The daemon says the order is no longer pending (taken, canceled or
-      // expired before the book caught up): it cannot be taken again.
+      // expired before the book caught up), or holds no such order (a pending
+      // revision that outlived it on the relays): it cannot be taken.
       setState(() => _cta = TakeOrderCta.unavailable);
       showOrderDetailSnackBar(context, l10n.orderNoLongerActive);
       return;

@@ -315,6 +315,12 @@ bridged by flutter_rust_bridge.
   (`wire_status_applies`), and a verdict refines a replayed `success` in either order
   (`status_write_blocked`). Dart decides the room on the persisted row (`TradeRow.rowStatus` +
   `completedAt`), like `chat_still_relevant_at`, not on the live book status.
+- **An order's take window ends at the Kind 38383 `expires_at` tag, never NIP-40 `expiration`.**
+  `expiration` is how long relays keep the event: the same value on a pending order from a
+  current mostrod, 180 days of retention on an older one. A node that no longer holds an order
+  never publishes its expiry, so a `pending` revision can outlive its window on the relays for
+  months; the node refuses to take it (`CantDo:NotFound` / `InvalidOrderStatus`).
+  `order_events::is_past_take_window` is the one rule: such a stranger's order leaves the book.
 - **Bond statuses never reach the wire book.** `WaitingTakerBond` publishes as `pending` (the
   order stays takeable by others until a bond locks) and `WaitingMakerBond` publishes nothing
   (the order is invisible until the maker's bond locks). Both exist only on the local trade row,

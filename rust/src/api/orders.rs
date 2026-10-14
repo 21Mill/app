@@ -905,7 +905,15 @@ impl OrderBook {
                 let mine = book.own.contains(&wire.id);
                 (wire, mine)
             };
-            if !ours && crate::mostro::status::is_hard_terminal(&order.status) {
+            // A stranger's order past its take window is as finished: the
+            // node refuses to take it, and one that no longer holds the order
+            // never publishes its expiry.
+            let finished = crate::mostro::status::is_hard_terminal(&order.status)
+                || crate::nostr::order_events::is_past_take_window(
+                    &order,
+                    crate::rt::unix_now(),
+                );
+            if !ours && finished {
                 // The removal is a no-op when the order was never in the
                 // book — the common case, a stranger's order finishing
                 // unseen — and then nothing is published either.
