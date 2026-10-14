@@ -604,6 +604,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn publication_refuses_a_retired_or_missing_identity_without_sending() {
+        for generation in [Some(u64::MAX), None] {
+            let mut sent = false;
+            let result = publish_request(generation, || false, async {
+                sent = true;
+                Ok(())
+            })
+            .await;
+            assert!(
+                result.is_err(),
+                "a request for a retired identity must not be published"
+            );
+            assert!(result.unwrap_err().to_string().starts_with("NoIdentity"));
+            assert!(!sent);
+        }
+    }
+
+    #[tokio::test]
     async fn a_write_for_an_identity_no_longer_active_is_refused_without_running() {
         // Arrange: a generation no identity ever reaches, as if the one that
         // asked had been deleted while the node answered.

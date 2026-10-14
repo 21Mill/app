@@ -1442,6 +1442,60 @@ mod tests {
             Some(1)
         );
 
+        // Reputation publication is deferred until the relay subscription
+        // is ready. A privacy change during that wait must stop the send.
+        // Keep these checks in the one identity lifecycle test so parallel
+        // tests never replace the global identity underneath each other.
+        use crate::api::reputation_transfer::publish_request;
+        let privacy = std::cell::Cell::new(false);
+        let sent = std::cell::Cell::new(false);
+        let waiting_to_publish = publish_request(
+            Some(generation),
+            || privacy.get(),
+            async {
+                sent.set(true);
+                Ok(())
+            },
+        );
+        privacy.set(true);
+        let result = waiting_to_publish.await;
+        assert!(result.is_err(), "privacy enabled before publication must stop it");
+        assert!(result.unwrap_err().to_string().starts_with("PrivacyModeEnabled"));
+        assert!(!sent.get());
+
+        // The guard must survive an await inside publication, preventing a
+        // concurrent identity replacement until the send finishes.
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
+        let publishing = publish_request(Some(generation), || false, async {
+            entered_tx.send(()).unwrap();
+            resume_rx.await.unwrap();
+            Ok(())
+        });
+        let concurrent_replacement = async {
+            entered_rx.await.unwrap();
+            let locked = identity_lock().try_write().is_err();
+            resume_tx.send(()).unwrap();
+            assert!(locked, "publication must keep the initiating identity active");
+        };
+        let (published, ()) = tokio::join!(publishing, concurrent_replacement);
+        published.unwrap();
+
+        let relay_failure = publish_request(Some(generation), || false, async {
+            anyhow::bail!("NoRelayAccepted")
+        })
+        .await;
+        assert_eq!(relay_failure.unwrap_err().to_string(), "NoRelayAccepted");
+        assert!(identity_lock().try_write().is_ok(), "a failed send releases the guard");
+
+        // This future was prepared while the identity was still present,
+        // but will only be polled after deletion below.
+        let late_sent = std::cell::Cell::new(false);
+        let late_publication = publish_request(Some(generation), || false, async {
+            late_sent.set(true);
+            Ok(())
+        });
+
         // What the deletion must wipe from the store, and what it must keep.
         db.save_trade_key("order-a", 21).await.unwrap();
         let cursor = crate::db::settings_keys::status_cursor("order-a");
@@ -1478,6 +1532,10 @@ mod tests {
         );
         assert!(get_identity().await.unwrap().is_none());
         assert_eq!(identity_generation().await, None);
+
+        let late_result = late_publication.await;
+        assert!(late_result.unwrap_err().to_string().starts_with("NoIdentity"));
+        assert!(!late_sent.get());
 
         // …but once it is deleted, the write is refused without running
         // (PR #590 review: a paused download must not refill the wiped cache).
