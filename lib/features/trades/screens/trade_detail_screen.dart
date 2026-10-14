@@ -545,7 +545,16 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
         '[TradeDetailScreen] trade role lookup failed: ${dbRole.error}',
       );
     }
-    return dbRole.valueOrNull;
+    final role = dbRole.valueOrNull;
+    if (role != null || !dbRole.hasValue) return role;
+    // No row at all. A maker's order canceled before anyone took it loses its
+    // row (Rust's `wipe_never_active_trade`) while the book keeps it as
+    // theirs, and then the order says the role: no guess, its maker buys a
+    // buy order. Without it the screen held `loading` for good, as opened
+    // from the order's "Trade canceled" notice.
+    final order = ref.watch(orderByIdProvider(widget.orderId));
+    if (order != null && order.isMine) return order.kind == 'buy';
+    return null;
   }
 
   /// [TradeStatus.loading] until the live status resolves, so the screen
