@@ -1270,6 +1270,43 @@ mod tests {
         }
     }
 
+    /// #810: an escrow goes to the trade's own node, which must be the active
+    /// one. On another node, or on none recorded, it is refused before any
+    /// ecash is swapped.
+    #[tokio::test]
+    // The globals lock must span the calls it guards.
+    #[allow(clippy::await_holding_lock)]
+    async fn an_escrow_for_a_trade_on_another_node_is_refused() {
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row,
+        };
+        // Arrange — the active node is a single-mint Cashu node.
+        let _g = escrow_lock();
+        escrow_mode::set_from_tags(
+            escrow_mode::EscrowMode::Cashu,
+            escrow_mode::CashuNodeConfig {
+                mint_urls: vec!["https://mint.a.com".to_string()],
+                ..Default::default()
+            },
+        );
+        for node in nodes_other_than_the_active_one() {
+            let order_id = uuid::Uuid::new_v4().to_string();
+            let mut row = seller_trade(&order_id, Some("02"), "");
+            row.order.node_pubkey = node.clone();
+            store_trade_row(&row).await;
+
+            // Act
+            let err = lock_escrow(order_id.clone()).await.unwrap_err();
+
+            // Assert
+            assert!(
+                err.to_string().contains("TradeOnOtherNode"),
+                "node {node:?}: got {err}"
+            );
+            forget_trade_row(&order_id).await;
+        }
+    }
+
     #[tokio::test]
     // The globals lock must span the calls it guards.
     #[allow(clippy::await_holding_lock)]

@@ -24222,6 +24222,54 @@ mod tests {
 
         assert_eq!(payout_of(&order_id).await, None);
     }
+    /// #810: a trade action goes to the trade's own node, which must be the
+    /// active one. A row on another node, or on none recorded, publishes
+    /// nothing: every action refuses with `TradeOnOtherNode`.
+    #[tokio::test]
+    async fn a_trade_action_on_another_node_is_refused() {
+        use crate::api::types::{OrderStatus as S, TradeRole as R};
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row, trade,
+        };
+
+        for node in nodes_other_than_the_active_one() {
+            // Each action with the row it is offered on: status, role, is_mine.
+            let cases = [
+                ("add-invoice", S::WaitingBuyerInvoice, R::Buyer, false),
+                ("fiat-sent", S::Active, R::Buyer, false),
+                ("release", S::FiatSent, R::Seller, false),
+                ("cooperative cancel", S::Active, R::Seller, false),
+                ("maker bond cancel", S::WaitingMakerBond, R::Seller, true),
+                ("bond invoice again", S::WaitingTakerBond, R::Buyer, false),
+            ];
+            for (action, status, role, is_mine) in cases {
+                // Arrange
+                let order_id = uuid::Uuid::new_v4().to_string();
+                let mut row = trade(&order_id, 7, status, &node);
+                row.role = role;
+                row.order.is_mine = is_mine;
+                store_trade_row(&row).await;
+
+                // Act
+                let id = order_id.clone();
+                let outcome = match action {
+                    "add-invoice" => send_invoice(id, "payout@example.com".into(), 1_000).await,
+                    "fiat-sent" => send_fiat_sent(id).await,
+                    "release" => release_order(id).await,
+                    "cooperative cancel" | "maker bond cancel" => cancel_order(id).await,
+                    _ => request_bond_invoice_again(id).await.map(|_| ()),
+                };
+
+                // Assert
+                let err = outcome.expect_err(action).to_string();
+                assert!(
+                    err.contains("TradeOnOtherNode"),
+                    "{action} on node {node:?}: got {err}"
+                );
+                forget_trade_row(&order_id).await;
+            }
+        }
+    }
 }
 
 #[cfg(test)]

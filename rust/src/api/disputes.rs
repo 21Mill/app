@@ -1864,6 +1864,39 @@ mod tests {
         );
     }
 
+    /// #810: a dispute goes to the trade's own node, which must be the active
+    /// one. On another node, or on none recorded, nothing is published and
+    /// no dispute is recorded.
+    #[tokio::test]
+    async fn a_dispute_on_another_node_is_refused() {
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row, trade,
+        };
+        for node in nodes_other_than_the_active_one() {
+            // Arrange
+            let order_id = uuid::Uuid::new_v4().to_string();
+            store_trade_row(&trade(
+                &order_id,
+                7,
+                crate::api::types::OrderStatus::FiatSent,
+                &node,
+            ))
+            .await;
+
+            // Act
+            let err = open_dispute(order_id.clone(), None).await.unwrap_err();
+
+            // Assert
+            assert!(
+                err.to_string().contains("TradeOnOtherNode"),
+                "node {node:?}: got {err}"
+            );
+            assert!(dispute_store().get(&order_id).await.is_none());
+            assert!(!pending_opens().lock().unwrap().contains(&order_id));
+            forget_trade_row(&order_id).await;
+        }
+    }
+
     #[tokio::test]
     async fn dispute_store_creates_record() {
         let trade_id = format!("t-{}", uuid::Uuid::new_v4());

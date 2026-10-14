@@ -471,6 +471,47 @@ mod tests {
         assert!(err.to_string().contains("AlreadyRated"));
     }
 
+    /// #810: a rating goes to the trade's own node, which must be the active
+    /// one. On another node, or on none recorded, nothing is published and
+    /// the slot is not kept, so the rating can still be sent from its node.
+    #[tokio::test]
+    // The privacy lock must span the calls it guards.
+    #[allow(clippy::await_holding_lock)]
+    async fn a_rating_on_another_node_is_refused() {
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row, trade,
+        };
+        let guard = privacy_lock().lock().unwrap();
+        set_privacy_mode(false);
+        let mut outcomes = Vec::new();
+        for node in nodes_other_than_the_active_one() {
+            // Arrange
+            let order_id = uuid::Uuid::new_v4().to_string();
+            store_trade_row(&trade(
+                &order_id,
+                7,
+                crate::api::types::OrderStatus::Success,
+                &node,
+            ))
+            .await;
+
+            // Act
+            let outcome = submit_rating(order_id.clone(), 4).await;
+            let kept = get_rating_for_trade(order_id.clone()).await.unwrap();
+            forget_trade_row(&order_id).await;
+            outcomes.push((node, outcome, kept));
+        }
+        // A panic under the lock would poison it for every rating test.
+        drop(guard);
+
+        // Assert
+        for (node, outcome, kept) in outcomes {
+            let err = outcome.expect_err(&node).to_string();
+            assert!(err.contains("TradeOnOtherNode"), "node {node:?}: got {err}");
+            assert!(kept.is_none(), "node {node:?}: the rating slot was kept");
+        }
+    }
+
     #[tokio::test]
     async fn privacy_mode_blocks_rating() {
         let _guard = privacy_lock().lock().unwrap();
