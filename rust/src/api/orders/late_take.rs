@@ -1054,6 +1054,11 @@ mod tests {
         assert_eq!(row.role, TradeRole::Buyer, "add-invoice addresses the buyer");
         assert_eq!(row.id, order_id, "the generic #394 row, not the take's");
         assert_eq!(row.trade_key_index, 95);
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "the row rebuilt from the message belongs to the node that sent it",
+        );
     }
 
     /// What the live path leaves behind an accepted take besides its row
