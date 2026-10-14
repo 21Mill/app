@@ -823,10 +823,12 @@ async fn refresh_rates(
             .ok()
     });
 
+    // Asked at each write, not once: the node can change while the copies
+    // stream in.
     let still_active =
-        crate::config::active_mostro_pubkey().eq_ignore_ascii_case(mostro_pubkey_hex);
+        || crate::config::active_mostro_pubkey().eq_ignore_ascii_case(mostro_pubkey_hex);
     let forget = || {
-        if still_active {
+        if still_active() {
             rates::clear(mostro_pubkey_hex);
         }
     };
@@ -855,7 +857,7 @@ async fn refresh_rates(
     };
 
     let sources = rates::parse_sources(tag_value(&event, "source").as_deref());
-    if still_active {
+    if still_active() {
         rates::store(
             mostro_pubkey_hex,
             parsed.clone(),
