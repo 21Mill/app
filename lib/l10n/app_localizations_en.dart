@@ -4202,6 +4202,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'This token could not be verified: it carries no proof of the mint\'s signature, so it was not accepted.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'This wallet only holds sats, and this token is in another unit (such as millisats or dollars). It was left untouched: you can redeem it in a wallet that supports its unit.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'This wallet only holds sats, and this token is in $unit. It was left untouched: you can redeem it in a wallet that supports that unit.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'millisats';
+
+  @override
+  String get cashuUnitUsd => 'dollars (USD)';
+
+  @override
+  String get cashuUnitEur => 'euros (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'The send failed and the wallet could not confirm the funds are back. Sync with the mint before trying again.';
 

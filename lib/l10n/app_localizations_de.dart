@@ -4261,6 +4261,24 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dieses Token konnte nicht überprüft werden: Es enthält keinen Nachweis der Mint-Signatur und wurde daher nicht angenommen.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'Diese Wallet enthält nur Sats, und dieses Token lautet auf eine andere Einheit (etwa Millisats oder Dollar). Es wurde nicht angetastet: Du kannst es in einer Wallet einlösen, die seine Einheit unterstützt.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'Diese Wallet enthält nur Sats, und dieses Token lautet auf $unit. Es wurde nicht angetastet: Du kannst es in einer Wallet einlösen, die diese Einheit unterstützt.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'Millisats';
+
+  @override
+  String get cashuUnitUsd => 'US-Dollar (USD)';
+
+  @override
+  String get cashuUnitEur => 'Euro (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'Das Senden ist fehlgeschlagen und die Wallet konnte nicht bestätigen, dass das Guthaben zurück ist. Synchronisiere mit der Mint, bevor du es erneut versuchst.';
 

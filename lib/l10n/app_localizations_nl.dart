@@ -4239,6 +4239,24 @@ class AppLocalizationsNl extends AppLocalizations {
       'Deze token kon niet worden geverifieerd: hij bevat geen bewijs van de handtekening van de mint, dus hij is niet geaccepteerd.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'Deze portemonnee bevat alleen sats en deze token is in een andere eenheid (bijvoorbeeld millisats of dollars). Hij is niet aangeraakt: je kunt hem inwisselen in een portemonnee die die eenheid ondersteunt.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'Deze portemonnee bevat alleen sats en deze token is in $unit. Hij is niet aangeraakt: je kunt hem inwisselen in een portemonnee die deze eenheid ondersteunt.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'millisats';
+
+  @override
+  String get cashuUnitUsd => 'dollars (USD)';
+
+  @override
+  String get cashuUnitEur => 'euro\'s (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'Het versturen is mislukt en de portemonnee kon niet bevestigen dat het geld terug is. Synchroniseer met de mint voordat je het opnieuw probeert.';
 

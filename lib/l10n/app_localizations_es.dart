@@ -4233,6 +4233,24 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo verificar este token: no trae prueba de la firma del mint, así que no se aceptó.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'Esta billetera solo guarda sats y este token está en otra unidad (por ejemplo, milisats o dólares). No se tocó: puedes canjearlo en una billetera que acepte esa unidad.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'Esta billetera solo guarda sats y este token está en $unit. No se tocó: puedes canjearlo en una billetera que acepte esa unidad.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'milisats';
+
+  @override
+  String get cashuUnitUsd => 'dólares (USD)';
+
+  @override
+  String get cashuUnitEur => 'euros (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'El envío falló y la billetera no pudo confirmar que los fondos volvieron. Sincronizá con el mint antes de intentar de nuevo.';
 
