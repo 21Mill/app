@@ -7,8 +7,8 @@ import 'package:mostro/core/automation/automation_id.dart';
 import 'package:mostro/core/automation/automation_ids.dart';
 import 'package:mostro/features/home/providers/home_order_providers.dart';
 import 'package:mostro/features/home/providers/order_reason_provider.dart';
-import 'package:mostro/features/settings/models/node_selector_rules.dart';
 import 'package:mostro/l10n/app_localizations.dart';
+import 'package:mostro/shared/utils/abbreviated_figure.dart';
 
 const _cardRadius = BorderRadius.all(Radius.circular(18));
 
@@ -73,15 +73,15 @@ class OrderCardFormats {
   }
 
   /// The price per BTC a fixed-sats order stands for, in its own currency,
-  /// abbreviated with the same k/M suffixes in every locale (`61.2k`,
-  /// `112M`; `61,2k` in Spanish) because it spans tens of thousands of EUR to
-  /// hundreds of millions of ARS. Exact: it comes from the order's two
+  /// abbreviated with the same k/M/B suffixes in every locale (`61.2k`,
+  /// `112M`, `10B`; `61,2k` in Spanish) because it spans tens of thousands of
+  /// EUR to billions of LBP. Exact: it comes from the order's two
   /// figures, not from an exchange rate. Null for a market-price order.
   String? fixedPricePerBtc(OrderItem order) {
     final fiatAmount = order.fiatAmount;
     if (!order.hasFixedSats || fiatAmount == null) return null;
     final price = fiatAmount * 1e8 / order.amountSats!.toDouble();
-    return abbreviateSats(BigInt.from(price.round()), _locale);
+    return abbreviateFigure(price, _locale);
   }
 
   /// `832 – 5,000` for a range, `25` for a single amount.
@@ -399,63 +399,79 @@ class _AmountRow extends StatelessWidget {
       figureColor = _premiumColor;
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Never truncated: a long range wraps at the spaces around
-              // the dash instead.
-              Text(
-                formats.amount(order),
-                style: TextStyle(
-                  fontFamily: AppFonts.figures,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.5,
-                  height: 1,
-                  color: palette.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              if (order.hasFixedSats)
-                _FixedSatsCaption(
-                  sats: formats.decimal.format(order.amountSats!.toInt()),
-                  style: captionStyle,
-                  palette: palette,
-                )
-              else
-                Text(l10n.marketPriceCaption, style: captionStyle),
-            ],
-          ),
-        ),
-        if (figure != null) ...[
-          const SizedBox(width: 10),
-          Column(
-            mainAxisSize: MainAxisSize.min,
+    return LayoutBuilder(
+      builder:
+          (context, constraints) => Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                figure,
-                style: TextStyle(
-                  fontFamily: AppFonts.figures,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: figureColor,
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Never truncated: a long range wraps at the spaces around
+                    // the dash instead.
+                    Text(
+                      formats.amount(order),
+                      style: TextStyle(
+                        fontFamily: AppFonts.figures,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.5,
+                        height: 1,
+                        color: palette.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (order.hasFixedSats)
+                      _FixedSatsCaption(
+                        sats: formats.decimal.format(order.amountSats!.toInt()),
+                        style: captionStyle,
+                        palette: palette,
+                      )
+                    else
+                      Text(l10n.marketPriceCaption, style: captionStyle),
+                  ],
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                caption,
-                style: TextStyle(fontSize: 10, color: palette.textFaint),
-              ),
+              if (figure != null) ...[
+                const SizedBox(width: 10),
+                // Capped at half the row: a premium never comes near it, but a
+                // price per BTC (`61,2k EUR/BTC`) at a large text scale wraps
+                // instead of pushing the row past the card.
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth / 2,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        figure,
+                        textAlign: TextAlign.end,
+                        style: TextStyle(
+                          fontFamily: AppFonts.figures,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: figureColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        caption,
+                        textAlign: TextAlign.end,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: palette.textFaint,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
-        ],
-      ],
     );
   }
 }
