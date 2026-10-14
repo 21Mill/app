@@ -3721,16 +3721,15 @@ async fn dispatch_mostro_message(
         if let Some(order_id) = &kind.id {
             let oid = order_id.to_string();
             if !status_write_blocked(&oid, &kind.action, event_ts).await {
-                if let Some(rebuilt) =
-                    rebuild_trade_from_dm(
-                        kind,
-                        &oid,
-                        trade_pubkey_hex,
-                        &sender_hex,
-                        trade_index,
-                        event_ts,
-                    )
-                        .await
+                if let Some(rebuilt) = rebuild_trade_from_dm(
+                    kind,
+                    &oid,
+                    trade_pubkey_hex,
+                    &sender_hex,
+                    trade_index,
+                    event_ts,
+                )
+                .await
                 {
                     row_state = RowState::Exists(Box::new(rebuilt));
                 }
