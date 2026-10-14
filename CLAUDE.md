@@ -295,6 +295,11 @@ bridged by flutter_rust_bridge.
   margin assumed 24 on mostrod ≥ 0.18.3 without the tag. Never the 38383 `expires_at`, which
   after the take is the event's retention (~15 days). No lock time, a Cashu node or a node
   without the guardian means no countdown, never an invented one.
+- **The payout amount is not the order amount.** The node pays the buyer `amount - fee` and says
+  so only in `add-invoice` and the buyer's `hold-invoice-payment-accepted`; Kind 38383 and a
+  restore's `orders` reply carry the order amount. The payout screen reads `payout_amount`,
+  recorded from those two messages before their status gate. Never feed it from `amount_sats`,
+  whose meaning depends on who wrote it last.
 - **A `success` keeps its peer chat for one hour, dated by the completion itself (#642).**
   `completed_at` is written for `success` alone, before that status reaches the trade row, from
   the `created_at` of what carried it — the buyer's `purchase-completed`, the
