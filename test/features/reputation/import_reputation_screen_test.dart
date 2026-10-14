@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,8 @@ import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/l10n/app_localizations_de.dart';
 import 'package:mostro/l10n/app_localizations_en.dart';
 import 'package:mostro/src/rust/api/reputation_transfer.dart';
+
+import '../../support/load_app_fonts.dart';
 
 final _en = AppLocalizationsEn();
 
@@ -165,6 +168,9 @@ Future<void> _tap(WidgetTester tester, String text) async {
     100,
     scrollable: find.byType(Scrollable).first,
   );
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.text(text));
+  await tester.pumpAndSettle();
   await tester.tap(find.text(text));
   await tester.pumpAndSettle();
 }
@@ -190,6 +196,7 @@ ButtonStyleButton _button(WidgetTester tester, String text) =>
     );
 
 void main() {
+  setUpAll(loadAppFonts);
   testWidgets('shows the figures of a pasted attestation and imports it', (
     tester,
   ) async {
@@ -494,6 +501,39 @@ void main() {
     expect(find.text(_en.reputationIdentityRequired), findsOneWidget);
   });
 
+  for (final outcome in ['invalid', 'launch', 'imported']) {
+    testWidgets('announces the $outcome result to screen readers', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+
+      try {
+        final api = await _pump(tester);
+        late final String message;
+        if (outcome == 'launch') {
+          api.launches = false;
+          await _tap(tester, _en.reputationOpenLnp2pbot);
+          message = _en.reputationOpenLnp2pbotFailed;
+        } else if (outcome == 'invalid') {
+          await _paste(tester, 'not an attestation');
+          await _tap(tester, _en.reputationCheck);
+          message = _en.reputationInvalidAttestation;
+        } else {
+          await _paste(tester, _json);
+          await _tap(tester, _en.reputationCheck);
+          await _tap(tester, _en.reputationImportConfirm);
+          message = _en.reputationImported;
+        }
+        expect(
+          tester.getSemantics(find.text(message)),
+          isSemantics(isLiveRegion: true),
+        );
+      } finally {
+        semantics.dispose();
+      }
+    });
+  }
+
   // DS-A11Y-4: German, 320 dp wide, text at 2×, both themes.
   for (final brightness in Brightness.values) {
     testWidgets('fits 320 dp in German at 2× text ($brightness)', (
@@ -523,6 +563,20 @@ void main() {
       // Assert
       expect(emptyError, isNull);
       expect(tester.takeException(), isNull);
+      final label = de.reputationImportConfirm;
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(label));
+      final lines =
+          paragraph
+              .getBoxesForSelection(
+                TextSelection(baseOffset: 0, extentOffset: label.length),
+              )
+              .map((box) => box.top)
+              .toSet();
+      expect(
+        lines,
+        hasLength(1),
+        reason: 'Action labels must stay on one line',
+      );
     });
   }
 }
