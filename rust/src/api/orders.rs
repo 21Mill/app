@@ -938,6 +938,56 @@ impl OrderBook {
         true
     }
 
+    /// Drop the strangers' orders whose take window closed by `now` since
+    /// they were filed, and say how many left.
+    ///
+    /// Ingest drops one that arrives past its window; one filed while it was
+    /// open waits for the node's expiry, which a node that no longer holds the
+    /// order never publishes ([`TAKE_WINDOW_PRUNE_SECS`]). Ours stay, as at
+    /// ingest: a maker's by `is_mine` or its claim, a taker's by its trade-key
+    /// binding — looked up for these few only, outside the lock.
+    pub(crate) async fn drop_past_take_window(&self, now: i64) -> usize {
+        let unclaimed_past = |book: &BookState, id: &str| {
+            book.orders.get(id).is_some_and(|order| {
+                !order.is_mine
+                    && !book.own.contains(id)
+                    && crate::nostr::order_events::is_past_take_window(order, now)
+            })
+        };
+        let closed: Vec<String> = {
+            let book = self.orders.read().await;
+            book.orders
+                .keys()
+                .filter(|id| unclaimed_past(&book, id))
+                .cloned()
+                .collect()
+        };
+        let mut strangers = Vec::new();
+        for id in closed {
+            if lookup_trade_key_index(&id).await.is_none() {
+                strangers.push(id);
+            }
+        }
+        if strangers.is_empty() {
+            return 0;
+        }
+        let dropped = {
+            let mut book = self.orders.write().await;
+            let mut dropped = 0;
+            for id in &strangers {
+                // A newer revision may have landed while the bindings were read.
+                if unclaimed_past(&book, id) && book.remove(id, &self.delta_tx) {
+                    dropped += 1;
+                }
+            }
+            dropped
+        };
+        if dropped > 0 {
+            self.schedule_publish();
+        }
+        dropped
+    }
+
     pub(crate) fn subscribe(&self) -> broadcast::Receiver<Vec<OrderInfo>> {
         self.tx.subscribe()
     }
@@ -7973,9 +8023,41 @@ pub async fn subscribe_orders() {
     // timeout that fired while the app was closed). Idempotent across
     // re-subscribes — at most one sweep loop per process.
     spawn_stale_sweep();
+    spawn_take_window_prune();
     // The pool is up and the DM filter seeded: what the push server holds
     // can be brought in step, now and on a timer (docs/PUSH_NOTIFICATIONS.md).
     crate::api::push::start_push_timer();
+}
+
+/// How often the book drops strangers' orders whose take window closed while
+/// they were listed ([`OrderBook::drop_past_take_window`]): mostrod's own
+/// expiry cadence, so a node's missing expiry costs about what a published
+/// one would.
+const TAKE_WINDOW_PRUNE_SECS: u64 = 60;
+static TAKE_WINDOW_PRUNE_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// At most one prune loop per process, like the sweep below.
+fn spawn_take_window_prune() {
+    if TAKE_WINDOW_PRUNE_ACTIVE
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
+    crate::rt::spawn(async {
+        loop {
+            crate::rt::time::sleep(crate::rt::time::Duration::from_secs(
+                TAKE_WINDOW_PRUNE_SECS,
+            ))
+            .await;
+            let dropped = order_book()
+                .drop_past_take_window(crate::rt::unix_now())
+                .await;
+            if dropped > 0 {
+                log::info!("[orders] {dropped} order(s) left the book: take window closed");
+            }
+        }
+    });
 }
 
 // ── Stale-state sweep ─────────────────────────────────────────────────────────
@@ -11491,6 +11573,55 @@ mod tests {
             .await;
 
         assert!(book.get_order("stranger-open").await.is_some());
+    }
+
+    /// A pending order filed while its take window was open stays filed when
+    /// the window closes and nothing arrives after it: a node that lost the
+    /// order never publishes its expiry. The prune drops it then, and only it.
+    #[tokio::test]
+    async fn a_strangers_order_leaves_the_book_once_its_take_window_closes() {
+        // Arrange — filed while open: a stranger's, a maker's of ours, one we
+        // took (bound trade key, `is_mine == false`), and one still open later.
+        let book = OrderBook::new();
+        let filed_at = crate::rt::unix_now();
+        let closes = |id: &str, at: i64| {
+            let mut order = dummy_order_info(id);
+            order.expires_at = Some(at);
+            order
+        };
+        let stranger = uuid::Uuid::new_v4().to_string();
+        let made = uuid::Uuid::new_v4().to_string();
+        let taken = uuid::Uuid::new_v4().to_string();
+        let open = uuid::Uuid::new_v4().to_string();
+        store_trade_key_index(&taken, 7).await;
+        let mut ours = closes(&made, filed_at + 60);
+        ours.is_mine = true;
+        for order in [
+            closes(&stranger, filed_at + 60),
+            ours,
+            closes(&taken, filed_at + 60),
+            closes(&open, filed_at + 3_600),
+        ] {
+            book.apply_ingested_order(current(&book, order, false).await, Publish::Coalesced)
+                .await;
+        }
+        let mut deltas = book.subscribe_deltas();
+
+        // Act — a minute later, with no event in between.
+        let dropped = book.drop_past_take_window(filed_at + 61).await;
+
+        // Assert
+        assert_eq!(dropped, 1);
+        assert!(book.get_order(&stranger).await.is_none());
+        for kept in [&made, &taken, &open] {
+            assert!(book.get_order(kept).await.is_some(), "{kept}");
+        }
+        assert!(
+            drain(&mut deltas)
+                .iter()
+                .any(|d| matches!(d, OrderBookDelta::Removed { order_id, .. } if *order_id == stranger)),
+            "subscribers hear of the removal"
+        );
     }
 
     /// Our own order stays whatever its window, as a finished one does: the

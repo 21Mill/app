@@ -320,7 +320,9 @@ bridged by flutter_rust_bridge.
   current mostrod, 180 days of retention on an older one. A node that no longer holds an order
   never publishes its expiry, so a `pending` revision can outlive its window on the relays for
   months; the node refuses to take it (`CantDo:NotFound` / `InvalidOrderStatus`).
-  `order_events::is_past_take_window` is the one rule: such a stranger's order leaves the book.
+  `order_events::is_past_take_window` is the one rule: such a stranger's order leaves the book —
+  at ingest, or within a minute of its window closing (`OrderBook::drop_past_take_window`).
+  A taker's own pending order stays: ownership comes from its trade-key binding.
 - **Bond statuses never reach the wire book.** `WaitingTakerBond` publishes as `pending` (the
   order stays takeable by others until a bond locks) and `WaitingMakerBond` publishes nothing
   (the order is invisible until the maker's bond locks). Both exist only on the local trade row,
