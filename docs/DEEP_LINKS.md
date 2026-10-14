@@ -55,6 +55,12 @@ setup) is still found through the pool's relays.
    (`nostr::live_subs`) are never issued on them. On the active node the event
    is also filed in the order book, through the live subscription's path
    (`ingest_order_event`), so Take Order shows it at once.
+   Each relay is asked once it is connected, and asked again if it drops
+   before answering, all within the lookup's 10 s. A link opened from the
+   background is looked up just as the resume pass bounces every relay the OS
+   cut, and nostr-sdk ends a lookup the instant its relay drops, with no answer
+   and no error: asked once, the order read as not found until the user
+   retried.
 3. **An order on another node** changes nothing until the user agrees. The
    dialog names the node as the registry does, or by its key. A node outside
    the registry — neither trusted nor added — comes with a warning, since only
