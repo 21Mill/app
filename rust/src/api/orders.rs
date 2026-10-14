@@ -8991,19 +8991,42 @@ async fn seed_global_dm_coverage() -> Vec<nostr_sdk::prelude::PublicKey> {
 /// user's own trade keys there (written by four paths before #809). Saves
 /// only the rows it changes, through [`persist_trade_row`], so a second pass
 /// writes nothing.
+///
+/// The listing only finds candidates. Each one is written like every other
+/// trade write: under the order's lock, on the row as it is then, read again
+/// by its own id (an order can hold two rows). A row wiped or moved on since
+/// the listing is never saved back from the stale copy.
 async fn forget_own_key_nodes(own_keys: &std::collections::HashSet<String>) {
     let Some(db) = crate::db::app_db::db() else {
         return;
     };
-    let trades = match db.list_trades().await {
-        Ok(trades) => trades,
+    let is_own_key = |node: &str| own_keys.contains(&node.to_lowercase());
+    let candidates: Vec<(String, String)> = match db.list_trades().await {
+        Ok(trades) => trades
+            .into_iter()
+            .filter(|t| crate::mostro::trade_node::trade_node(t).is_some_and(is_own_key))
+            .map(|t| (t.id, t.order.id))
+            .collect(),
         Err(e) => {
             crate::api::logging::blog_warn("orders", format!("own-key node check skipped: {e}"));
             return;
         }
     };
-    for mut trade in trades {
-        let is_own_key = |node: &str| own_keys.contains(&node.to_lowercase());
+    for (row_id, order_id) in candidates {
+        let _guard = lock_order(&order_id).await;
+        let current = match db.list_trades().await {
+            Ok(trades) => trades.into_iter().find(|t| t.id == row_id),
+            Err(e) => {
+                crate::api::logging::blog_warn(
+                    "orders",
+                    format!("own-key node of order={order_id} not checked: {e}"),
+                );
+                continue;
+            }
+        };
+        let Some(mut trade) = current else {
+            continue;
+        };
         if !crate::mostro::trade_node::forget_own_key_node(&mut trade, is_own_key) {
             continue;
         }
