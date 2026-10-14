@@ -1279,7 +1279,7 @@ async fn create_order_once(params: NewOrderParams) -> Result<OrderInfo> {
         // The issuing node, as on a book order (the 38383 author): the DM
         // filter and the push registration read it back after a node
         // switch (docs/PUSH_NOTIFICATIONS.md §7.1).
-        creator_pubkey: active_mostro_pubkey(),
+        node_pubkey: active_mostro_pubkey(),
         created_at: now,
         // The test environment may ask the daemon for a short expiry; the
         // daemon's own default is an hour, shown here as the day-long
@@ -1764,7 +1764,7 @@ async fn take_order_once(
         id: uuid::Uuid::new_v4().to_string(),
         order: order_info,
         role,
-        // Not the peer's trade pubkey: `creator_pubkey` on a book order is the
+        // Not the peer's trade pubkey: `node_pubkey` on a book order is the
         // Mostro node itself (the 38383 event author) — seeding it here poisons
         // the durable peer record (#334). The real counterparty arrives via
         // `maybe_capture_peer_reveal` and is persisted below when already known.
@@ -2181,7 +2181,7 @@ fn trade_row_from_small_order(
     is_mine: bool,
     trade_index: u32,
     counterparty_pubkey: String,
-    creator_pubkey: &str,
+    node_pubkey: &str,
     status: OrderStatus,
 ) -> Option<crate::api::types::TradeInfo> {
     let order_kind = match order.kind {
@@ -2202,7 +2202,7 @@ fn trade_row_from_small_order(
         fiat_code: order.fiat_code.clone(),
         payment_method: order.payment_method.clone(),
         premium: order.premium as f64,
-        creator_pubkey: creator_pubkey.to_string(),
+        node_pubkey: node_pubkey.to_string(),
         created_at: order.created_at.unwrap_or(now),
         expires_at: order.expires_at,
         is_mine,
@@ -5084,7 +5084,7 @@ fn restored_bond_row(
         payment_method: String::new(),
         premium: 0.0,
         // The node the restore answered from: the issuing node of the row.
-        creator_pubkey: active_mostro_pubkey(),
+        node_pubkey: active_mostro_pubkey(),
         created_at: now,
         expires_at: None,
         is_mine: maker,
@@ -5155,7 +5155,7 @@ fn is_restored_maker_placeholder(trade: &crate::api::types::TradeInfo) -> bool {
 fn fill_restored_maker_row(
     trade: &crate::api::types::TradeInfo,
     published: &mostro_core::order::SmallOrder,
-    creator_pubkey: &str,
+    node_pubkey: &str,
 ) -> Option<crate::api::types::TradeInfo> {
     let role = match published.kind {
         Some(mostro_core::order::Kind::Sell) => TradeRole::Seller,
@@ -5169,7 +5169,7 @@ fn fill_restored_maker_row(
         true,
         trade.trade_key_index,
         String::new(),
-        creator_pubkey,
+        node_pubkey,
         trade.order.status.clone(),
     )?;
     filled.id = trade.id.clone();
@@ -10862,7 +10862,7 @@ mod tests {
         let row = |status: OrderStatus, outcome| crate::api::types::TradeInfo {
             counterparty_pubkey: "ab".repeat(32),
             order: crate::api::types::OrderInfo {
-                creator_pubkey: "cd".repeat(32),
+                node_pubkey: "cd".repeat(32),
                 ..wire_order("order-1", status.clone())
             },
             outcome,
@@ -12392,7 +12392,7 @@ mod tests {
         assert_eq!(restored_peer_for(&row, &own, &own, &mostro), None);
         assert_eq!(restored_peer_for(&row, &mostro, &own, &mostro), None);
         let mut published = row.clone();
-        published.order.creator_pubkey = peer.clone();
+        published.order.node_pubkey = peer.clone();
         assert_eq!(restored_peer_for(&published, &peer, &own, &mostro), None);
     }
 
@@ -18196,7 +18196,7 @@ mod tests {
             created_at: 0,
             expires_at: None,
             amount_sats: None,
-            creator_pubkey: String::new(),
+            node_pubkey: String::new(),
             rating: 0.0,
             total_reviews: 0,
             days_active: 0,
@@ -24125,7 +24125,7 @@ mod bond_window_tests {
             created_at: 0,
             expires_at: None,
             amount_sats: Some(1000),
-            creator_pubkey: String::new(),
+            node_pubkey: String::new(),
             rating: 0.0,
             total_reviews: 0,
             days_active: 0,

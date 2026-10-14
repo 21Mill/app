@@ -152,7 +152,7 @@ mod tests {
                 fiat_code: "USD".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "node".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,

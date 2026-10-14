@@ -160,7 +160,7 @@ pub fn restored_peer_for(
     let peer = nostr_sdk::prelude::PublicKey::from_hex(peer_hex.trim())
         .ok()?
         .to_hex();
-    let named_elsewhere = [own_trade_pubkey, mostro_pubkey, &trade.order.creator_pubkey]
+    let named_elsewhere = [own_trade_pubkey, mostro_pubkey, &trade.order.node_pubkey]
         .iter()
         .any(|other| other.eq_ignore_ascii_case(&peer));
     (!named_elsewhere).then_some(peer)

@@ -35,7 +35,7 @@ rust_types.TradeInfo _trade({required String counterpartyPubkey}) =>
         fiatCode: 'USD',
         paymentMethod: 'bank',
         premium: 0,
-        creatorPubkey: 'maker',
+        nodePubkey: 'maker',
         createdAt: intToPlatformInt64(1),
         isMine: true,
         rating: 0,

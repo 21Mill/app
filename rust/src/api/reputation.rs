@@ -632,7 +632,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "maker".into(),
+                node_pubkey: "maker".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,

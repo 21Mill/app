@@ -593,7 +593,7 @@ mod tests {
             fiat_code: "USD".into(),
             payment_method: "cash".into(),
             premium: 0.0,
-            creator_pubkey: String::new(),
+            node_pubkey: String::new(),
             created_at: 1,
             expires_at: None,
             is_mine: false,

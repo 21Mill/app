@@ -136,7 +136,7 @@ pub type Wanted = HashMap<String, String>;
 /// `key_for(index)` derives the pubkey for a trade-key index; `None` when it
 /// cannot (the identity is not loaded) drops that key from the set rather
 /// than registering a placeholder. `active_node` stands in for a row whose
-/// `creator_pubkey` is empty — a maker row written before the node was
+/// `node_pubkey` is empty — a maker row written before the node was
 /// recorded on it — and for nothing else.
 pub fn wanted_pubkeys(
     trades: &[TradeInfo],
@@ -154,10 +154,10 @@ pub fn wanted_pubkeys(
         let Some(pubkey) = key_for(trade.trade_key_index) else {
             continue;
         };
-        let node = if trade.order.creator_pubkey.is_empty() {
+        let node = if trade.order.node_pubkey.is_empty() {
             active_node
         } else {
-            trade.order.creator_pubkey.as_str()
+            trade.order.node_pubkey.as_str()
         };
         wanted.insert(pubkey.to_lowercase(), node.to_lowercase());
     }
@@ -354,7 +354,7 @@ mod tests {
                 fiat_code: "USD".into(),
                 payment_method: "x".into(),
                 premium: 0.0,
-                creator_pubkey: node.to_string(),
+                node_pubkey: node.to_string(),
                 created_at: 0,
                 expires_at: None,
                 is_mine: false,

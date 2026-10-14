@@ -1959,7 +1959,7 @@ mod tests {
                 fiat_code: "VES".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "maker".into(),
+                node_pubkey: "maker".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: true,
@@ -3356,7 +3356,7 @@ mod tests {
         let sound = format!("sound-{}", uuid::Uuid::new_v4());
         for (order_id, counterparty) in [(&poisoned, node.clone()), (&sound, peer.to_hex())] {
             let mut trade = persisted_trade(order_id, OrderStatus::Dispute);
-            trade.order.creator_pubkey = node.clone();
+            trade.order.node_pubkey = node.clone();
             trade.counterparty_pubkey = counterparty;
             db.save_trade(&trade).await.unwrap();
         }

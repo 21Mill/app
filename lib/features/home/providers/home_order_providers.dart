@@ -79,7 +79,7 @@ class OrderItem {
     required this.fiatCode,
     required this.paymentMethod,
     required this.premium,
-    required this.creatorPubkey,
+    required this.nodePubkey,
     required this.createdAt,
     this.expiresAt,
     this.rating = 0.0,
@@ -110,7 +110,7 @@ class OrderItem {
   final String fiatCode;
   final String paymentMethod;
   final double premium;
-  final String creatorPubkey;
+  final String nodePubkey;
   final DateTime createdAt;
   final DateTime? expiresAt;
   final double rating;
@@ -186,7 +186,7 @@ class OrderItem {
           other.fiatCode == fiatCode &&
           other.paymentMethod == paymentMethod &&
           other.premium == premium &&
-          other.creatorPubkey == creatorPubkey &&
+          other.nodePubkey == nodePubkey &&
           other.createdAt == createdAt &&
           other.expiresAt == expiresAt &&
           other.rating == rating &&
@@ -207,7 +207,7 @@ class OrderItem {
     fiatCode,
     paymentMethod,
     premium,
-    creatorPubkey,
+    nodePubkey,
     createdAt,
     expiresAt,
     rating,
@@ -229,7 +229,7 @@ class OrderItem {
     fiatCode: info.fiatCode,
     paymentMethod: info.paymentMethod,
     premium: info.premium,
-    creatorPubkey: info.creatorPubkey,
+    nodePubkey: info.nodePubkey,
     createdAt: DateTime.fromMillisecondsSinceEpoch(
       platformInt64ToInt(info.createdAt) * 1000,
     ),

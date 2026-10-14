@@ -8929,7 +8929,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       fiatCode: dco_decode_String(arr[7]),
       paymentMethod: dco_decode_String(arr[8]),
       premium: dco_decode_f_64(arr[9]),
-      creatorPubkey: dco_decode_String(arr[10]),
+      nodePubkey: dco_decode_String(arr[10]),
       createdAt: dco_decode_i_64(arr[11]),
       expiresAt: dco_decode_opt_box_autoadd_i_64(arr[12]),
       isMine: dco_decode_bool(arr[13]),
@@ -11926,7 +11926,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_fiatCode = sse_decode_String(deserializer);
     var var_paymentMethod = sse_decode_String(deserializer);
     var var_premium = sse_decode_f_64(deserializer);
-    var var_creatorPubkey = sse_decode_String(deserializer);
+    var var_nodePubkey = sse_decode_String(deserializer);
     var var_createdAt = sse_decode_i_64(deserializer);
     var var_expiresAt = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_isMine = sse_decode_bool(deserializer);
@@ -11946,7 +11946,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       fiatCode: var_fiatCode,
       paymentMethod: var_paymentMethod,
       premium: var_premium,
-      creatorPubkey: var_creatorPubkey,
+      nodePubkey: var_nodePubkey,
       createdAt: var_createdAt,
       expiresAt: var_expiresAt,
       isMine: var_isMine,
@@ -14920,7 +14920,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.fiatCode, serializer);
     sse_encode_String(self.paymentMethod, serializer);
     sse_encode_f_64(self.premium, serializer);
-    sse_encode_String(self.creatorPubkey, serializer);
+    sse_encode_String(self.nodePubkey, serializer);
     sse_encode_i_64(self.createdAt, serializer);
     sse_encode_opt_box_autoadd_i_64(self.expiresAt, serializer);
     sse_encode_bool(self.isMine, serializer);

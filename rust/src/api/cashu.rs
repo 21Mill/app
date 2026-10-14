@@ -1571,7 +1571,7 @@ mod tests {
                 fiat_code: "USD".to_string(),
                 payment_method: "cash".to_string(),
                 premium: 0.0,
-                creator_pubkey: counterparty_pubkey.to_string(),
+                node_pubkey: counterparty_pubkey.to_string(),
                 created_at: 0,
                 expires_at: None,
                 is_mine: false,

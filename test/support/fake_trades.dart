@@ -41,7 +41,7 @@ TradeInfo fakeTrade({
     fiatCode: fiatCode,
     paymentMethod: paymentMethod,
     premium: 0,
-    creatorPubkey: 'pubkey-$id',
+    nodePubkey: 'pubkey-$id',
     createdAt: startedAt,
     isMine: isMine,
     rating: 0,

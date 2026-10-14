@@ -9784,7 +9784,7 @@ impl SseDecode for crate::api::types::OrderInfo {
         let mut var_fiatCode = <String>::sse_decode(deserializer);
         let mut var_paymentMethod = <String>::sse_decode(deserializer);
         let mut var_premium = <f64>::sse_decode(deserializer);
-        let mut var_creatorPubkey = <String>::sse_decode(deserializer);
+        let mut var_nodePubkey = <String>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
         let mut var_expiresAt = <Option<i64>>::sse_decode(deserializer);
         let mut var_isMine = <bool>::sse_decode(deserializer);
@@ -9804,7 +9804,7 @@ impl SseDecode for crate::api::types::OrderInfo {
             fiat_code: var_fiatCode,
             payment_method: var_paymentMethod,
             premium: var_premium,
-            creator_pubkey: var_creatorPubkey,
+            node_pubkey: var_nodePubkey,
             created_at: var_createdAt,
             expires_at: var_expiresAt,
             is_mine: var_isMine,
@@ -12491,7 +12491,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::OrderInfo {
             self.fiat_code.into_into_dart().into_dart(),
             self.payment_method.into_into_dart().into_dart(),
             self.premium.into_into_dart().into_dart(),
-            self.creator_pubkey.into_into_dart().into_dart(),
+            self.node_pubkey.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
             self.expires_at.into_into_dart().into_dart(),
             self.is_mine.into_into_dart().into_dart(),
@@ -14918,7 +14918,7 @@ impl SseEncode for crate::api::types::OrderInfo {
         <String>::sse_encode(self.fiat_code, serializer);
         <String>::sse_encode(self.payment_method, serializer);
         <f64>::sse_encode(self.premium, serializer);
-        <String>::sse_encode(self.creator_pubkey, serializer);
+        <String>::sse_encode(self.node_pubkey, serializer);
         <i64>::sse_encode(self.created_at, serializer);
         <Option<i64>>::sse_encode(self.expires_at, serializer);
         <bool>::sse_encode(self.is_mine, serializer);
