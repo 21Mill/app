@@ -83,8 +83,8 @@ pub fn parse_order_event(event: &Event, my_pubkey: Option<&PublicKey>) -> Option
     } else {
         get("amt").and_then(|v| v.parse().ok())
     };
-    // creator_pubkey is the Mostro node's pubkey (the event author).
-    let creator_pubkey = event.pubkey.to_hex();
+    // node_pubkey is the Mostro node's pubkey (the event author).
+    let node_pubkey = event.pubkey.to_hex();
     let created_at = order_created_at(
         event,
         get("published_at").or_else(|| get("created_at")).as_deref(),
@@ -123,7 +123,7 @@ pub fn parse_order_event(event: &Event, my_pubkey: Option<&PublicKey>) -> Option
         fiat_code,
         payment_method,
         premium,
-        creator_pubkey,
+        node_pubkey,
         created_at,
         expires_at,
         is_mine,
@@ -810,6 +810,24 @@ mod tests {
         assert_eq!(order.total_reviews, 0);
         assert_eq!(order.days_active, 0);
         assert_eq!(order.maker_since, None);
+    }
+
+    #[test]
+    fn order_info_json_with_the_old_field_name_keeps_its_node() {
+        // Rows persisted before the rename name the node `creator_pubkey`;
+        // they load into `node_pubkey`, and write back under the new name.
+        let legacy = r#"{
+            "id":"308e1272-d5f4-47e6-bd97-3504baea9c23",
+            "kind":"Buy","status":"Pending","amount_sats":null,
+            "fiat_amount":100.0,"fiat_amount_min":null,"fiat_amount_max":null,
+            "fiat_code":"USD","payment_method":"Bank","premium":0.0,
+            "creator_pubkey":"abcd","created_at":0,"expires_at":null,"is_mine":false
+        }"#;
+        let order: OrderInfo = serde_json::from_str(legacy).unwrap();
+        assert_eq!(order.node_pubkey, "abcd");
+        let written = serde_json::to_value(&order).unwrap();
+        assert_eq!(written["node_pubkey"], "abcd");
+        assert!(written.get("creator_pubkey").is_none());
     }
 
     #[test]

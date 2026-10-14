@@ -291,7 +291,11 @@ pub struct OrderInfo {
     /// Market premium as a percentage, e.g. `1.5` means 1.5% above market.
     /// For display only — same `f64` precision caveat applies.
     pub premium: f64,
-    pub creator_pubkey: String,
+    /// The Mostro node that issued the order: the Kind 38383 author on a book
+    /// order, the node that answered on a trade row. Empty when unknown.
+    /// Rows persisted before the rename carry it as `creator_pubkey`.
+    #[serde(alias = "creator_pubkey")]
+    pub node_pubkey: String,
     /// Unix timestamp (seconds).
     pub created_at: i64,
     pub expires_at: Option<i64>,

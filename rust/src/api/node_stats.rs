@@ -210,7 +210,7 @@ fn dedup_latest(orders: Vec<Revision>) -> Vec<OrderInfo> {
     let mut latest: HashMap<(String, String), Revision> = HashMap::new();
     for revision in orders {
         let key = (
-            revision.order.creator_pubkey.clone(),
+            revision.order.node_pubkey.clone(),
             revision.order.id.clone(),
         );
         if latest
@@ -243,7 +243,7 @@ fn count_open_orders(orders: Vec<Revision>, now: i64) -> HashMap<String, NodeLiq
         if !is_open(&order, now) {
             continue;
         }
-        let (by_fiat, latest) = per_node.entry(order.creator_pubkey.clone()).or_default();
+        let (by_fiat, latest) = per_node.entry(order.node_pubkey.clone()).or_default();
         *by_fiat
             .entry(order.fiat_code.to_ascii_uppercase())
             .or_default() += 1;
@@ -683,7 +683,7 @@ mod tests {
             fiat_code: fiat.into(),
             payment_method: String::new(),
             premium: 0.0,
-            creator_pubkey: node.into(),
+            node_pubkey: node.into(),
             created_at,
             expires_at: None,
             is_mine: false,

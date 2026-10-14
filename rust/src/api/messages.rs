@@ -2795,10 +2795,10 @@ pub(crate) fn chat_grace_ends_at(trade: &crate::api::types::TradeInfo) -> Option
 ///
 /// The pubkey checks are an invariant guard (#334): a row whose
 /// "counterparty" is the Mostro node itself (rows written before the fix
-/// seeded `creator_pubkey` = the 38383 event author) would derive garbage
+/// copied it from `node_pubkey`, the 38383 event author) would derive garbage
 /// chat keys AND claim the single-owner subscription guard with them,
 /// silently blocking the correct subscription when a replayed reveal
-/// arrives. The `creator_pubkey` comparison is the load-bearing one: it is
+/// arrives. The `node_pubkey` comparison is the load-bearing one: it is
 /// the exact field the pre-fix seed copied from, on the same row, so it
 /// catches the poison whichever node published the event — the trades table
 /// is not scoped per node, and this iterates rows from every node the user
@@ -2812,7 +2812,7 @@ pub(crate) fn chat_still_relevant(trade: &crate::api::types::TradeInfo) -> bool 
 /// derived with the node would open no conversation of this trade.
 pub(crate) fn plausible_counterparty(trade: &crate::api::types::TradeInfo, peer: &str) -> bool {
     !peer.is_empty()
-        && peer != trade.order.creator_pubkey
+        && peer != trade.order.node_pubkey
         && peer != crate::config::active_mostro_pubkey()
 }
 
@@ -3786,7 +3786,7 @@ mod tests {
                 fiat_code: "VES".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -3832,7 +3832,7 @@ mod tests {
         no_peer.counterparty_pubkey = String::new();
         assert!(!chat_still_relevant(&no_peer));
 
-        // A pre-#334 row seeded with `creator_pubkey` holds the Mostro node
+        // A pre-#334 row seeded from `node_pubkey` holds the Mostro node
         // itself as "counterparty" — deriving chat keys from it would claim
         // the subscription guard with garbage and block the real reveal.
         let mut daemon_peer = base.clone();
@@ -3842,9 +3842,9 @@ mod tests {
         // Same poison, different node: the trades table is not scoped per
         // node, so a row seeded while ANOTHER node was active carries that
         // node's pubkey — which never equals the currently-active one. The
-        // row-local `creator_pubkey` comparison is what catches it.
+        // row-local `node_pubkey` comparison is what catches it.
         let mut other_node_peer = base.clone();
-        other_node_peer.counterparty_pubkey = "maker".into(); // == creator_pubkey
+        other_node_peer.counterparty_pubkey = "node".into(); // == node_pubkey
         assert!(!chat_still_relevant(&other_node_peer));
 
         let mut canceled = base;
@@ -4035,7 +4035,7 @@ mod tests {
                 fiat_code: "VES".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -4311,7 +4311,7 @@ mod tests {
         let node_hex = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
         let poisoned_id = uuid::Uuid::new_v4().to_string();
         let mut poisoned = live_trade(&poisoned_id, &node_hex, trade_index);
-        poisoned.order.creator_pubkey = node_hex.clone();
+        poisoned.order.node_pubkey = node_hex.clone();
         crate::db::app_db::db()
             .expect("db still initialized")
             .save_trade(&poisoned)

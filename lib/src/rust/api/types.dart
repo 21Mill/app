@@ -1484,7 +1484,11 @@ class OrderInfo {
   /// Market premium as a percentage, e.g. `1.5` means 1.5% above market.
   /// For display only — same `f64` precision caveat applies.
   final double premium;
-  final String creatorPubkey;
+
+  /// The Mostro node that issued the order: the Kind 38383 author on a book
+  /// order, the node that answered on a trade row. Empty when unknown.
+  /// Rows persisted before the rename carry it as `creator_pubkey`.
+  final String nodePubkey;
 
   /// Unix timestamp (seconds).
   final PlatformInt64 createdAt;
@@ -1531,7 +1535,7 @@ class OrderInfo {
     required this.fiatCode,
     required this.paymentMethod,
     required this.premium,
-    required this.creatorPubkey,
+    required this.nodePubkey,
     required this.createdAt,
     this.expiresAt,
     required this.isMine,
@@ -1554,7 +1558,7 @@ class OrderInfo {
       fiatCode.hashCode ^
       paymentMethod.hashCode ^
       premium.hashCode ^
-      creatorPubkey.hashCode ^
+      nodePubkey.hashCode ^
       createdAt.hashCode ^
       expiresAt.hashCode ^
       isMine.hashCode ^
@@ -1579,7 +1583,7 @@ class OrderInfo {
           fiatCode == other.fiatCode &&
           paymentMethod == other.paymentMethod &&
           premium == other.premium &&
-          creatorPubkey == other.creatorPubkey &&
+          nodePubkey == other.nodePubkey &&
           createdAt == other.createdAt &&
           expiresAt == other.expiresAt &&
           isMine == other.isMine &&

@@ -102,8 +102,15 @@ pub(super) async fn reconcile_late_take(
     } else {
         match take_snapshot_row(&late.pending, kind, order_id, event_ts) {
             Some(trade) => Some((trade, "take record", "#566")),
-            None => dm_trade_row(kind, order_id, trade_pubkey_hex, trade_index, event_ts)
-                .map(|trade| (trade, "DM", "#394")),
+            None => dm_trade_row(
+                kind,
+                order_id,
+                trade_pubkey_hex,
+                &late.original.sender.to_hex(),
+                trade_index,
+                event_ts,
+            )
+            .map(|trade| (trade, "DM", "#394")),
         }
     };
     let Some((mut trade, source, issue)) = candidate else {
@@ -752,7 +759,7 @@ mod tests {
             created_at: 1_000,
             expires_at: None,
             amount_sats: None,
-            creator_pubkey: String::new(),
+            node_pubkey: String::new(),
             rating: 0.0,
             total_reviews: 0,
             days_active: 0,
@@ -1054,6 +1061,11 @@ mod tests {
         assert_eq!(row.role, TradeRole::Buyer, "add-invoice addresses the buyer");
         assert_eq!(row.id, order_id, "the generic #394 row, not the take's");
         assert_eq!(row.trade_key_index, 95);
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "the row rebuilt from the message belongs to the node that sent it",
+        );
     }
 
     /// What the live path leaves behind an accepted take besides its row

@@ -1347,7 +1347,7 @@ async fn create_order_once(params: NewOrderParams) -> Result<OrderInfo> {
         // The issuing node, as on a book order (the 38383 author): the DM
         // filter and the push registration read it back after a node
         // switch (docs/PUSH_NOTIFICATIONS.md §7.1).
-        creator_pubkey: active_mostro_pubkey(),
+        node_pubkey: active_mostro_pubkey(),
         created_at: now,
         // The test environment may ask the daemon for a short expiry; the
         // daemon's own default is an hour, shown here as the day-long
@@ -1973,7 +1973,7 @@ fn trade_row_for_accepted_take(
         id: uuid::Uuid::new_v4().to_string(),
         order: order_info,
         role,
-        // Not the peer's trade pubkey: `creator_pubkey` on a book order is the
+        // Not the peer's trade pubkey: `node_pubkey` on a book order is the
         // Mostro node itself (the 38383 event author) — seeding it here poisons
         // the durable peer record (#334). The real counterparty arrives via
         // `maybe_capture_peer_reveal` and is persisted when already known.
@@ -2297,7 +2297,7 @@ fn trade_row_from_small_order(
     is_mine: bool,
     trade_index: u32,
     counterparty_pubkey: String,
-    creator_pubkey: &str,
+    node_pubkey: &str,
     status: OrderStatus,
 ) -> Option<crate::api::types::TradeInfo> {
     let order_kind = match order.kind {
@@ -2318,7 +2318,7 @@ fn trade_row_from_small_order(
         fiat_code: order.fiat_code.clone(),
         payment_method: order.payment_method.clone(),
         premium: order.premium as f64,
-        creator_pubkey: creator_pubkey.to_string(),
+        node_pubkey: node_pubkey.to_string(),
         created_at: order.created_at.unwrap_or(now),
         expires_at: order.expires_at,
         is_mine,
@@ -2388,10 +2388,12 @@ fn trade_row_from_small_order(
 /// replayed ack of a create whose confirmation timed out is adopted here as
 /// a maker row once no pending record remains to intercept it (review
 /// round 2).
+///
+/// `node` is the daemon that sent the message: the adopted row's node.
 async fn adopt_range_remainder(
     order_id: &str,
     kind: &mostro_core::message::MessageKind,
-    trade_pubkey_hex: &str,
+    node: &str,
     trade_index: u32,
     event_ts: i64,
 ) -> bool {
@@ -2444,7 +2446,7 @@ async fn adopt_range_remainder(
         true,
         trade_index,
         String::new(),
-        trade_pubkey_hex,
+        node,
         OrderStatus::Pending,
     ) else {
         // Unreachable: the role match above already required a kind.
@@ -2493,15 +2495,25 @@ async fn adopt_range_remainder(
 ///
 /// Emits the rebuilt status itself: the arm that follows sees the row
 /// already holding it and skips its own write and update.
+///
+/// `node` is the daemon that sent the message: the rebuilt row's node.
 async fn rebuild_trade_from_dm(
     kind: &mostro_core::message::MessageKind,
     order_id: &str,
     trade_pubkey_hex: &str,
+    node: &str,
     trade_index: u32,
     occurred_at: i64,
 ) -> Option<crate::api::types::TradeInfo> {
     let db = crate::db::app_db::db()?;
-    let trade = dm_trade_row(kind, order_id, trade_pubkey_hex, trade_index, occurred_at)?;
+    let trade = dm_trade_row(
+        kind,
+        order_id,
+        trade_pubkey_hex,
+        node,
+        trade_index,
+        occurred_at,
+    )?;
     let status = trade.order.status.clone();
     store_trade_key_index(order_id, trade_index).await;
     if let Err(e) = persist_trade_row(db, &trade).await {
@@ -2530,11 +2542,13 @@ async fn rebuild_trade_from_dm(
 
 /// The row [`rebuild_trade_from_dm`] rebuilds a message into, built but not
 /// persisted — the late-take reconcile builds before it may replace
-/// anything (#566). `None` when the message proves no trade.
+/// anything (#566). `None` when the message proves no trade. `node` is the
+/// daemon that sent the message: the row's node.
 fn dm_trade_row(
     kind: &mostro_core::message::MessageKind,
     order_id: &str,
     trade_pubkey_hex: &str,
+    node: &str,
     trade_index: u32,
     occurred_at: i64,
 ) -> Option<crate::api::types::TradeInfo> {
@@ -2614,7 +2628,7 @@ fn dm_trade_row(
         is_mine,
         trade_index,
         counterparty,
-        "",
+        node,
         status.clone(),
     )?;
     // A row rebuilt already completed is dated by the message that carried
@@ -2646,11 +2660,12 @@ fn dm_trade_row(
 /// only record of the order there is (#394 step 2). Maker-ness is by
 /// construction (only this attempt's create can echo its request_id), the
 /// role comes from the order kind, and the payload is the published order,
-/// min/max included, so a range order rebuilds whole.
+/// min/max included, so a range order rebuilds whole. `node` is the daemon
+/// that confirmed it: the row's node.
 async fn persist_late_create_confirmation(
     daemon_id: &str,
     kind: &mostro_core::message::MessageKind,
-    trade_pubkey_hex: &str,
+    node: &str,
     trade_index: u32,
     occurred_at: i64,
 ) {
@@ -2686,7 +2701,7 @@ async fn persist_late_create_confirmation(
         true,
         trade_index,
         String::new(),
-        trade_pubkey_hex,
+        node,
         status.clone(),
     ) else {
         return;
@@ -3902,9 +3917,15 @@ async fn dispatch_mostro_message(
         if let Some(order_id) = &kind.id {
             let oid = order_id.to_string();
             if !status_write_blocked(&oid, &kind.action, event_ts).await {
-                if let Some(rebuilt) =
-                    rebuild_trade_from_dm(kind, &oid, trade_pubkey_hex, trade_index, event_ts)
-                        .await
+                if let Some(rebuilt) = rebuild_trade_from_dm(
+                    kind,
+                    &oid,
+                    trade_pubkey_hex,
+                    &sender_hex,
+                    trade_index,
+                    event_ts,
+                )
+                .await
                 {
                     row_state = RowState::Exists(Box::new(rebuilt));
                 }
@@ -3960,7 +3981,7 @@ async fn dispatch_mostro_message(
                             &daemon_id,
                             &row_state,
                             trade_index,
-                            Some((kind, trade_pubkey_hex)),
+                            Some((kind, sender_hex.as_str())),
                         )
                         .await
                         {
@@ -3998,7 +4019,7 @@ async fn dispatch_mostro_message(
                         persist_late_create_confirmation(
                             &daemon_id,
                             kind,
-                            trade_pubkey_hex,
+                            &sender_hex,
                             pending.trade_index,
                             event_ts,
                         )
@@ -4008,7 +4029,7 @@ async fn dispatch_mostro_message(
                     &daemon_id,
                     &row_state,
                     trade_index,
-                    Some((kind, trade_pubkey_hex)),
+                    Some((kind, sender_hex.as_str())),
                 )
                 .await
                 {
@@ -4021,7 +4042,7 @@ async fn dispatch_mostro_message(
                 } else if adopt_range_remainder(
                     &daemon_id,
                     kind,
-                    trade_pubkey_hex,
+                    &sender_hex,
                     trade_index,
                     event_ts,
                 )
@@ -4990,7 +5011,7 @@ async fn dispatch_mostro_message(
                 handle_create_bond_reply(
                     &order_id,
                     kind,
-                    trade_pubkey_hex,
+                    &sender_hex,
                     claim,
                     &mut order_guard,
                     event_ts,
@@ -5273,7 +5294,7 @@ fn restored_bond_row(
         payment_method: String::new(),
         premium: 0.0,
         // The node the restore answered from: the issuing node of the row.
-        creator_pubkey: active_mostro_pubkey(),
+        node_pubkey: active_mostro_pubkey(),
         created_at: now,
         expires_at: None,
         is_mine: maker,
@@ -5344,7 +5365,7 @@ fn is_restored_maker_placeholder(trade: &crate::api::types::TradeInfo) -> bool {
 fn fill_restored_maker_row(
     trade: &crate::api::types::TradeInfo,
     published: &mostro_core::order::SmallOrder,
-    creator_pubkey: &str,
+    node_pubkey: &str,
 ) -> Option<crate::api::types::TradeInfo> {
     let role = match published.kind {
         Some(mostro_core::order::Kind::Sell) => TradeRole::Seller,
@@ -5358,7 +5379,7 @@ fn fill_restored_maker_row(
         true,
         trade.trade_key_index,
         String::new(),
-        creator_pubkey,
+        node_pubkey,
         trade.order.status.clone(),
     )?;
     filled.id = trade.id.clone();
@@ -5790,6 +5811,8 @@ async fn maker_order_is_published(order_id: &str) -> bool {
 /// key's own `WaitingMakerBond` row — the trade index is the
 /// `(trade pubkey, order id)` match the restart fallback relies on — and
 /// moves it to `Pending` with the bond `Locked`. Returns whether it acted.
+/// `published` is the `new-order` and the node that sent it, when there is
+/// one: a restored placeholder is filled from that order, on that node.
 async fn confirm_maker_bond(
     order_id: &str,
     row_state: &RowState,
@@ -5802,10 +5825,10 @@ async fn confirm_maker_bond(
     // A restored placeholder learns its side, fiat and amounts from the
     // order the daemon just published (§6.5); the lock below then moves it.
     if is_restored_maker_placeholder(trade) {
-        if let Some((kind, creator)) = published {
+        if let Some((kind, node)) = published {
             if let Some(mostro_core::message::Payload::Order(so)) = &kind.payload {
                 if let (Some(filled), Some(db)) =
-                    (fill_restored_maker_row(trade, so, creator), crate::db::app_db::db())
+                    (fill_restored_maker_row(trade, so, node), crate::db::app_db::db())
                 {
                     if let Err(e) = persist_trade_row(db, &filled).await {
                         crate::api::logging::blog_warn(
@@ -5873,11 +5896,12 @@ async fn lock_maker_bond(
 /// maker row is written before anything else queued on the order runs. After
 /// the 10 s timeout the caller already returned `NoDaemonResponse` and
 /// persisted nothing: the row is written here from the payload's order when
-/// it carries one, so the parked order still reaches My Trades.
+/// it carries one, so the parked order still reaches My Trades. `node` is
+/// the daemon that asked for the bond: the row's node.
 async fn handle_create_bond_reply(
     order_id: &str,
     kind: &mostro_core::message::MessageKind,
-    trade_pubkey_hex: &str,
+    node: &str,
     claim: crate::mostro::pending::CreateBondClaim,
     order_guard: &mut Option<tokio::sync::OwnedMutexGuard<()>>,
     event_ts: i64,
@@ -5935,7 +5959,7 @@ async fn handle_create_bond_reply(
         true,
         claim.trade_index,
         String::new(),
-        trade_pubkey_hex,
+        node,
         OrderStatus::WaitingMakerBond,
     ) else {
         return;
@@ -9211,15 +9235,102 @@ pub(crate) async fn resubscribe_global_dm_filter() {
 ///
 /// Union, not replace: a session key inserted concurrently (create/take in
 /// flight while subscriptions restart) must never be evicted.
+///
+/// With every own trade key at hand, it also forgets a trade row's node that
+/// is one of them ([`forget_own_key_nodes`]) before the filter's `authors`
+/// are read from the rows.
 async fn seed_global_dm_coverage() -> Vec<nostr_sdk::prelude::PublicKey> {
     let derived = build_trade_key_map().await;
-    let mut map = global_dm_keys().write().await;
-    for (hex, entry) in derived {
-        map.entry(hex).or_insert(entry);
-    }
-    map.keys()
+    let own_keys: std::collections::HashSet<String> = {
+        let mut map = global_dm_keys().write().await;
+        for (hex, entry) in derived {
+            map.entry(hex).or_insert(entry);
+        }
+        map.keys().cloned().collect()
+    };
+    forget_own_key_nodes(&own_keys).await;
+    own_keys
+        .iter()
         .filter_map(|hex| nostr_sdk::prelude::PublicKey::from_hex(hex).ok())
         .collect()
+}
+
+/// Reset to unknown the node of every trade row that holds one of the
+/// user's own trade keys there (written by four paths before #809).
+///
+/// The listing only finds candidates. Each one is changed by a conditional,
+/// node-only write ([`Storage::forget_trade_node`]): it checks the node again
+/// inside the write and leaves every other field as stored, so a write that
+/// landed since the listing survives — not every trade writer takes the
+/// order's lock (`submit_rating` does not) — and a row wiped meanwhile stays
+/// wiped, tombstone included. It still runs under the order's lock, in line
+/// with the daemon-message writers. A second pass writes nothing.
+async fn forget_own_key_nodes(own_keys: &std::collections::HashSet<String>) {
+    let Some(db) = crate::db::app_db::db() else {
+        return;
+    };
+    let candidates: Vec<(String, String, String)> = match db.list_trades().await {
+        Ok(trades) => trades
+            .into_iter()
+            .filter_map(|t| {
+                let node = crate::mostro::trade_node::trade_node(&t)?.to_owned();
+                own_keys
+                    .contains(&node.to_lowercase())
+                    .then_some((t.id, t.order.id, node))
+            })
+            .collect(),
+        Err(e) => {
+            crate::api::logging::blog_warn("orders", format!("own-key node check skipped: {e}"));
+            return;
+        }
+    };
+    for (row_id, order_id, node) in candidates {
+        let _guard = lock_order(&order_id).await;
+        #[cfg(test)]
+        own_key_node_test_pause().await;
+        match db.forget_trade_node(&row_id, &node).await {
+            Ok(true) => {
+                crate::api::logging::blog_info(
+                    "orders",
+                    format!("order={order_id} held our own trade key as its node — now unknown"),
+                );
+                crate::api::trade_touch::touch_trade(&order_id);
+                crate::api::push::request_reconcile();
+            }
+            Ok(false) => {}
+            Err(e) => crate::api::logging::blog_warn(
+                "orders",
+                format!("could not forget the own-key node of order={order_id}: {e}"),
+            ),
+        }
+    }
+}
+
+/// The gate and the "reached" flag of an armed [`own_key_node_test_pause`].
+#[cfg(test)]
+type OwnKeyNodePause = (
+    std::sync::Arc<tokio::sync::Notify>,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+);
+
+#[cfg(test)]
+thread_local! {
+    /// The armed pause, if any, for the next own-key node reset on this
+    /// thread to reach its write.
+    static OWN_KEY_NODE_PAUSE: std::cell::RefCell<Option<OwnKeyNodePause>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The test seam that holds [`forget_own_key_nodes`] right before it writes a
+/// row, so a test can commit another write in between. Test builds only:
+/// the call is a `#[cfg(test)]` statement, so the cleanup carries none of it.
+#[cfg(test)]
+async fn own_key_node_test_pause() {
+    let armed = OWN_KEY_NODE_PAUSE.with(|pause| pause.borrow_mut().take());
+    if let Some((gate, reached)) = armed {
+        reached.store(true, std::sync::atomic::Ordering::SeqCst);
+        gate.notified().await;
+    }
 }
 
 async fn build_trade_key_map() -> HashMap<String, (nostr_sdk::prelude::Keys, u32)> {
@@ -11157,7 +11268,7 @@ mod tests {
         let row = |status: OrderStatus, outcome| crate::api::types::TradeInfo {
             counterparty_pubkey: "ab".repeat(32),
             order: crate::api::types::OrderInfo {
-                creator_pubkey: "cd".repeat(32),
+                node_pubkey: "cd".repeat(32),
                 ..wire_order("order-1", status.clone())
             },
             outcome,
@@ -12823,7 +12934,7 @@ mod tests {
         assert_eq!(restored_peer_for(&row, &own, &own, &mostro), None);
         assert_eq!(restored_peer_for(&row, &mostro, &own, &mostro), None);
         let mut published = row.clone();
-        published.order.creator_pubkey = peer.clone();
+        published.order.node_pubkey = peer.clone();
         assert_eq!(restored_peer_for(&published, &peer, &own, &mostro), None);
     }
 
@@ -15265,6 +15376,9 @@ mod tests {
         }
 
         async fn mark_trade_rated(&self, _order_id: &str, _rated_at: i64) -> Result<()> {
+            unimplemented!()
+        }
+        async fn forget_trade_node(&self, _row_id: &str, _node: &str) -> Result<bool> {
             unimplemented!()
         }
         async fn mark_trade_completed(&self, _order_id: &str, _completed_at: i64) -> Result<()> {
@@ -18259,6 +18373,11 @@ mod tests {
         assert_eq!(row.order.status, crate::api::types::OrderStatus::Pending);
         assert!(row.order.is_mine);
         assert_eq!(row.order.fiat_amount, Some(1000.0));
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "the remainder belongs to the node that sent it, not to our trade key",
+        );
         assert_eq!(get_trade_key_index(&child_id).await, Some(9));
         assert!(rx.try_recv().is_ok(), "the UI learns about the new trade");
 
@@ -18397,6 +18516,141 @@ mod tests {
             .await
             .contains_key(&session.public_key().to_hex()));
         assert!(pubkeys.contains(&session.public_key()));
+    }
+
+    /// Rows written before #809 by the range remainder, the late create
+    /// confirmation, the late maker bond and the restored maker placeholder
+    /// hold the user's own trade key as their node. Seeding the coverage
+    /// knows every own trade key: such a node is forgotten (unknown), and a
+    /// real node is left alone.
+    #[tokio::test]
+    async fn seeding_coverage_forgets_a_node_that_is_our_own_trade_key() {
+        use crate::api::types::OrderStatus;
+        let path =
+            std::env::temp_dir().join(format!("mostro_own_key_node_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+
+        let own = nostr_sdk::prelude::Keys::generate();
+        ensure_global_dm_coverage(&own, 93).await;
+        let poisoned = uuid::Uuid::new_v4().to_string();
+        db.save_trade(&crate::mostro::test_fixtures::trade(
+            &poisoned,
+            93,
+            OrderStatus::Active,
+            &own.public_key().to_hex(),
+        ))
+        .await
+        .unwrap();
+        let node = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let sound = uuid::Uuid::new_v4().to_string();
+        db.save_trade(&crate::mostro::test_fixtures::trade(
+            &sound,
+            94,
+            OrderStatus::Active,
+            &node,
+        ))
+        .await
+        .unwrap();
+
+        seed_global_dm_coverage().await;
+
+        let row = db.get_trade_by_order_id(&poisoned).await.unwrap().unwrap();
+        assert_eq!(row.order.node_pubkey, "", "our own trade key is no node");
+        let row = db.get_trade_by_order_id(&sound).await.unwrap().unwrap();
+        assert_eq!(row.order.node_pubkey, node, "a real node is kept");
+    }
+
+    /// The own-key node reset writes a trade row like every other writer:
+    /// under the order's lock, on the row as it is then. Run without it, a
+    /// row wiped while the reset was in flight came back from the copy it had
+    /// listed — and its wipe tombstone was lifted with it.
+    #[tokio::test]
+    async fn the_own_key_node_reset_waits_for_the_order_lock_and_keeps_a_wipe() {
+        use crate::api::types::OrderStatus;
+        let path =
+            std::env::temp_dir().join(format!("mostro_own_key_wipe_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+
+        let own = nostr_sdk::prelude::Keys::generate();
+        ensure_global_dm_coverage(&own, 95).await;
+        let order_id = uuid::Uuid::new_v4().to_string();
+        db.save_trade(&crate::mostro::test_fixtures::trade(
+            &order_id,
+            95,
+            OrderStatus::Active,
+            &own.public_key().to_hex(),
+        ))
+        .await
+        .unwrap();
+
+        let guard = lock_order(&order_id).await;
+        let mut reset = tokio::spawn(seed_global_dm_coverage());
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(200), &mut reset)
+                .await
+                .is_err(),
+            "the reset must wait for the order's lock"
+        );
+        wipe_trade_row(db, &order_id, 1_000, 95).await.unwrap();
+        drop(guard);
+        reset.await.unwrap();
+
+        assert!(
+            db.get_trade_by_order_id(&order_id).await.unwrap().is_none(),
+            "a wiped row stays wiped"
+        );
+        assert!(
+            db.get_setting(&crate::db::settings_keys::trade_wiped(&order_id))
+                .await
+                .unwrap()
+                .is_some(),
+            "and keeps its tombstone"
+        );
+    }
+
+    /// The own-key node reset changes the node and nothing else. Not every
+    /// trade writer takes the order's lock — `submit_rating` marks a row
+    /// rated without it — so a rating committed while the reset is between
+    /// its read and its write must survive the write (PR #817 review).
+    #[tokio::test]
+    async fn the_own_key_node_reset_keeps_a_rating_committed_during_it() {
+        use crate::api::types::OrderStatus;
+        let path =
+            std::env::temp_dir().join(format!("mostro_own_key_rating_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+
+        let own = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let mut trade =
+            crate::mostro::test_fixtures::trade(&order_id, 96, OrderStatus::Success, &own);
+        trade.completed_at = Some(100);
+        db.save_trade(&trade).await.unwrap();
+        let own_keys = std::collections::HashSet::from([own]);
+
+        // Hold the reset right before its write.
+        let gate = std::sync::Arc::new(tokio::sync::Notify::new());
+        let reached = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        OWN_KEY_NODE_PAUSE
+            .with(|pause| *pause.borrow_mut() = Some((gate.clone(), reached.clone())));
+        let reset = tokio::spawn(async move { forget_own_key_nodes(&own_keys).await });
+        let mut waited = 0;
+        while !reached.load(std::sync::atomic::Ordering::SeqCst) {
+            assert!(waited < 400, "the reset never reached its write");
+            waited += 1;
+            crate::rt::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+
+        // A rating commits in between, the way submit_rating writes it.
+        db.mark_trade_rated(&order_id, 1234).await.unwrap();
+        gate.notify_one();
+        reset.await.unwrap();
+
+        let row = db.get_trade_by_order_id(&order_id).await.unwrap().unwrap();
+        assert_eq!(row.order.node_pubkey, "", "the own trade key is no node");
+        assert_eq!(row.rated_at, Some(1234), "the committed rating is kept");
     }
 
     /// PR #252 review (ermeme P1): a create rejected for an unsupported node
@@ -18637,7 +18891,7 @@ mod tests {
             created_at: 0,
             expires_at: None,
             amount_sats: None,
-            creator_pubkey: String::new(),
+            node_pubkey: String::new(),
             rating: 0.0,
             total_reviews: 0,
             days_active: 0,
@@ -20139,6 +20393,11 @@ mod tests {
         );
         assert_eq!(row.order.amount_sats, Some(6_307));
         assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "a rebuilt row belongs to the node that sent the message",
+        );
+        assert_eq!(
             drain_updates(&mut rx, &order_id),
             vec![crate::api::types::OrderStatus::WaitingBuyerInvoice],
         );
@@ -21033,6 +21292,11 @@ mod tests {
             crate::api::types::OrderStatus::WaitingMakerBond
         );
         assert_eq!(row.trade_key_index, 22);
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "the parked row belongs to the node that asked for the bond",
+        );
         // The payload's amount is the bond: it never becomes the order's sats.
         assert_eq!(row.order.amount_sats, None);
         let bond = row.bond.expect("bond persisted");
@@ -22623,6 +22887,11 @@ mod tests {
         assert_eq!(row.order.fiat_amount, Some(250.0));
         assert!(row.order.is_mine);
         assert_eq!(row.trade_key_index, 86);
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "filling the placeholder keeps the node that confirmed it",
+        );
         assert!(!is_restored_maker_placeholder(&row));
         assert_eq!(row.bond.map(|b| b.state), Some(BondState::Locked));
     }
@@ -22769,6 +23038,11 @@ mod tests {
         assert_eq!(row.trade_key_index, 14);
         assert_eq!(row.order.fiat_amount_min, Some(100.0));
         assert_eq!(row.order.fiat_amount_max, Some(500.0));
+        assert_eq!(
+            row.order.node_pubkey,
+            active_mostro_pubkey(),
+            "the maker row belongs to the node that confirmed it",
+        );
         assert_eq!(
             get_trade_key_index(&order_id).await,
             Some(14),
@@ -24596,7 +24870,7 @@ mod bond_window_tests {
             created_at: 0,
             expires_at: None,
             amount_sats: Some(1000),
-            creator_pubkey: String::new(),
+            node_pubkey: String::new(),
             rating: 0.0,
             total_reviews: 0,
             days_active: 0,

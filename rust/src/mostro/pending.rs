@@ -229,7 +229,7 @@ pub(crate) fn test_take_kind() -> PendingRequestKind {
             created_at: 0,
             expires_at: None,
             amount_sats: None,
-            creator_pubkey: String::new(),
+            node_pubkey: String::new(),
             rating: 0.0,
             total_reviews: 0,
             days_active: 0,

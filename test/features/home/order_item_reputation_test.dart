@@ -17,7 +17,7 @@ OrderInfo _info({
     fiatCode: 'USD',
     paymentMethod: 'Wire',
     premium: 1.5,
-    creatorPubkey: 'node-pubkey',
+    nodePubkey: 'node-pubkey',
     createdAt: 1000,
     isMine: false,
     rating: rating,
