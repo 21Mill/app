@@ -265,7 +265,11 @@ bridged by flutter_rust_bridge.
   `delete_identity` (generate *and* import go through it) wipes what the identity produced:
   rows via `Storage::clear_identity_data`, Rust's in-memory stores via `forget_identity_state`,
   relay subscriptions via `release_identity_subscriptions`, and the Dart caches via
-  `resetIdentityScopedState` (issue #533). Device preferences stay (relays, node choice,
+  `resetIdentityScopedState` (issue #533). A task that can still write for the old identity is
+  stopped **first**, and awaited, before anything is cleared — today the late-take retries
+  (#566), by `forget_late_take_retries` at the head of `release_identity_subscriptions`. A new
+  one goes there too, or what it writes after the clears leaks into the next user's session.
+  Device preferences stay (relays, node choice,
   push token, overrides). Anything new that holds per-trade or per-identity data — a table, a
   `settings` key family (add its prefix to `IDENTITY_SCOPED_PREFIXES`), a process-wide store,
   a non-`autoDispose` provider — must be added to the matching one, or it leaks into the next
@@ -363,5 +367,12 @@ bridged by flutter_rust_bridge.
   `/api/notify`. For a solver's message the sender is mostrix, which does not yet
   (mostrix#177). Don't make `wake_peer` ring the solver (not a push client), and don't register
   `pub(K_conv)` with the push server as a workaround (§7.3 says why).
+- **A `mostro:` order link changes nothing on its own** (`docs/DEEP_LINKS.md`). The format is
+  the daemon's Kind 38383 `source` tag. Its relays are asked through a throwaway client and
+  never join the pool — no persisted relay, no `live_subs` REQ on them — and the node switch it
+  may ask for waits for the user's yes, then takes the Settings path (`selectNode`). `app_links`
+  stays on 6.x until the app builds with Flutter 3.44 (7.1+). Release Linux and Windows builds
+  are single-instance on purpose — that is how a link reaches the window already open — and
+  debug builds are not, so `flutter run` still works next to an open release.
 
 <!-- MANUAL ADDITIONS END -->

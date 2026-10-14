@@ -834,7 +834,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByMeMessage =>
-      'Vous avez demandé l\'annulation de cet échange. Il reste ouvert jusqu\'à ce que l\'autre partie annule aussi. Sans réponse de sa part, vous pouvez ouvrir un litige.';
+      'Vous avez demandé l\'annulation de cette transaction. Elle reste ouverte jusqu\'à ce que l\'autre partie annule aussi. Sans réponse de sa part, vous pouvez ouvrir un litige.';
 
   @override
   String get tradeCardCancelRequestedByPeerTitle =>
@@ -842,7 +842,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByPeerMessage =>
-      'Elle a demandé l\'annulation de cet échange. Acceptez pour y mettre fin sans mouvement de fonds, ou poursuivez l\'échange.';
+      'Elle a demandé l\'annulation de cette transaction. Acceptez pour y mettre fin sans mouvement de fonds, ou poursuivez la transaction.';
 
   @override
   String get tradeCancelRequestedByMeNotice =>
@@ -1135,7 +1135,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String get orderNoLongerActive => 'Cet ordre n\'est plus actif';
 
   @override
-  String get tradeNoLongerYours => 'Vous ne participez plus à cet échange';
+  String get tradeNoLongerYours =>
+      'Vous ne participez plus à cette transaction';
 
   @override
   String get sessionTimeoutMessage =>
@@ -3643,7 +3644,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeCardWaitingBuyerInvoiceMessage =>
-      'L\'échange reprend dès que l\'acheteur ajoute une facture Lightning.';
+      'La transaction reprend dès que l\'acheteur ajoute une facture Lightning.';
 
   @override
   String get tradeCardWaitingPaymentTitle =>
@@ -3651,17 +3652,17 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeCardWaitingPaymentMessage =>
-      'L\'échange reprend dès que le vendeur paie la facture hold.';
+      'La transaction reprend dès que le vendeur paie la facture hold.';
 
   @override
   String get tradeCardWaitingTakerBondTitle => 'Paiement de caution en attente';
 
   @override
   String get tradeCardWaitingTakerBondMessage =>
-      'La caution anti-abus du preneur doit être payée avant le début de l\'échange.';
+      'La caution anti-abus du preneur doit être payée avant le début de la transaction.';
 
   @override
-  String get tradeCardActiveTitle => 'Échange actif';
+  String get tradeCardActiveTitle => 'Transaction active';
 
   @override
   String get tradeCardActiveMessage =>
@@ -3682,46 +3683,46 @@ class AppLocalizationsFr extends AppLocalizations {
       'Le vendeur a libéré les sats. Le paiement de l\'acheteur est en route.';
 
   @override
-  String get tradeCardSuccessTitle => 'Échange terminé';
+  String get tradeCardSuccessTitle => 'Transaction terminée';
 
   @override
   String get tradeCardSuccessMessage =>
-      'L\'échange s\'est terminé avec succès.';
+      'La transaction s\'est terminée avec succès.';
 
   @override
-  String get tradeCardCanceledTitle => 'Échange annulé';
+  String get tradeCardCanceledTitle => 'Transaction annulée';
 
   @override
-  String get tradeCardCanceledMessage => 'L\'échange a été annulé.';
+  String get tradeCardCanceledMessage => 'La transaction a été annulée.';
 
   @override
   String get tradeCardExpiredTitle => 'Ordre expiré';
 
   @override
   String get tradeCardExpiredMessage =>
-      'L\'ordre a expiré avant que l\'échange puisse continuer.';
+      'L\'ordre a expiré avant que la transaction puisse continuer.';
 
   @override
   String get tradeCardCooperativelyCanceledTitle =>
-      'Échange annulé d\'un commun accord';
+      'Transaction annulée d\'un commun accord';
 
   @override
   String get tradeCardCooperativelyCanceledMessage =>
-      'Les deux parties ont accepté d\'annuler l\'échange.';
+      'Les deux parties ont accepté d\'annuler la transaction.';
 
   @override
   String get tradeCardDisputeTitle => 'Litige ouvert';
 
   @override
   String get tradeCardDisputeMessage =>
-      'Un litige a été ouvert sur cet échange.';
+      'Un litige a été ouvert sur cette transaction.';
 
   @override
   String get tradeCardCanceledByAdminTitle => 'Annulé par le médiateur';
 
   @override
   String get tradeCardCanceledByAdminMessage =>
-      'Le médiateur du litige a annulé l\'échange.';
+      'Le médiateur du litige a annulé la transaction.';
 
   @override
   String get tradeCardSettledByAdminTitle => 'Réglé par le médiateur';
@@ -3735,13 +3736,14 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tradeCardCompletedByAdminMessage =>
-      'Le médiateur du litige a terminé l\'échange.';
+      'Le médiateur du litige a terminé la transaction.';
 
   @override
-  String get tradeCardUpdatedTitle => 'Échange mis à jour';
+  String get tradeCardUpdatedTitle => 'Transaction mise à jour';
 
   @override
-  String get tradeCardUpdatedMessage => 'Le statut de cet échange a changé.';
+  String get tradeCardUpdatedMessage =>
+      'Le statut de cette transaction a changé.';
 
   @override
   String get tradeCardCanceledByMakerMessage =>
@@ -4501,4 +4503,48 @@ class AppLocalizationsFr extends AppLocalizations {
   String myReputationOnNode(String node) {
     return 'Sur $node';
   }
+
+  @override
+  String get orderLinkTitle => 'Lien vers un ordre';
+
+  @override
+  String get orderLinkLooking => 'Recherche de l\'ordre…';
+
+  @override
+  String orderLinkSwitching(String nodeName) {
+    return 'Passage à $nodeName…';
+  }
+
+  @override
+  String get orderLinkInvalidTitle => 'Impossible d\'ouvrir ce lien';
+
+  @override
+  String get orderLinkInvalidBody =>
+      'Ce n\'est pas un lien vers un ordre Mostro, ou il en manque une partie.';
+
+  @override
+  String get orderLinkNotFoundBody =>
+      'Aucun relais n\'a répondu avec cet ordre. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get orderLinkUnavailableTitle => 'Ordre plus disponible';
+
+  @override
+  String get orderLinkUnavailableBody =>
+      'Quelqu\'un l\'a déjà pris, ou il a été annulé ou a expiré.';
+
+  @override
+  String get orderLinkFailedTitle => 'Impossible d\'ouvrir l\'ordre';
+
+  @override
+  String get orderLinkOtherNodeTitle => 'Ordre sur un autre nœud';
+
+  @override
+  String orderLinkOtherNodeBody(String nodeName) {
+    return 'Cet ordre a été publié sur $nodeName. Pour le voir et le prendre, passez à ce nœud.';
+  }
+
+  @override
+  String get orderLinkUnknownNodeWarning =>
+      'Ce nœud n\'est pas dans votre liste. N\'y passez que si vous faites confiance à la personne qui vous a envoyé le lien : le nœud sur lequel vous échangez règle vos échanges et tranche leurs litiges.';
 }
