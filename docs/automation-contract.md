@@ -54,6 +54,7 @@ fails the build when an identifier is declared and attached to nothing.
 | `order.status` | The kebab-case name of `TradeStatus`: `loading`, `pending`, `waiting-invoice`, `waiting-payment`, `waiting-bond`, `in-progress`, `active`, `fiat-sent`, `payout-pending`, `completed`, `cancelled`, `disputed`, `pending-rating`, `rated`. Never the localized chip copy. `waiting-bond` is the anti-abuse bond window (`docs/ANTI_ABUSE_BOND.md`): the daemon is waiting for the user's bond bolt11 before the trade flow starts. |
 | `order.id` | The full order id, where the visible text is shortened. |
 | `keys.public_key` | The identity's full public key. |
+| `reputation.import.identity` | The complete identity npub shown for comparison with lnp2pBot before confirming its binding. |
 | `settings.mostro_node.pubkey` | The active daemon's full public key, where the visible subtitle is truncated. |
 | `wallet.connection` | `connected` or `disconnected`. |
 | `pay.invoice.text` | The hold invoice (`bolt11`), which is otherwise only drawn as a QR code or paid directly by the wallet. |

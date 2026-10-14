@@ -22,7 +22,7 @@ use mostro_core::reputation::{
     AttestationError, ReputationAttestation, ReputationRebind, ATTESTATION_LIFETIME_SECS,
     REBIND_MAX_LIFETIME_SECS,
 };
-use nostr_sdk::prelude::{Keys, PublicKey, Timestamp};
+use nostr_sdk::prelude::{Keys, PublicKey, Timestamp, ToBech32};
 
 use crate::api::identity::{identity_generation, while_identity_current};
 use crate::api::orders::{ask_daemon_with, fresh_request_id, DaemonAnswer};
@@ -91,6 +91,13 @@ pub fn get_reputation_support() -> ReputationSupportInfo {
         issuer: support.issuer,
         import_issuers: support.import_issuers,
     }
+}
+
+/// Encode the displayed identity as npub for comparison with lnp2pBot's
+/// confirmation. Dart supplies the same hex key used in the bot link.
+#[flutter_rust_bridge::frb(sync)]
+pub fn reputation_identity_npub(identity_hex: String) -> Result<String> {
+    Ok(pubkey(&identity_hex)?.to_bech32()?)
 }
 
 /// Verify an attestation pasted or received, without sending anything: the
@@ -456,6 +463,19 @@ mod tests {
 
     fn vectors() -> serde_json::Value {
         serde_json::from_str(VECTORS).unwrap()
+    }
+
+    #[test]
+    fn the_displayed_npub_encodes_the_bot_link_identity() {
+        use nostr_sdk::prelude::FromBech32;
+        let hex = "ab1db593a4d1196eb07335fdc702a314712ed29c631ceaebd84708a17d3bc2f7";
+        let npub = reputation_identity_npub(hex.into()).unwrap();
+        assert!(npub.starts_with("npub1"));
+        assert_eq!(PublicKey::from_bech32(&npub).unwrap().to_hex(), hex);
+        assert!(reputation_identity_npub("not-a-key".into())
+            .unwrap_err()
+            .to_string()
+            .starts_with("InvalidPubkey"));
     }
 
     #[test]

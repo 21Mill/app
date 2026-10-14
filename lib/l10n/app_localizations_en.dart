@@ -4566,16 +4566,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String reputationFigures(int reviews, String rating, int days) {
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
+    final String reviewsString = reviewsNumberFormat.format(reviews);
+    final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String daysString = daysNumberFormat.format(days);
+
     String _temp0 = intl.Intl.pluralLogic(
       reviews,
       locale: localeName,
-      other: '$reviews ratings received',
+      other: '$reviewsString ratings received',
       one: '1 rating received',
     );
     String _temp1 = intl.Intl.pluralLogic(
       days,
       locale: localeName,
-      other: 'trading for $days days',
+      other: 'trading for $daysString days',
       one: 'trading for 1 day',
     );
     return '$_temp0, $rating on average, $_temp1';
@@ -4588,4 +4596,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get reputationOpenLnp2pbotFailed =>
       'Telegram could not be opened. Open lnp2pBot in Telegram yourself and paste here what it sends you.';
+
+  @override
+  String get reputationIdentityHint =>
+      'Before confirming in lnp2pBot, check that it shows this same public key:';
+
+  @override
+  String get reputationUnavailable =>
+      'Unable to check whether reputation can be imported. Try again.';
+
+  @override
+  String get reputationIdentityChanged =>
+      'Your identity changed. Check the public key shown here before trying again.';
 }

@@ -43,6 +43,10 @@ class ReputationApi {
   Future<String?> identity() async =>
       (await identity_api.getIdentity())?.publicKey;
 
+  /// Encode the same public key displayed and sent to the bot, in Rust.
+  String npub(String identity) =>
+      rust.reputationIdentityNpub(identityHex: identity);
+
   /// Opens [uri] outside the app; false when nothing could open it.
   Future<bool> openExternal(Uri uri) async {
     try {

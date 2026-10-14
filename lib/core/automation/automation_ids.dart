@@ -304,6 +304,7 @@ class AutomationIds {
   static const String payCancel = 'pay.cancel';
 
   // Reputation portability (#674)
+  static const String reputationImportIdentity = 'reputation.import.identity';
   static const String reputationImportOpenBot = 'reputation.import.open_bot';
   static const String reputationImportInput = 'reputation.import.input';
   static const String reputationImportCheck = 'reputation.import.check';

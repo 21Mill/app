@@ -1403,5 +1403,8 @@
   "reputationImportConfirm": "Importer sur ce Mostro",
   "reputationFigures": "{reviews, plural, =1{1 évaluation reçue} other{{reviews} évaluations reçues}}, {rating} en moyenne, {days, plural, =1{échange depuis 1 jour} other{échange depuis {days} jours}}",
   "reputationFiguresNote": "La réputation importée s'ajoute à celle que vous avez ici ; vos contreparties les voient fusionnées.",
-  "reputationOpenLnp2pbotFailed": "Impossible d'ouvrir Telegram. Ouvrez lnp2pBot vous-même dans Telegram et collez ici ce qu'il vous envoie."
+  "reputationOpenLnp2pbotFailed": "Impossible d'ouvrir Telegram. Ouvrez lnp2pBot vous-même dans Telegram et collez ici ce qu'il vous envoie.",
+  "reputationIdentityHint": "Avant de confirmer dans lnp2pBot, vérifiez que cette même clé publique s’affiche :",
+  "reputationUnavailable": "Impossible de vérifier si la réputation peut être importée. Réessayez.",
+  "reputationIdentityChanged": "Votre identité a changé. Vérifiez la clé publique affichée ici avant de réessayer."
 }

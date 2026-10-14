@@ -44,7 +44,10 @@ class ReputationPrimaryButton extends StatelessWidget {
           shape: _shape,
           textStyle: _label,
         ),
-        child: Text(label),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(label, maxLines: 1),
+        ),
       ),
     );
   }
@@ -78,14 +81,17 @@ class ReputationSecondaryButton extends StatelessWidget {
       return OutlinedButton(
         onPressed: onPressed,
         style: style,
-        child: Text(label),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(label, maxLines: 1),
+        ),
       );
     }
     return OutlinedButton.icon(
       onPressed: onPressed,
       style: style,
       icon: Icon(icon, size: 18),
-      label: Text(label),
+      label: FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1)),
     );
   }
 }

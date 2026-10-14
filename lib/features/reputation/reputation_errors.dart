@@ -11,6 +11,7 @@ String localizedReputationError(
 }) {
   final raw = error.toString();
   final byMarker = <String, String>{
+    'NoIdentity': l10n.noIdentityFoundMessage,
     'PrivacyModeEnabled': l10n.reputationIdentityRequired,
     'ReputationIdentityRequired': l10n.reputationIdentityRequired,
     'ReputationExportUnsupported': l10n.reputationNodeDoesNotExport,

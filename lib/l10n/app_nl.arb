@@ -1403,5 +1403,8 @@
   "reputationImportConfirm": "Importeren in deze Mostro",
   "reputationFigures": "{reviews, plural, =1{1 ontvangen beoordeling} other{{reviews} ontvangen beoordelingen}}, gemiddeld {rating}, {days, plural, =1{handelt al 1 dag} other{handelt al {days} dagen}}",
   "reputationFiguresNote": "Geïmporteerde reputatie wordt opgeteld bij die van hier; je tegenpartijen zien ze samen.",
-  "reputationOpenLnp2pbotFailed": "Telegram kon niet worden geopend. Open lnp2pBot zelf in Telegram en plak hier wat hij je stuurt."
+  "reputationOpenLnp2pbotFailed": "Telegram kon niet worden geopend. Open lnp2pBot zelf in Telegram en plak hier wat hij je stuurt.",
+  "reputationIdentityHint": "Controleer voordat je in lnp2pBot bevestigt of dezelfde openbare sleutel wordt getoond:",
+  "reputationUnavailable": "Kan niet controleren of de reputatie kan worden geïmporteerd. Probeer het opnieuw.",
+  "reputationIdentityChanged": "Je identiteit is gewijzigd. Controleer de openbare sleutel die hier wordt getoond voordat je het opnieuw probeert."
 }

@@ -1403,5 +1403,8 @@
   "reputationImportConfirm": "In diesen Mostro importieren",
   "reputationFigures": "{reviews, plural, =1{1 erhaltene Bewertung} other{{reviews} erhaltene Bewertungen}}, im Schnitt {rating}, {days, plural, =1{seit 1 Tag am Handeln} other{seit {days} Tagen am Handeln}}",
   "reputationFiguresNote": "Importierte Reputation wird zu deiner hiesigen addiert; deine Handelspartner sehen beide zusammen.",
-  "reputationOpenLnp2pbotFailed": "Telegram konnte nicht geöffnet werden. Öffne lnp2pBot selbst in Telegram und füge hier ein, was er dir schickt."
+  "reputationOpenLnp2pbotFailed": "Telegram konnte nicht geöffnet werden. Öffne lnp2pBot selbst in Telegram und füge hier ein, was er dir schickt.",
+  "reputationIdentityHint": "Prüfe vor der Bestätigung in lnp2pBot, dass dort derselbe öffentliche Schlüssel angezeigt wird:",
+  "reputationUnavailable": "Es konnte nicht geprüft werden, ob die Reputation importiert werden kann. Versuch es erneut.",
+  "reputationIdentityChanged": "Deine Identität hat sich geändert. Prüfe den hier angezeigten öffentlichen Schlüssel, bevor du es erneut versuchst."
 }

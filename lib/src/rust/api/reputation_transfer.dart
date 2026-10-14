@@ -13,6 +13,13 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 ReputationSupportInfo getReputationSupport() =>
     RustLib.instance.api.crateApiReputationTransferGetReputationSupport();
 
+/// Encode the displayed identity as npub for comparison with lnp2pBot's
+/// confirmation. Dart supplies the same hex key used in the bot link.
+String reputationIdentityNpub({required String identityHex}) => RustLib
+    .instance
+    .api
+    .crateApiReputationTransferReputationIdentityNpub(identityHex: identityHex);
+
 /// Verify an attestation pasted or received, without sending anything: the
 /// event's own rules (signature, kind, tags, clock). Whether the node trusts
 /// its issuer is the node's to say on import.

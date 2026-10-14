@@ -1403,5 +1403,8 @@
   "reputationImportConfirm": "Importar en este Mostro",
   "reputationFigures": "{reviews, plural, =1{1 calificación recibida} other{{reviews} calificaciones recibidas}}, {rating} de promedio, {days, plural, =1{operando desde hace 1 día} other{operando desde hace {days} días}}",
   "reputationFiguresNote": "La reputación importada se suma a la que tienes aquí; tus contrapartes las ven juntas.",
-  "reputationOpenLnp2pbotFailed": "No se pudo abrir Telegram. Abre lnp2pBot en Telegram por tu cuenta y pega aquí lo que te envíe."
+  "reputationOpenLnp2pbotFailed": "No se pudo abrir Telegram. Abre lnp2pBot en Telegram por tu cuenta y pega aquí lo que te envíe.",
+  "reputationIdentityHint": "Antes de confirmar en lnp2pBot, comprueba que muestre esta misma clave pública:",
+  "reputationUnavailable": "No se pudo comprobar si se puede importar la reputación. Inténtalo de nuevo.",
+  "reputationIdentityChanged": "Tu identidad cambió. Comprueba la clave pública que se muestra aquí antes de volver a intentarlo."
 }

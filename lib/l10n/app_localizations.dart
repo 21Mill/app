@@ -7635,6 +7635,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Telegram could not be opened. Open lnp2pBot in Telegram yourself and paste here what it sends you.'**
   String get reputationOpenLnp2pbotFailed;
+
+  /// Explain why the complete npub is shown beside the Telegram action
+  ///
+  /// In en, this message translates to:
+  /// **'Before confirming in lnp2pBot, check that it shows this same public key:'**
+  String get reputationIdentityHint;
+
+  /// Failure to read the privacy/identity state; actions stay disabled until Retry succeeds
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to check whether reputation can be imported. Try again.'**
+  String get reputationUnavailable;
+
+  /// The bot action found a different identity than the one shown; review it before retrying
+  ///
+  /// In en, this message translates to:
+  /// **'Your identity changed. Check the public key shown here before trying again.'**
+  String get reputationIdentityChanged;
 }
 
 class _AppLocalizationsDelegate
