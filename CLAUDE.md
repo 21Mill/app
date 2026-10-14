@@ -290,7 +290,8 @@ bridged by flutter_rust_bridge.
   from `TradeInfo::escrow_locked_at`: the `created_at` of the daemon message that moved the
   order out of `waiting-payment`, **the oldest one**, never the first to arrive (a replay comes
   newest-first, and on a buy order `hold-invoice-payment-accepted` is re-sent once the buyer's
-  invoice arrives). It adds the window of the node that sent it (`escrow_node`, not the active
+  invoice arrives) — oldest within one take: a maker order's republish clears it, since a buy
+  order's lock comes in `waiting-buyer-invoice`, which a taker can still leave. It adds the window of the node that sent it (`escrow_node`, not the active
   node): `hold_invoice_cltv_delta − escrow_deadline_margin_blocks` blocks of ten minutes, the
   margin assumed 24 on mostrod ≥ 0.18.3 without the tag. Never the 38383 `expires_at`, which
   after the take is the event's retention (~15 days). No lock time, a Cashu node or a node

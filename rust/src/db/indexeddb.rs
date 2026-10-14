@@ -693,6 +693,11 @@ impl Storage for IndexedDbStorage {
         .await
     }
 
+    async fn clear_escrow_lock(&self, order_id: &str) -> Result<()> {
+        self.patch_trade_by_order_id(order_id, trade_json::clear_escrow_lock)
+            .await
+    }
+
     async fn set_cooperative_cancel_state(
         &self,
         order_id: &str,

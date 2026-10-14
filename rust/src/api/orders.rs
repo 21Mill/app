@@ -6344,9 +6344,24 @@ fn is_maker_waiting_step(status: &OrderStatus) -> bool {
 /// next take on the same trade index inherits its deadline, because
 /// `next_step_start` keeps the older timestamp for a step it cannot tell
 /// apart.
+///
+/// The escrow lock is cleared before `Pending` for the same reason. On a buy
+/// order it is recorded in `waiting-buyer-invoice`, which a taker can still
+/// leave (mostrod refunds the seller and republishes), and a stranded lock
+/// would refuse the next take's as newer and date its deadline from this one.
 async fn write_maker_step_end(db: &impl Storage, order_id: &str) -> bool {
     if !clear_maker_step_start(db, order_id).await {
         // Writing `Pending` now would strand the key above.
+        return false;
+    }
+    if let Err(e) = db.clear_escrow_lock(order_id).await {
+        crate::api::logging::blog_warn(
+            "orders",
+            format!(
+                "escrow lock not cleared for republished order={}: {e}",
+                crate::api::logging::short_id(order_id),
+            ),
+        );
         return false;
     }
     if let Err(e) = db
@@ -14827,6 +14842,9 @@ mod tests {
             _locked_at: i64,
             _node: &str,
         ) -> Result<()> {
+            unimplemented!()
+        }
+        async fn clear_escrow_lock(&self, _order_id: &str) -> Result<()> {
             unimplemented!()
         }
         async fn set_cooperative_cancel_state(

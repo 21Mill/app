@@ -1094,6 +1094,9 @@ mod tests {
         ) -> Result<()> {
             unimplemented!()
         }
+        async fn clear_escrow_lock(&self, _order_id: &str) -> Result<()> {
+            unimplemented!()
+        }
         async fn set_cooperative_cancel_state(
             &self,
             _order_id: &str,

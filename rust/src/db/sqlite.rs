@@ -959,6 +959,14 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
+    async fn clear_escrow_lock(&self, order_id: &str) -> Result<()> {
+        let sql = "UPDATE trades SET data = json_set(\
+             data, '$.escrow_locked_at', json('null'), '$.escrow_node', json('null')) \
+             WHERE json_extract(data, '$.order.id') = ?";
+        sqlx::query(sql).bind(order_id).execute(&self.pool).await?;
+        Ok(())
+    }
+
     async fn set_cooperative_cancel_state(
         &self,
         order_id: &str,
@@ -1728,6 +1736,51 @@ mod tests {
             .await
             .unwrap()
             .is_none());
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A cleared lock reads back as none, on that order only, and the next
+    /// lock recorded is taken even though it is later than the cleared one.
+    #[tokio::test]
+    async fn clear_escrow_lock_lets_a_later_lock_in() {
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+        for (row, order) in [("row-a", "order-a"), ("row-b", "order-b")] {
+            storage.save_trade(&trade_row(row, order)).await.unwrap();
+            storage
+                .mark_escrow_locked(order, 1_700_000_100, "node-a")
+                .await
+                .unwrap();
+        }
+
+        storage.clear_escrow_lock("order-a").await.unwrap();
+        let a = storage
+            .get_trade_by_order_id("order-a")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.escrow_locked_at, None);
+        assert_eq!(a.escrow_node, None);
+        let b = storage
+            .get_trade_by_order_id("order-b")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(b.escrow_locked_at, Some(1_700_000_100));
+
+        storage
+            .mark_escrow_locked("order-a", 1_700_009_999, "node-b")
+            .await
+            .unwrap();
+        let a = storage
+            .get_trade_by_order_id("order-a")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(a.escrow_locked_at, Some(1_700_009_999));
+        assert_eq!(a.escrow_node.as_deref(), Some("node-b"));
 
         drop(storage);
         let _ = std::fs::remove_file(&path);

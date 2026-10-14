@@ -695,7 +695,12 @@ than what the row holds (`Storage::mark_escrow_locked`, oldest wins), then
 `touch_trade`. Not gated by the status rules below: a replayed message
 older than the stored status is exactly the one that dates the lock. A
 message dated beyond the clock-skew tolerance, a row that does not exist
-and `CashuEscrowLocked` record nothing.
+and `CashuEscrowLocked` record nothing. Oldest within one take: a maker
+order's republish (`write_maker_step_end`) clears both fields before it
+writes `pending` (`Storage::clear_escrow_lock`), because a buy order's lock
+comes in `waiting-buyer-invoice`, which the taker can still cancel out of —
+mostrod refunds the seller and republishes — and the next take's lock,
+being later, would otherwise be refused.
 
 Two rules gate every status sync in the table, and both exist for the
 same reason: the global kind-14 subscription carries no `since`, so every

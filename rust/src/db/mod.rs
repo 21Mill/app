@@ -492,6 +492,12 @@ pub trait Storage: Send + Sync {
     /// when no matching trade exists.
     async fn mark_escrow_locked(&self, order_id: &str, locked_at: i64, node: &str) -> Result<()>;
 
+    /// Forget the escrow lock of the trade identified by `order.id`
+    /// (`$.escrow_locked_at` and `$.escrow_node` back to null), so the next
+    /// take of a republished maker order records its own. No-op when no
+    /// matching trade exists.
+    async fn clear_escrow_lock(&self, order_id: &str) -> Result<()>;
+
     /// Record who asked to cancel an active trade cooperatively
     /// (`$.cooperative_cancel_state`) on the trade identified by `order.id`.
     /// The status is left alone: the protocol has no cancel-requested status,

@@ -115,6 +115,13 @@ pub(crate) fn mark_escrow_locked(trade: &mut Value, locked_at: i64, node: &str) 
     Ok(())
 }
 
+/// `$.escrow_locked_at` and `$.escrow_node` back to null.
+pub(crate) fn clear_escrow_lock(trade: &mut Value) -> Result<()> {
+    *field(trade, &["escrow_locked_at"])? = Value::Null;
+    *field(trade, &["escrow_node"])? = Value::Null;
+    Ok(())
+}
+
 /// `$.cooperative_cancel_state = state`, as serde spells the variant.
 pub(crate) fn set_cooperative_cancel_state(
     trade: &mut Value,
@@ -256,6 +263,20 @@ mod tests {
         mark_escrow_locked(&mut t, 1700000100, "node-c").unwrap();
         assert_eq!(t["escrow_locked_at"], 1700000100);
         assert_eq!(t["escrow_node"], "node-c");
+    }
+
+    #[test]
+    fn a_cleared_escrow_lock_takes_a_later_one() {
+        let mut t = trade();
+        mark_escrow_locked(&mut t, 1700000100, "node-a").unwrap();
+
+        clear_escrow_lock(&mut t).unwrap();
+        assert!(t["escrow_locked_at"].is_null());
+        assert!(t["escrow_node"].is_null());
+
+        mark_escrow_locked(&mut t, 1700009999, "node-b").unwrap();
+        assert_eq!(t["escrow_locked_at"], 1700009999);
+        assert_eq!(t["escrow_node"], "node-b");
     }
 
     #[test]
