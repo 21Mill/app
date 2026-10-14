@@ -6,12 +6,19 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ask`, `check_exported`, `check_importable`, `event_id`, `identity_keys`, `is_export_reply`, `is_import_reply`, `new`, `parse`, `pending_slot`, `pubkey`, `publish_request`, `refusal`, `same_identity`, `while_still_current`
+// These functions are ignored because they are not marked as `pub`: `ask`, `check_exported`, `check_importable`, `event_id`, `identity_keys`, `importable`, `is_export_reply`, `is_import_reply`, `new`, `parse`, `pending_slot`, `pubkey`, `publish_request`, `refusal`, `same_identity`, `while_still_current`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
 
 /// What the active node advertises, as of its last capability fetch.
 ReputationSupportInfo getReputationSupport() =>
     RustLib.instance.api.crateApiReputationTransferGetReputationSupport();
+
+/// Encode the displayed identity as npub for comparison with lnp2pBot's
+/// confirmation. Dart supplies the same hex key used in the bot link.
+String reputationIdentityNpub({required String identityHex}) => RustLib
+    .instance
+    .api
+    .crateApiReputationTransferReputationIdentityNpub(identityHex: identityHex);
 
 /// Verify an attestation pasted or received, without sending anything: the
 /// event's own rules (signature, kind, tags, clock). Whether the node trusts
@@ -33,6 +40,17 @@ Future<ReputationAttestationInfo> exportReputation({
 }) => RustLib.instance.api.crateApiReputationTransferExportReputation(
   destination: destination,
   rebind: rebind,
+);
+
+/// Run, without sending anything, every check [`import_reputation`] makes
+/// before it asks the node: the active node imports, the identity key is
+/// usable (not in privacy mode), and the attestation verifies, names the
+/// user's identity and comes from a key the node trusts. The screen calls it
+/// on Check, so a refusal shows before the user commits to an import.
+Future<ReputationAttestationInfo> checkReputationImport({
+  required String attestationJson,
+}) => RustLib.instance.api.crateApiReputationTransferCheckReputationImport(
+  attestationJson: attestationJson,
 );
 
 /// Import `attestation_json` into the active node. It must name the user's

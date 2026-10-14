@@ -55,6 +55,13 @@ setup) is still found through the pool's relays.
    (`nostr::live_subs`) are never issued on them. On the active node the event
    is also filed in the order book, through the live subscription's path
    (`ingest_order_event`), so Take Order shows it at once.
+   Each relay is asked at once, and asked again once it is back if it drops
+   before answering, all within the lookup's 10 s. A link that brings the app
+   back is looked up just as `resync()` bounces every relay the OS cut — on
+   resume, and on Android also when the link starts a new engine on a core
+   still running — and nostr-sdk ends a lookup the instant its relay drops,
+   with no answer and no error: asked once, the order read as not found until
+   the user retried.
 3. **An order on another node** changes nothing until the user agrees. The
    dialog names the node as the registry does, or by its key. A node outside
    the registry — neither trusted nor added — comes with a warning, since only

@@ -61,3 +61,9 @@ trade_id: String
 score: u8
 from_pubkey: String
 ```
+
+## Reputation portability UI
+
+The `/import_reputation` route and its local validation, Telegram handoff,
+confirmation, and failure behavior are specified in
+[Reputation Transfer](reputation_transfer.md#import-screen).
