@@ -197,6 +197,53 @@ void main() {
       });
     });
 
+    testWidgets('lists one or two methods in a sheet when they do not fit', (
+      tester,
+    ) async {
+      const long =
+          'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do '
+          'eiusmod tempor incididunt ut labore et dolore magna aliqua';
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order(paymentMethod: 'Cash,$long'));
+
+        await tester.tap(find.text('Cash, $long'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('Payment methods'), findsOneWidget);
+        expect(find.text('Cash'), findsOneWidget);
+        expect(find.text(long), findsOneWidget);
+      });
+    });
+
+    testWidgets('lists a single long custom method in a sheet', (tester) async {
+      const long =
+          'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do '
+          'eiusmod tempor incididunt ut labore et dolore magna aliqua';
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order(paymentMethod: long));
+
+        await tester.tap(find.text(long));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('Payment methods'), findsOneWidget);
+        expect(find.text(long), findsNWidgets(2));
+      });
+    });
+
+    testWidgets('keeps one short method that fits a plain row', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order(paymentMethod: 'Zelle'));
+
+        await tester.tap(find.text('Zelle'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('Payment methods'), findsNothing);
+      });
+    });
+
     testWidgets('copies the full id when the row is tapped', (tester) async {
       await withClock(Clock.fixed(kFakeNow), () async {
         String? copied;
