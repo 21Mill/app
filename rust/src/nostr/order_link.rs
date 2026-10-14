@@ -710,6 +710,52 @@ mod tests {
         assert!(found.is_some());
     }
 
+    /// A pool whose relays are connected, so that `relay_probe` can bounce
+    /// them as the resume does.
+    async fn pool_on(url: &str) -> Client {
+        let pool = Client::new();
+        pool.add_relay(url).await.unwrap();
+        pool.try_connect_relay(url, std::time::Duration::from_secs(3))
+            .await
+            .unwrap();
+        pool
+    }
+
+    /// A link opened from the background: the OS cut the pool's sockets while
+    /// the app was away, and the resume pass (`resync`) bounces each relay
+    /// while the lookup's request is on its way. nostr-sdk ends a lookup the
+    /// instant its relay drops, with no answer and no error, so the order read
+    /// as not found until the user retried.
+    #[tokio::test]
+    async fn a_pool_relay_that_drops_before_answering_is_asked_again() {
+        let node = Keys::generate();
+        let id = uuid::Uuid::new_v4().to_string();
+        let (_relay, url) = relay_with(&[order_event(&node, &id, "pending", 1_000)]).await;
+        let pool = pool_on(&url).await;
+        let node = node.public_key();
+
+        let (found, ()) = tokio::join!(
+            find_order_event(Some(&pool), &[], &node, &id),
+            crate::nostr::relay_probe::force_reconnect(&pool, &url),
+        );
+
+        assert!(found.is_some());
+    }
+
+    /// The retry is for a relay that dropped, not one that answered: a
+    /// connected pool that does not hold the order says so at once.
+    #[tokio::test]
+    async fn a_connected_pool_without_the_order_answers_at_once() {
+        let (_relay, url) = relay_with(&[]).await;
+        let pool = pool_on(&url).await;
+        let started = std::time::Instant::now();
+
+        let found = find_order_event(Some(&pool), &[], &node(), ORDER_ID).await;
+
+        assert!(found.is_none());
+        assert!(started.elapsed() < ANSWER_GRACE, "{:?}", started.elapsed());
+    }
+
     /// A link shared while the order was pending may be opened after it was
     /// taken: what is shown is the order now.
     #[tokio::test]
