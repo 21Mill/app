@@ -564,6 +564,7 @@
   "sortBestReputation": "Beste Reputation",
   "sortSheetTitle": "Sortieren nach",
   "orderCardPremiumCaption": "Prämie",
+  "orderCardPriceCaption": "Preis",
   "orderFixedAmount": "Fester Betrag · für {sats}",
   "reputationNew": "Neu",
   "reputationNoTrades": "keine Trades",

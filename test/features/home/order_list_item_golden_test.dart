@@ -8,8 +8,9 @@ import '../../support/fake_orders.dart';
 import '../../support/golden_harness.dart';
 
 /// A fixed-sats order and a market-price range order stacked, keyed for a
-/// tight golden. The first card is the best-premium one, so one golden pair
-/// covers both the highlight border and the plain hairline.
+/// tight golden. The fixed card shows its price per BTC where the market card
+/// shows its premium, and the market card is the best-premium one, so one
+/// golden pair covers both the highlight border and the plain hairline.
 Widget _gallery() {
   return Padding(
     key: const ValueKey('order-gallery'),
@@ -24,14 +25,12 @@ Widget _gallery() {
             fiatAmount: 100,
             fiatCode: 'USD',
             paymentMethod: 'Wire, Revolut',
-            premium: 2.5,
             rating: 4.8,
             tradeCount: 16,
             daysActive: 219,
-            amountSats: BigInt.from(4000),
+            amountSats: BigInt.from(163400),
             minutesAgo: 12,
           ),
-          reason: OrderReason.bestPremium,
         ),
         const SizedBox(height: 8),
         OrderListItem(
@@ -47,6 +46,7 @@ Widget _gallery() {
             rating: 3.2,
             minutesAgo: 120,
           ),
+          reason: OrderReason.bestPremium,
         ),
       ],
     ),

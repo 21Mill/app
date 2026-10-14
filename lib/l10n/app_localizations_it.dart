@@ -1998,6 +1998,9 @@ class AppLocalizationsIt extends AppLocalizations {
   String get orderCardPremiumCaption => 'premio';
 
   @override
+  String get orderCardPriceCaption => 'prezzo';
+
+  @override
   String orderFixedAmount(String sats) {
     return 'Importo fisso · per $sats';
   }

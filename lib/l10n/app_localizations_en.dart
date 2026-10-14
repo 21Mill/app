@@ -1983,6 +1983,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get orderCardPremiumCaption => 'premium';
 
   @override
+  String get orderCardPriceCaption => 'price';
+
+  @override
   String orderFixedAmount(String sats) {
     return 'Fixed amount · for $sats';
   }

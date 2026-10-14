@@ -57,7 +57,7 @@ The user taps the backup reminder or navigates to the Account screen. Until the 
 
 ### User Story 3 — Browse the Order Book (Priority: P1)
 
-A user browses available buy/sell offers in the public order book. The list is organized into two tabs (BUY BTC / SELL BTC) from the taker's perspective. Each order card shows fiat amount, currency, price type (market or fixed with premium), payment methods, and the maker's reputation stats. The user can filter by currency, payment method, rating range, and premium range.
+A user browses available buy/sell offers in the public order book. The list is organized into two tabs (BUY BTC / SELL BTC) from the taker's perspective. Each order card shows fiat amount, currency, price type (market price with its premium, or fixed sats with the price per BTC they represent, in the order's currency; fixed-sats orders carry no premium, so the premium filter, the best-premium sort and the best-premium highlight leave them out), payment methods, and the maker's reputation stats. The user can filter by currency, payment method, rating range, and premium range.
 
 **Why this priority**: This is the core discovery surface. Users must see and evaluate existing offers before taking or creating one.
 

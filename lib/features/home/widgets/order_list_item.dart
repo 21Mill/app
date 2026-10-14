@@ -7,6 +7,7 @@ import 'package:mostro/core/automation/automation_id.dart';
 import 'package:mostro/core/automation/automation_ids.dart';
 import 'package:mostro/features/home/providers/home_order_providers.dart';
 import 'package:mostro/features/home/providers/order_reason_provider.dart';
+import 'package:mostro/features/settings/models/node_selector_rules.dart';
 import 'package:mostro/l10n/app_localizations.dart';
 
 const _cardRadius = BorderRadius.all(Radius.circular(18));
@@ -29,12 +30,14 @@ const double _premiumHighThreshold = 3;
 /// doing for the allocations it stops making, and the honest size of the win
 /// is small — the claim that construction dominates does not hold.
 class OrderCardFormats {
-  OrderCardFormats._(String locale)
-    : premium = NumberFormat('+0.0;-0.0', locale),
-      _unsignedPremium = NumberFormat('0.0', locale),
-      rating = NumberFormat('0.##', locale),
-      decimal = NumberFormat.decimalPattern(locale),
-      fiat = NumberFormat('#,##0.##', locale);
+  OrderCardFormats._(this._locale)
+    : premium = NumberFormat('+0.0;-0.0', _locale),
+      _unsignedPremium = NumberFormat('0.0', _locale),
+      rating = NumberFormat('0.##', _locale),
+      decimal = NumberFormat.decimalPattern(_locale),
+      fiat = NumberFormat('#,##0.##', _locale);
+
+  final String _locale;
 
   /// Premium, always signed: `+2.5` / `-2.5`.
   final NumberFormat premium;
@@ -69,6 +72,18 @@ class OrderCardFormats {
     return '$text%';
   }
 
+  /// The price per BTC a fixed-sats order stands for, in its own currency,
+  /// abbreviated with the same k/M suffixes in every locale (`61.2k`,
+  /// `112M`; `61,2k` in Spanish) because it spans tens of thousands of EUR to
+  /// hundreds of millions of ARS. Exact: it comes from the order's two
+  /// figures, not from an exchange rate. Null for a market-price order.
+  String? fixedPricePerBtc(OrderItem order) {
+    final fiatAmount = order.fiatAmount;
+    if (!order.hasFixedSats || fiatAmount == null) return null;
+    final price = fiatAmount * 1e8 / order.amountSats!.toDouble();
+    return abbreviateSats(BigInt.from(price.round()), _locale);
+  }
+
   /// `832 – 5,000` for a range, `25` for a single amount.
   String amount(OrderItem order) =>
       order.isRange
@@ -84,7 +99,8 @@ class OrderCardFormats {
 /// reputation strip. The premium is plain coloured text — pills are reserved
 /// for the highlight chips, which appear once per list — and its colour is
 /// read from the taker's side: green in their favour or at market, amber up
-/// to 3 points against them, orange beyond.
+/// to 3 points against them, orange beyond. A fixed-sats order has no
+/// premium, so it shows its price per BTC there instead, in a neutral colour.
 ///
 /// Nothing in the card has a fixed height, so it grows with the text scale.
 class OrderListItem extends StatelessWidget {
@@ -367,6 +383,21 @@ class _AmountRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final captionStyle = TextStyle(fontSize: 11, color: palette.textTertiary);
+    // A fixed-sats order has no premium: its right-hand figure is the price
+    // per BTC it stands for.
+    final String? figure;
+    final String caption;
+    final Color figureColor;
+    if (order.hasFixedSats) {
+      final price = formats.fixedPricePerBtc(order);
+      figure = price == null ? null : '$price ${order.fiatCode}/BTC';
+      caption = l10n.orderCardPriceCaption;
+      figureColor = palette.textBody;
+    } else {
+      figure = formats.premiumPercent(order.premium);
+      caption = l10n.orderCardPremiumCaption;
+      figureColor = _premiumColor;
+    }
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -382,7 +413,7 @@ class _AmountRow extends StatelessWidget {
                 formats.amount(order),
                 style: TextStyle(
                   fontFamily: AppFonts.figures,
-                  fontSize: 25,
+                  fontSize: 26,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.5,
                   height: 1,
@@ -401,27 +432,29 @@ class _AmountRow extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 10),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              formats.premiumPercent(order.premium),
-              style: TextStyle(
-                fontFamily: AppFonts.figures,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: _premiumColor,
+        if (figure != null) ...[
+          const SizedBox(width: 10),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                figure,
+                style: TextStyle(
+                  fontFamily: AppFonts.figures,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: figureColor,
+                ),
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              l10n.orderCardPremiumCaption,
-              style: TextStyle(fontSize: 10, color: palette.textFaint),
-            ),
-          ],
-        ),
+              const SizedBox(height: 4),
+              Text(
+                caption,
+                style: TextStyle(fontSize: 10, color: palette.textFaint),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
