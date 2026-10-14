@@ -525,9 +525,14 @@ pub async fn cashu_get_balance() -> Result<u64> {
 /// is adopted only by a receive that succeeds: a token that turns out spent or
 /// worthless leaves the wallet unbound and nothing remembered.
 ///
-/// **Errors**: `CashuReceiveFailed` (wrong mint, already spent, malformed),
-/// `CashuTokenUnverified`, plus the markers from [`cashu_connect`].
+/// A token in any unit but sats is refused from the token alone, before a
+/// mint is asked or a wallet opened for it.
+///
+/// **Errors**: `CashuUnsupportedUnit`, `CashuReceiveFailed` (wrong mint,
+/// already spent, malformed), `CashuTokenUnverified`, plus the markers from
+/// [`cashu_connect`].
 pub async fn cashu_receive_token(encoded: String) -> Result<u64> {
+    crate::cashu::ensure_receivable(&encoded)?;
     let amount = match live_wallet().await {
         Some(wallet) => wallet.receive_token(&encoded).await?,
         None => receive_unbound(&encoded).await?,
@@ -1346,6 +1351,49 @@ mod tests {
                 .to_string()
                 .contains("InvalidMintUrl")
         );
+    }
+
+    #[tokio::test]
+    // The globals lock must span the calls it guards.
+    #[allow(clippy::await_holding_lock)]
+    async fn a_token_in_another_unit_is_refused_before_any_mint_is_asked() {
+        // Arrange — an unbound wallet and a dollar token. No identity is loaded
+        // and the mint does not resolve, so any answer that got as far as
+        // opening a wallet would be `NoIdentity` or "unreachable".
+        let _g = escrow_lock();
+        forget_wallet_mint().await;
+        let usd_token = cdk::nuts::Token::new(
+            "https://mint.invalid"
+                .parse::<cdk::mint_url::MintUrl>()
+                .unwrap(),
+            Vec::new(),
+            None,
+            cdk::nuts::CurrencyUnit::Usd,
+        )
+        .to_string();
+
+        // Act / Assert — with no mint set, the token's mint would be adopted;
+        // on a node that pins one, that mint would be opened. Either way the
+        // unit is the answer, and nothing is bound.
+        let no_mint = cashu_receive_token(usd_token.clone()).await.unwrap_err();
+        assert!(
+            no_mint.to_string().starts_with("CashuUnsupportedUnit"),
+            "with no mint set: got {no_mint}"
+        );
+
+        escrow_mode::set_from_tags(
+            escrow_mode::EscrowMode::Cashu,
+            escrow_mode::CashuNodeConfig {
+                mint_urls: vec!["https://mint.invalid".to_string()],
+                ..Default::default()
+            },
+        );
+        let node_mint = cashu_receive_token(usd_token).await.unwrap_err();
+        assert!(
+            node_mint.to_string().starts_with("CashuUnsupportedUnit"),
+            "with the node's mint: got {node_mint}"
+        );
+        assert!(!cashu_status().await.unwrap().connected);
     }
 
     #[test]

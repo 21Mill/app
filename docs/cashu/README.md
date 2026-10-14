@@ -457,6 +457,17 @@ hard prerequisite, not a nice-to-have.
   - `balance()`, `receive_token(encoded)` (swap-in; DLEQ verified **before** the
     swap — cdk's own receive path skips a proof that carries none),
     `create_token(amount)` (send/export), `sweep_spent_proofs()` (NUT-07);
+  - the wallet holds **`sat` only**, and says so: a received token in any other
+    unit — `msat`, `usd`, `eur`, `auth`, a custom one — is refused from the token
+    alone with `CashuUnsupportedUnit: <code>`, before the DLEQ check and before a
+    wallet is opened for its mint. `<code>` is chosen by Rust, never copied from
+    the token: `msat`, `usd`, `eur`, a three-letter custom code, or `other`. Dart
+    names the first four ("dollars (USD)", "GBP") and gives `other` a generic
+    message, and tells the user the token was left untouched. `msat` is no
+    exception: millisats become sats only through a melt and a mint, which this
+    wallet does not do. A v3 token naming no unit passes as sats, as in cdk; one
+    whose proofs belong to another unit's keyset still fails the DLEQ check
+    (`CashuTokenUnverified`);
   - the sweep is housekeeping, **not** recovery: cdk's state check ignores proofs
     an operation reserved, so an unredeemed token of ours is not reclaimed by it.
     Reclaiming one (`get_pending_sends` + `revoke_send`) is C10 — the single
@@ -516,7 +527,7 @@ hard prerequisite, not a nice-to-have.
   route in `lib/core/app_routes.dart`, entry point **always visible** in Settings next
   to the existing NWC wallet entry, on every node (§1.2). The screen shows the wallet's
   mint and lets the user set or change it (the mint-selection rules are in C2).
-- Riverpod providers over the C2 FRB surface; l10n for the 5 locales.
+- Riverpod providers over the C2 FRB surface; l10n for every locale.
 - Explicitly out of scope: Lightning↔ecash melt/mint, multi-mint, backup UX (C10).
 - **Done when:** a tester can fund the wallet from any Cashu wallet (e.g. a nutshell
   faucet token) and see/export balance, on a Cashu node and on a Lightning node alike —

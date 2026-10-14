@@ -220,12 +220,13 @@ impl CashuWallet {
     /// connect requirement to avoid — [`Wallet::verify_token_dleq`] rejects the
     /// missing proof instead of skipping it.
     ///
-    /// **Errors** (stable markers): `CashuTokenUnverified` when the token
-    /// carries no usable DLEQ proof, `CashuReceiveFailed` for everything else
-    /// (malformed, wrong mint, already spent).
+    /// **Errors** (stable markers): `CashuUnsupportedUnit` for a token in any
+    /// unit but sats, `CashuTokenUnverified` when the token carries no usable
+    /// DLEQ proof, `CashuReceiveFailed` for everything else (malformed, wrong
+    /// mint, already spent).
     pub async fn receive_token(&self, encoded: &str) -> Result<u64> {
         let normalized = normalize_token(encoded);
-        let token = Token::from_str(&normalized).map_err(|e| anyhow!("CashuReceiveFailed: {e}"))?;
+        let token = parse_received_token(&normalized)?;
 
         if let Err(e) = self.inner.verify_token_dleq(&token).await {
             // A token minted elsewhere is a plain user mistake, not a failed
@@ -467,14 +468,67 @@ pub async fn stored_balance(db_path: &str, mint_url: Option<&str>) -> Result<u64
 /// learns which one to bind to from the first token it receives.
 ///
 /// **Errors**: `CashuReceiveFailed` when the token does not parse or names no
-/// single mint.
+/// single mint, `CashuUnsupportedUnit` when it is not in sats.
 pub fn token_mint_url(encoded: &str) -> Result<String> {
-    let token = Token::from_str(&normalize_token(encoded))
-        .map_err(|e| anyhow!("CashuReceiveFailed: {e}"))?;
+    let token = parse_received_token(encoded)?;
     let mint = token
         .mint_url()
         .map_err(|e| anyhow!("CashuReceiveFailed: {e}"))?;
     Ok(mint.to_string())
+}
+
+/// Refuse, from the token alone, a token this wallet cannot take.
+///
+/// Called before a wallet is opened for the token, so a dollar token is not
+/// answered by whatever opening its mint happens to fail with.
+///
+/// **Errors**: those of [`parse_received_token`].
+pub fn ensure_receivable(encoded: &str) -> Result<()> {
+    parse_received_token(encoded).map(|_| ())
+}
+
+/// Decode a token handed to this wallet to receive.
+///
+/// The one place a received token is read, so every receive path refuses the
+/// same tokens for the same reasons.
+///
+/// The unit is checked here, ahead of everything cdk does: the wallet holds
+/// sats only (Mostro amounts are satoshis), and msat is no exception —
+/// millisats become sats through a melt and a mint, never a swap. Left to cdk,
+/// such a token fails its keyset lookup during the DLEQ check, which reads as
+/// a token with no proof of the mint's signature. A v3 token naming no unit
+/// passes, as it does in cdk: old sat tokens were written that way.
+///
+/// **Errors**: `CashuReceiveFailed` when the token does not parse,
+/// `CashuUnsupportedUnit: <code>` when it names a unit other than sats — see
+/// [`unsupported_unit_code`] for what `<code>` can be.
+pub(crate) fn parse_received_token(encoded: &str) -> Result<Token> {
+    let token = Token::from_str(&normalize_token(encoded))
+        .map_err(|e| anyhow!("CashuReceiveFailed: {e}"))?;
+    match token.unit() {
+        None | Some(CurrencyUnit::Sat) => Ok(token),
+        Some(other) => bail!("CashuUnsupportedUnit: {}", unsupported_unit_code(&other)),
+    }
+}
+
+/// The unit a refused token is in, as a code Dart can name to the user.
+///
+/// `msat`, `usd` and `eur` as cdk spells them; a custom unit only when it is
+/// three lowercase letters, the shape of a currency code (`gbp`); `other` for
+/// everything else, `auth` included. A custom unit is whatever text the
+/// token's maker chose, so anything longer never reaches the screen.
+fn unsupported_unit_code(unit: &CurrencyUnit) -> String {
+    match unit {
+        CurrencyUnit::Msat => "msat".to_string(),
+        CurrencyUnit::Usd => "usd".to_string(),
+        CurrencyUnit::Eur => "eur".to_string(),
+        CurrencyUnit::Custom(code)
+            if code.len() == 3 && code.chars().all(|c| c.is_ascii_lowercase()) =>
+        {
+            code.to_string()
+        }
+        _ => "other".to_string(),
+    }
 }
 
 /// Strip whitespace and the `cashu:` URI scheme.
@@ -686,6 +740,50 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("CashuReceiveFailed"));
+    }
+
+    #[test]
+    fn a_token_in_another_unit_is_refused_as_such() {
+        // Arrange — the wallet holds sats only, and msat is no exception:
+        // turning millisats into sats is a melt and a mint, not a swap.
+        let mint = cdk::mint_url::MintUrl::from_str("https://mint.example.com").unwrap();
+        let token_in =
+            |unit: CurrencyUnit| Token::new(mint.clone(), Vec::new(), None, unit).to_string();
+
+        // Act / Assert — refused for its unit, before any mint is asked.
+        // The code after the marker is what Dart names: the known units, a
+        // currency-code-shaped custom one, and "other" for any text a token's
+        // maker could have put there.
+        for (unit, code) in [
+            (CurrencyUnit::Msat, "msat"),
+            (CurrencyUnit::Usd, "usd"),
+            (CurrencyUnit::Eur, "eur"),
+            (CurrencyUnit::custom("GBP"), "gbp"),
+            (CurrencyUnit::Auth, "other"),
+            (CurrencyUnit::custom("sats"), "other"),
+            (CurrencyUnit::custom("usd now"), "other"),
+            (CurrencyUnit::custom("u$d"), "other"),
+        ] {
+            let err = parse_received_token(&token_in(unit.clone())).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                format!("CashuUnsupportedUnit: {code}"),
+                "a {unit} token"
+            );
+        }
+
+        // A sat token is read, and so is a v3 token that names no unit: cdk
+        // takes those as sats, and old sat tokens were written that way.
+        assert!(parse_received_token(&token_in(CurrencyUnit::Sat)).is_ok());
+        let unitless = Token::TokenV3(cdk::nuts::TokenV3 {
+            token: vec![cdk::nuts::nut00::token::TokenV3Token::new(
+                mint.clone(),
+                Vec::new(),
+            )],
+            memo: None,
+            unit: None,
+        });
+        assert!(parse_received_token(&unitless.to_string()).is_ok());
     }
 
     #[test]

@@ -4245,6 +4245,24 @@ class AppLocalizationsIt extends AppLocalizations {
       'Non è stato possibile verificare questo token: non contiene la prova della firma della mint, quindi non è stato accettato.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'Questo portafoglio contiene solo sats e questo token è in un\'altra unità (ad esempio millisats o dollari). Non è stato toccato: puoi riscuoterlo in un portafoglio che supporta la sua unità.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'Questo portafoglio contiene solo sats e questo token è in $unit. Non è stato toccato: puoi riscuoterlo in un portafoglio che supporta questa unità.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'millisats';
+
+  @override
+  String get cashuUnitUsd => 'dollari (USD)';
+
+  @override
+  String get cashuUnitEur => 'euro (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'L\'invio non è riuscito e il portafoglio non ha potuto confermare che i fondi siano tornati. Sincronizza con la mint prima di riprovare.';
 
@@ -4525,4 +4543,115 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get orderLinkUnknownNodeWarning =>
       'Questo nodo non è nella tua lista. Passaci solo se ti fidi di chi ti ha inviato il link: il nodo su cui operi regola le tue operazioni e decide le loro dispute.';
+
+  @override
+  String get reputationNodeDoesNotExport =>
+      'Questo Mostro non esporta la reputazione.';
+
+  @override
+  String get reputationNodeDoesNotImport =>
+      'Questo Mostro non importa la reputazione.';
+
+  @override
+  String get reputationIdentityRequired =>
+      'La reputazione si può spostare solo da un account che la conserva. Disattiva la modalità di privacy totale e riprova.';
+
+  @override
+  String get reputationNotEligible =>
+      'Il tuo account non può ancora esportare la reputazione: servono almeno 10 scambi completati e 5 valutazioni ricevute.';
+
+  @override
+  String get reputationBoundToOtherIdentity =>
+      'La tua reputazione lì è già legata a un\'altra identità. Autorizza lo spostamento dall\'identità a cui è legata.';
+
+  @override
+  String get reputationInvalidRebind =>
+      'L\'autorizzazione a spostare la tua reputazione non è valida o è scaduta. Creane una nuova.';
+
+  @override
+  String get reputationExpiredAttestation =>
+      'Questa reputazione è scaduta. Richiedila di nuovo alla sua origine.';
+
+  @override
+  String get reputationUntrustedIssuer =>
+      'Questo Mostro non accetta reputazione da quell\'origine.';
+
+  @override
+  String get reputationIdentityMismatch =>
+      'Questa reputazione è stata emessa per un\'identità diversa da quella che stai usando.';
+
+  @override
+  String get reputationAlreadyImported =>
+      'Questa reputazione è già stata importata su questo Mostro.';
+
+  @override
+  String get reputationInvalidAttestation =>
+      'Questa non è una reputazione valida. Richiedila di nuovo alla sua origine.';
+
+  @override
+  String get reputationImportTitle => 'Importa reputazione';
+
+  @override
+  String get reputationImportIntro =>
+      'Porta su questo Mostro la reputazione guadagnata su lnp2pBot o su un altro Mostro. L\'importazione collega i due account: l\'origine e questo Mostro sanno che appartengono alla stessa persona.';
+
+  @override
+  String get reputationOpenLnp2pbot => 'Ottienila da lnp2pBot';
+
+  @override
+  String get reputationPasteHint => 'Incolla la reputazione ricevuta';
+
+  @override
+  String get reputationCheck => 'Verifica';
+
+  @override
+  String get reputationImported => 'La tua reputazione è stata importata.';
+
+  @override
+  String get reputationImportConfirm => 'Importa su questo Mostro';
+
+  @override
+  String reputationFigures(int reviews, String rating, int days) {
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
+    final String reviewsString = reviewsNumberFormat.format(reviews);
+    final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String daysString = daysNumberFormat.format(days);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      reviews,
+      locale: localeName,
+      other: '$reviewsString valutazioni ricevute',
+      one: '1 valutazione ricevuta',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'scambia da $daysString giorni',
+      one: 'scambia da 1 giorno',
+    );
+    return '$_temp0, $rating di media, $_temp1';
+  }
+
+  @override
+  String get reputationFiguresNote =>
+      'La reputazione importata si somma a quella che hai qui; le tue controparti le vedono unite.';
+
+  @override
+  String get reputationOpenLnp2pbotFailed =>
+      'Impossibile aprire Telegram. Apri lnp2pBot in Telegram e incolla qui ciò che ti invia.';
+
+  @override
+  String get reputationIdentityHint =>
+      'Prima di confermare in lnp2pBot, verifica che mostri questa stessa chiave pubblica:';
+
+  @override
+  String get reputationUnavailable =>
+      'Impossibile verificare se la reputazione può essere importata. Riprova.';
+
+  @override
+  String get reputationIdentityChanged =>
+      'La tua identità è cambiata. Controlla la chiave pubblica mostrata qui prima di riprovare.';
 }

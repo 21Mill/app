@@ -4458,6 +4458,16 @@
   "@cashuErrorNoMnemonic": {"description": "Cashu wallet — permanent: an nsec-imported identity has no seed"},
   "cashuErrorTokenUnverified": "This token could not be verified: it carries no proof of the mint's signature, so it was not accepted.",
   "@cashuErrorTokenUnverified": {"description": "Cashu wallet — a received token has no usable DLEQ proof"},
+  "cashuErrorUnsupportedUnit": "This wallet only holds sats, and this token is in another unit (such as millisats or dollars). It was left untouched: you can redeem it in a wallet that supports its unit.",
+  "@cashuErrorUnsupportedUnit": {"description": "Cashu wallet — a received token is in a unit other than sats (msat, usd, …); refused before any mint was asked"},
+  "cashuErrorUnsupportedUnitNamed": "This wallet only holds sats, and this token is in {unit}. It was left untouched: you can redeem it in a wallet that supports that unit.",
+  "@cashuErrorUnsupportedUnitNamed": {"description": "Cashu wallet — a received token is in a unit the app can name; {unit} is one of cashuUnitMsat/Usd/Eur or an upper-case currency code", "placeholders": {"unit": {"type": "String", "example": "dollars (USD)"}}},
+  "cashuUnitMsat": "millisats",
+  "@cashuUnitMsat": {"description": "Cashu unit name inside cashuErrorUnsupportedUnitNamed — millisatoshis"},
+  "cashuUnitUsd": "dollars (USD)",
+  "@cashuUnitUsd": {"description": "Cashu unit name inside cashuErrorUnsupportedUnitNamed — US dollars"},
+  "cashuUnitEur": "euros (EUR)",
+  "@cashuUnitEur": {"description": "Cashu unit name inside cashuErrorUnsupportedUnitNamed — euros"},
   "cashuErrorSendUnresolved": "The send failed and the wallet could not confirm the funds are back. Sync with the mint before trying again.",
   "@cashuErrorSendUnresolved": {"description": "Cashu wallet — a failed send whose proofs could not be confirmed back"},
   "lockEscrowTitle": "Lock the escrow",
@@ -4710,5 +4720,111 @@
   "orderLinkUnknownNodeWarning": "This node isn't in your list. Change to it only if you trust whoever sent you the link: the node you trade on settles your trades and resolves their disputes.",
   "@orderLinkUnknownNodeWarning": {
     "description": "Warning in the change-node dialog when the linked order's node is neither trusted nor added by the user"
+  },
+  "reputationNodeDoesNotExport": "This Mostro does not export reputation.",
+  "reputationNodeDoesNotImport": "This Mostro does not import reputation.",
+  "reputationIdentityRequired": "Reputation can only be moved from an account that keeps its reputation. Turn off full privacy mode and try again.",
+  "reputationNotEligible": "Your account cannot export its reputation yet: it needs at least 10 completed trades and 5 ratings received.",
+  "reputationBoundToOtherIdentity": "Your reputation there is already bound to another identity. Authorize the move from the identity it is bound to.",
+  "reputationInvalidRebind": "The authorization to move your reputation is invalid or has expired. Create a new one.",
+  "reputationExpiredAttestation": "This reputation has expired. Request it again from its source.",
+  "reputationUntrustedIssuer": "This Mostro does not accept reputation from that source.",
+  "reputationIdentityMismatch": "This reputation was issued for another identity than the one you are using.",
+  "reputationAlreadyImported": "This reputation was already imported on this Mostro.",
+  "reputationInvalidAttestation": "This is not a valid reputation. Request it again from its source.",
+  "reputationImportTitle": "Import reputation",
+  "reputationImportIntro": "Bring the reputation you earned on lnp2pBot or on another Mostro to this one. Importing links the two accounts: the source and this Mostro learn they belong to the same person.",
+  "reputationOpenLnp2pbot": "Get it from lnp2pBot",
+  "reputationPasteHint": "Paste the reputation you received",
+  "reputationCheck": "Check",
+  "reputationImported": "Your reputation was imported.",
+  "reputationImportConfirm": "Import into this Mostro",
+  "reputationFigures": "{reviews, plural, =1{1 rating received} other{{reviews} ratings received}}, {rating} on average, {days, plural, =1{trading for 1 day} other{trading for {days} days}}",
+  "@reputationFigures": {
+    "description": "Import reputation screen: the figures of a checked attestation. {rating} is already formatted for the locale",
+    "placeholders": {
+      "reviews": {
+        "type": "int",
+      "format": "decimalPattern"
+      },
+      "rating": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int",
+      "format": "decimalPattern"
+      }
+    }
+  },
+  "reputationFiguresNote": "Imported reputation is added to the one you have here; your counterparties see them merged.",
+  "@reputationNodeDoesNotExport": {
+    "description": "Reputation portability (#674): the active node does not advertise reputation_issuer, so it cannot export"
+  },
+  "@reputationNodeDoesNotImport": {
+    "description": "Import reputation screen, shown up front: the active node does not advertise reputation_import_issuers"
+  },
+  "@reputationIdentityRequired": {
+    "description": "Reputation export/import refused in full privacy mode: both act on the identity key"
+  },
+  "@reputationNotEligible": {
+    "description": "The node refused an export: the account is below its minimum of trades and ratings"
+  },
+  "@reputationBoundToOtherIdentity": {
+    "description": "The node refused an export: the source account is already bound to another identity"
+  },
+  "@reputationInvalidRebind": {
+    "description": "The authorization to move a reputation to a new identity is invalid or expired"
+  },
+  "@reputationExpiredAttestation": {
+    "description": "A reputation attestation past its expiration"
+  },
+  "@reputationUntrustedIssuer": {
+    "description": "The active node does not trust the issuer that signed the attestation"
+  },
+  "@reputationIdentityMismatch": {
+    "description": "The attestation names an identity other than the user's"
+  },
+  "@reputationAlreadyImported": {
+    "description": "The node refused an import: this attestation was imported before"
+  },
+  "@reputationInvalidAttestation": {
+    "description": "Pasted text that is not a valid reputation attestation"
+  },
+  "@reputationImportTitle": {
+    "description": "App bar title of the Import reputation screen"
+  },
+  "@reputationImportIntro": {
+    "description": "Import reputation screen: what importing does, including that it links the two accounts"
+  },
+  "reputationOpenLnp2pbotFailed": "Telegram could not be opened. Open lnp2pBot in Telegram yourself and paste here what it sends you.",
+  "@reputationOpenLnp2pbotFailed": {
+    "description": "Shown when the Telegram link could not be opened: the user can still do it by hand"
+  },
+  "@reputationPasteHint": {
+    "description": "Hint of the field where the user pastes the attestation"
+  },
+  "@reputationCheck": {
+    "description": "Button that verifies the pasted attestation before importing it"
+  },
+  "@reputationImported": {
+    "description": "Shown once the node accepted the import"
+  },
+  "@reputationImportConfirm": {
+    "description": "Button that sends the checked attestation to the active node; the import is irreversible"
+  },
+  "@reputationFiguresNote": {
+    "description": "Under the figures: imported reputation is merged with the one on this node"
+  },
+  "reputationIdentityHint": "Before confirming in lnp2pBot, check that it shows this same public key:",
+  "reputationUnavailable": "Unable to check whether reputation can be imported. Try again.",
+  "reputationIdentityChanged": "Your identity changed. Check the public key shown here before trying again.",
+  "@reputationIdentityHint": {
+    "description": "Explain why the complete npub is shown beside the Telegram action"
+  },
+  "@reputationUnavailable": {
+    "description": "Failure to read the privacy/identity state; actions stay disabled until Retry succeeds"
+  },
+  "@reputationIdentityChanged": {
+    "description": "The bot action found a different identity than the one shown; review it before retrying"
   }
 }
