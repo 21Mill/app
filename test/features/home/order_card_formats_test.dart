@@ -56,6 +56,17 @@ void main() {
         expect(OrderCardFormats.of('es').fixedPricePerBtc(order), '112M');
       });
 
+      test('reads billions as B, the way a fiat figure is read', () {
+        final order = fakeOrder(
+          fiatAmount: 1000000,
+          fiatCode: 'LBP',
+          amountSats: BigInt.from(10000),
+        );
+
+        expect(OrderCardFormats.of('en').fixedPricePerBtc(order), '10B');
+        expect(OrderCardFormats.of('es').fixedPricePerBtc(order), '10B');
+      });
+
       test('is null for a market-price order', () {
         expect(OrderCardFormats.of('en').fixedPricePerBtc(fakeOrder()), isNull);
       });
