@@ -326,9 +326,24 @@ class _OrderPaymentMethodsRowState extends State<OrderPaymentMethodsRow> {
     return OrderDataRow(
       icon: widget.icon,
       label: widget.label,
-      value: KeyedSubtree(
-        key: _valueKey,
-        child: OrderDataValue(text, figures: widget.figures),
+      // A later width change (rotation, split screen, a resized window, a
+      // new text scale) rebuilds nothing here, so re-read after any layout
+      // that resizes the value. The notifier is a proxy box, so intrinsic
+      // sizing still passes through, and it skips the first layout, which
+      // the callback above already covers.
+      value: NotificationListener<SizeChangedLayoutNotification>(
+        onNotification: (_) {
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _noteTruncation(),
+          );
+          return true;
+        },
+        child: SizeChangedLayoutNotifier(
+          child: KeyedSubtree(
+            key: _valueKey,
+            child: OrderDataValue(text, figures: widget.figures),
+          ),
+        ),
       ),
       onTap:
           summary.hidden > 0 || (_truncated && summary.all.isNotEmpty)
