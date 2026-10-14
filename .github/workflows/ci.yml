@@ -233,11 +233,16 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      # A miss makes `pod install` git-clone every pod from GitHub, and one
+      # clone that cannot connect fails the job. main misses whenever a pull
+      # request changed the key (it cannot read a pull request's cache), so
+      # restore this ref's newest pods cache: only changed pods download.
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/CocoaPods
           key: pods-${{ runner.os }}-${{ hashFiles('pubspec.lock', 'ios/Podfile') }}
+          restore-keys: pods-${{ runner.os }}-
 
       # Debug compiles everything that can break here (Swift, pods, the Rust
       # staticlib, the pbxproj) and skips the Dart AOT step of a release build.

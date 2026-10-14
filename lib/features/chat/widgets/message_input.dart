@@ -6,6 +6,7 @@ import 'package:mostro/l10n/app_localizations.dart';
 /// Bottom message composition bar.
 ///
 /// Pill-shaped row containing an attach button, a text field, and a send button.
+/// The field takes the cursor as it appears, so a chat opens ready to type.
 class MessageInput extends StatefulWidget {
   const MessageInput({
     super.key,
@@ -47,6 +48,7 @@ class _MessageInputState extends State<MessageInput> {
 
   @override
   Widget build(BuildContext context) {
+    // design-check: ignore DS-COL-11 — the v1 composer colours (§14), unchanged; the chat has no palette yet
     final colors = Theme.of(context).extension<AppColors>();
     if (colors == null) throw StateError('AppColors theme extension must be registered');
     final l10n = AppLocalizations.of(context);
@@ -54,6 +56,7 @@ class _MessageInputState extends State<MessageInput> {
     return Container(
       decoration: BoxDecoration(
         color: colors.backgroundCard,
+        // design-check: ignore DS-SHP-1 — the v1 composer pill (§14), unchanged; the chat has no palette yet
         borderRadius: BorderRadius.circular(28),
       ),
       padding: const EdgeInsets.symmetric(
@@ -91,6 +94,7 @@ class _MessageInputState extends State<MessageInput> {
           Expanded(
             child: TextField(
               controller: _controller,
+              autofocus: true,
               maxLines: 1,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _handleSend(),
@@ -103,14 +107,17 @@ class _MessageInputState extends State<MessageInput> {
                 filled: true,
                 fillColor: colors.backgroundInput,
                 border: OutlineInputBorder(
+                  // design-check: ignore DS-SHP-4 — the v1 composer field (§14), unchanged; the chat has no palette yet
                   borderRadius: BorderRadius.circular(AppRadius.input),
                   borderSide: BorderSide.none,
                 ),
                 enabledBorder: OutlineInputBorder(
+                  // design-check: ignore DS-SHP-4 — the v1 composer field (§14), unchanged; the chat has no palette yet
                   borderRadius: BorderRadius.circular(AppRadius.input),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
+                  // design-check: ignore DS-SHP-4 — the v1 composer field (§14), unchanged; the chat has no palette yet
                   borderRadius: BorderRadius.circular(AppRadius.input),
                   borderSide: BorderSide.none,
                 ),
