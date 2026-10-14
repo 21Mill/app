@@ -16,7 +16,7 @@ import 'package:mostro/src/rust/api/reputation_transfer.dart';
 final _en = AppLocalizationsEn();
 
 const _json = '{"id":"a","kind":38388}';
-const _npub = 'npub1currentidentity';
+const _npub = 'npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
 const _otherJson = '{"id":"b","kind":38388}';
 const _identity =
     'ab1db593a4d1196eb07335fdc702a314712ed29c631ceaebd84708a17d3bc2f7';
@@ -71,6 +71,7 @@ class _FakeApi extends ReputationApi {
   Completer<ReputationAttestationInfo>? importReply;
   Completer<ReputationAttestationInfo>? checkReply;
 
+  @override
   String npub(String identity) => _npub;
 
   @override
@@ -454,6 +455,43 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(_en.reputationImportConfirm), findsNothing);
     expect(api.imported, isEmpty);
+  });
+
+  testWidgets('review counts use the locale number separators', (tester) async {
+    await _pump(
+      tester,
+      api: _FakeApi(reviews: 12345),
+      locale: const Locale('es'),
+    );
+    await _paste(tester, _json);
+    await _tap(tester, 'Comprobar');
+    expect(find.textContaining('12.345'), findsOneWidget);
+    expect(find.textContaining('12345'), findsNothing);
+  });
+
+  testWidgets('a missing identity blocks actions with an actionable message', (
+    tester,
+  ) async {
+    final api = _FakeApi()..readIdentity = () async => null;
+    await _pump(tester, api: api);
+    expect(find.text(_en.noIdentityFoundMessage), findsOneWidget);
+    expect(_button(tester, _en.reputationOpenLnp2pbot).enabled, isFalse);
+    expect(_button(tester, _en.reputationCheck).enabled, isFalse);
+  });
+
+  testWidgets('privacy enabled during the identity read cancels the handoff', (
+    tester,
+  ) async {
+    final api = await _pump(tester);
+    final identity = Completer<String?>();
+    api.readIdentity = () => identity.future;
+    await tester.tap(find.text(_en.reputationOpenLnp2pbot));
+    await tester.pump();
+    api.privacy = true;
+    identity.complete(_identity);
+    await tester.pumpAndSettle();
+    expect(api.opened, isEmpty);
+    expect(find.text(_en.reputationIdentityRequired), findsOneWidget);
   });
 
   // DS-A11Y-4: German, 320 dp wide, text at 2×, both themes.
