@@ -12,6 +12,14 @@ Each goes only to a node whose Kind 38385 info event advertises it
 (`mostro::reputation_support`): a node that predates the actions cannot parse
 them and would never answer.
 
+After signing and establishing the reply subscription, both requests check
+the initiating identity generation and privacy mode again before publishing.
+An identity change returns `NoIdentity`; enabling privacy mode returns
+`PrivacyModeEnabled`. Neither case publishes the prepared request. Publication
+holds the identity guard until the send finishes; the daemon reply wait does
+not hold it. Pending-attestation reads and writes remain identity-guarded and
+serialize through the same slot lock, so cleanup cannot delete a newer export.
+
 ## Functions
 
 ### get_reputation_support() → ReputationSupportInfo  *(sync)*

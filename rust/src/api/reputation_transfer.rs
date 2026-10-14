@@ -355,14 +355,21 @@ fn same_identity(asked: Option<u64>, now: Option<u64>) -> Result<()> {
     }
 }
 
-/// Deferred publication of a reputation request, separate from subscription
-/// setup and the reply wait so its state checks can be tested without relays.
+/// Validate again after signing and subscription setup, then keep the
+/// initiating identity active until publication finishes. The daemon reply
+/// wait happens outside this guard so it never delays an identity wipe.
 pub(crate) async fn publish_request(
-    _generation: Option<u64>,
-    _privacy_mode: impl FnOnce() -> bool,
+    generation: Option<u64>,
+    privacy_mode: impl FnOnce() -> bool,
     publish: impl std::future::Future<Output = Result<()>>,
 ) -> Result<()> {
-    publish.await
+    while_still_current(generation, async {
+        if privacy_mode() {
+            bail!("PrivacyModeEnabled: reputation portability needs the identity key");
+        }
+        publish.await
+    })
+    .await
 }
 
 /// Send one reputation request from a fresh trade key with the identity

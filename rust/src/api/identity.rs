@@ -1449,18 +1449,20 @@ mod tests {
         use crate::api::reputation_transfer::publish_request;
         let privacy = std::cell::Cell::new(false);
         let sent = std::cell::Cell::new(false);
-        let waiting_to_publish = publish_request(
-            Some(generation),
-            || privacy.get(),
-            async {
-                sent.set(true);
-                Ok(())
-            },
-        );
+        let waiting_to_publish = publish_request(Some(generation), || privacy.get(), async {
+            sent.set(true);
+            Ok(())
+        });
         privacy.set(true);
         let result = waiting_to_publish.await;
-        assert!(result.is_err(), "privacy enabled before publication must stop it");
-        assert!(result.unwrap_err().to_string().starts_with("PrivacyModeEnabled"));
+        assert!(
+            result.is_err(),
+            "privacy enabled before publication must stop it"
+        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .starts_with("PrivacyModeEnabled"));
         assert!(!sent.get());
 
         // The guard must survive an await inside publication, preventing a
@@ -1476,7 +1478,10 @@ mod tests {
             entered_rx.await.unwrap();
             let locked = identity_lock().try_write().is_err();
             resume_tx.send(()).unwrap();
-            assert!(locked, "publication must keep the initiating identity active");
+            assert!(
+                locked,
+                "publication must keep the initiating identity active"
+            );
         };
         let (published, ()) = tokio::join!(publishing, concurrent_replacement);
         published.unwrap();
@@ -1486,7 +1491,15 @@ mod tests {
         })
         .await;
         assert_eq!(relay_failure.unwrap_err().to_string(), "NoRelayAccepted");
-        assert!(identity_lock().try_write().is_ok(), "a failed send releases the guard");
+        // Other tests briefly read the identity to reject stale generations.
+        // Wait for those readers instead of assuming the lock is idle now.
+        let after_failure = crate::rt::time::timeout(
+            crate::rt::time::Duration::from_secs(5),
+            identity_lock().write(),
+        )
+        .await
+        .expect("a failed send releases the guard");
+        drop(after_failure);
 
         // This future was prepared while the identity was still present,
         // but will only be polled after deletion below.
