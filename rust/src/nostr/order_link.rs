@@ -26,7 +26,7 @@ use nostr_sdk::prelude::*;
 use crate::nostr::first_answer::{newest_answer, replaceable_rank};
 use crate::nostr::order_events::{trade_order_filter, KIND_ORDER};
 use crate::nostr::relay_list::normalize_relay_url;
-use crate::rt::time::Duration;
+use crate::rt::time::{sleep, Duration, Instant};
 use std::net::{IpAddr, Ipv4Addr};
 
 /// The scheme of an order link.
@@ -46,6 +46,9 @@ pub const LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
 /// sooner once every relay has answered; only a slow or silent one costs this
 /// wait, never more than [`LOOKUP_TIMEOUT`] in all.
 const ANSWER_GRACE: Duration = Duration::from_secs(3);
+
+/// How often the lookup looks again at a relay it waits for.
+const RECONNECT_POLL: Duration = Duration::from_millis(100);
 
 /// What a `mostro:` link says, checked for shape. Nothing here is known to
 /// exist until [`find_order_event`] finds it.
@@ -272,11 +275,12 @@ fn parse_node(value: &str) -> Option<PublicKey> {
 /// The newest revision of `order_id`'s Kind 38383 event that `node` signed.
 ///
 /// Asks `pool` — the app's client, when it has one — and `extra_relays`,
-/// through a short-lived client of their own, at once. A relay is not
-/// trusted to honour the filter: author, kind and `d` tag are checked again
-/// here (nostr-sdk has already checked the signature). Returns on the first
-/// copy plus [`ANSWER_GRACE`], or `None` once every relay finished, or
-/// [`LOOKUP_TIMEOUT`] passed, without one.
+/// through a short-lived client of their own, at once. Each relay is asked
+/// once it is connected, and again if it drops before answering
+/// ([`answers_from`]). A relay is not trusted to honour the filter: author,
+/// kind and `d` tag are checked again here (nostr-sdk has already checked the
+/// signature). Returns on the first copy plus [`ANSWER_GRACE`], or `None` once
+/// every relay answered, or [`LOOKUP_TIMEOUT`] passed, without one.
 ///
 /// `extra_relays` must not hold the pool's own relays: those would be asked
 /// twice, over a second connection ([`OrderLink::relays_outside`]).
@@ -287,18 +291,19 @@ pub async fn find_order_event(
     order_id: &str,
 ) -> Option<Event> {
     let filter = trade_order_filter(node, order_id);
+    let deadline = Instant::now() + LOOKUP_TIMEOUT;
 
     // Both sent at once: neither waits on the other's relays.
     let ask_pool = async {
         match pool {
-            Some(client) => events_from(client, filter.clone()).await,
+            Some(client) => answers_from(client, &filter, deadline).await,
             None => stream::empty().boxed(),
         }
     };
     let ask_link = async {
         let client = lookup_client(extra_relays).await;
         let events = match &client {
-            Some(client) => events_from(client, filter.clone()).await,
+            Some(client) => answers_from(client, &filter, deadline).await,
             None => stream::empty().boxed(),
         };
         (client, events)
@@ -333,25 +338,92 @@ fn is_revision_of(event: &Event, node: &PublicKey, order_id: &str) -> bool {
         && event.tags.identifier().as_deref() == Some(order_id)
 }
 
-/// The events `client` streams for `filter`, errors logged and dropped. An
-/// empty stream when the request cannot even be made (no relay to ask).
-async fn events_from(client: &Client, filter: Filter) -> stream::BoxStream<'static, Event> {
-    match client.stream_events(filter).timeout(LOOKUP_TIMEOUT).await {
-        Ok(events) => events
-            .filter_map(|(relay, item)| async move {
-                item.inspect_err(|e| log::debug!("[order-link] {relay}: {e}"))
-                    .ok()
-            })
-            .boxed(),
-        Err(e) => {
-            log::debug!("[order-link] lookup not sent: {e}");
-            stream::empty().boxed()
-        }
-    }
+/// What `client`'s relays answer for `filter` by `deadline`, each asked on
+/// its own ([`answers_from_relay`]). Empty when the client has no relay.
+async fn answers_from(
+    client: &Client,
+    filter: &Filter,
+    deadline: Instant,
+) -> stream::BoxStream<'static, Event> {
+    let relays = client.relays().await;
+    stream::select_all(
+        relays
+            .into_values()
+            .map(|relay| answers_from_relay(relay, filter.clone(), deadline)),
+    )
+    .boxed()
 }
 
-/// A client on `relays` alone, connecting in the background — a request sent
-/// before a relay is up waits for it. `None` when there is nothing to ask.
+/// What `relay` answers for `filter` by `deadline`, errors logged and dropped.
+///
+/// Asked once it is connected, and asked again when it drops before
+/// answering: nostr-sdk ends a lookup the instant its relay drops, with no
+/// answer and no error. A link opened from the background is looked up just
+/// as the resume pass (`api::nostr::resync`) bounces every relay the OS cut,
+/// and an iOS socket the OS closed only fails once written to. A lookup the
+/// relay ends while still connected has its answer — EOSE, `CLOSED`, or the
+/// deadline — and is not asked again.
+fn answers_from_relay(
+    relay: Relay,
+    filter: Filter,
+    deadline: Instant,
+) -> stream::BoxStream<'static, Event> {
+    let asking: Option<stream::BoxStream<'static, Event>> = None;
+    stream::unfold((relay, asking), move |(relay, mut asking)| {
+        let filter = filter.clone();
+        async move {
+            loop {
+                if let Some(mut answers) = asking.take() {
+                    match answers.next().await {
+                        Some(event) => return Some((event, (relay, Some(answers)))),
+                        None if relay.status() == RelayStatus::Connected => return None,
+                        None => log::debug!("[order-link] {} dropped, asking again", relay.url()),
+                    }
+                }
+                if !connected_by(&relay, deadline).await {
+                    return None;
+                }
+                let left = deadline.saturating_duration_since(Instant::now());
+                match relay.stream_events(filter.clone()).timeout(left).await {
+                    Ok(events) => {
+                        let url = relay.url().clone();
+                        asking = Some(
+                            events
+                                .filter_map(move |item| {
+                                    let url = url.clone();
+                                    async move {
+                                        item.inspect_err(|e| log::debug!("[order-link] {url}: {e}"))
+                                            .ok()
+                                    }
+                                })
+                                .boxed(),
+                        );
+                    }
+                    Err(e) => {
+                        log::debug!("[order-link] {} not asked: {e}", relay.url());
+                        return None;
+                    }
+                }
+            }
+        }
+    })
+    .boxed()
+}
+
+/// Whether `relay` is connected by `deadline`, waiting for it if need be.
+async fn connected_by(relay: &Relay, deadline: Instant) -> bool {
+    while relay.status() != RelayStatus::Connected {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        sleep(RECONNECT_POLL).await;
+    }
+    true
+}
+
+/// A client on `relays` alone, connecting in the background: each relay is
+/// asked once it is up ([`answers_from`]). `None` when there is nothing to
+/// ask.
 async fn lookup_client(relays: &[String]) -> Option<Client> {
     let client = Client::new();
     let mut added = 0;
