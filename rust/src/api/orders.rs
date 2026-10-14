@@ -18359,6 +18359,49 @@ mod tests {
         );
     }
 
+    /// The own-key node reset changes the node and nothing else. Not every
+    /// trade writer takes the order's lock — `submit_rating` marks a row
+    /// rated without it — so a rating committed while the reset is between
+    /// its read and its write must survive the write (PR #817 review).
+    #[tokio::test]
+    async fn the_own_key_node_reset_keeps_a_rating_committed_during_it() {
+        use crate::api::types::OrderStatus;
+        let path =
+            std::env::temp_dir().join(format!("mostro_own_key_rating_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+
+        let own = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let mut trade =
+            crate::mostro::test_fixtures::trade(&order_id, 96, OrderStatus::Success, &own);
+        trade.completed_at = Some(100);
+        db.save_trade(&trade).await.unwrap();
+        let own_keys = std::collections::HashSet::from([own]);
+
+        // Hold the reset right before its write.
+        let gate = std::sync::Arc::new(tokio::sync::Notify::new());
+        let reached = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        OWN_KEY_NODE_PAUSE
+            .with(|pause| *pause.borrow_mut() = Some((gate.clone(), reached.clone())));
+        let reset = tokio::spawn(async move { forget_own_key_nodes(&own_keys).await });
+        let mut waited = 0;
+        while !reached.load(std::sync::atomic::Ordering::SeqCst) {
+            assert!(waited < 400, "the reset never reached its write");
+            waited += 1;
+            crate::rt::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+
+        // A rating commits in between, the way submit_rating writes it.
+        db.mark_trade_rated(&order_id, 1234).await.unwrap();
+        gate.notify_one();
+        reset.await.unwrap();
+
+        let row = db.get_trade_by_order_id(&order_id).await.unwrap().unwrap();
+        assert_eq!(row.order.node_pubkey, "", "the own trade key is no node");
+        assert_eq!(row.rated_at, Some(1234), "the committed rating is kept");
+    }
+
     /// PR #252 review (ermeme P1): a create rejected for an unsupported node
     /// protocol must fail BEFORE deriving or persisting anything. The exact
     /// error string pins the ordering: had the preflight run after key
