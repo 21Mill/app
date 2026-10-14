@@ -3786,7 +3786,7 @@ mod tests {
                 fiat_code: "VES".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                node_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -3844,7 +3844,7 @@ mod tests {
         // node's pubkey — which never equals the currently-active one. The
         // row-local `node_pubkey` comparison is what catches it.
         let mut other_node_peer = base.clone();
-        other_node_peer.counterparty_pubkey = "maker".into(); // == node_pubkey
+        other_node_peer.counterparty_pubkey = "node".into(); // == node_pubkey
         assert!(!chat_still_relevant(&other_node_peer));
 
         let mut canceled = base;
@@ -4035,7 +4035,7 @@ mod tests {
                 fiat_code: "VES".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                node_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,

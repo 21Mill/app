@@ -1347,7 +1347,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                node_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1429,7 +1429,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                node_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1555,7 +1555,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                node_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1807,7 +1807,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                node_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1895,7 +1895,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                node_pubkey: "daemon".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1938,7 +1938,7 @@ mod tests {
             .await
             .unwrap();
         storage
-            .save_trade(&trade("row-uuid-b", "order-b", "daemon"))
+            .save_trade(&trade("row-uuid-b", "order-b", "node"))
             .await
             .unwrap();
 
@@ -2506,7 +2506,7 @@ mod tests {
             fiat_code: "CUP".into(),
             payment_method: "bank".into(),
             premium: 0.0,
-            node_pubkey: "maker".into(),
+            node_pubkey: "node".into(),
             created_at: 1,
             expires_at: None,
             is_mine: true,

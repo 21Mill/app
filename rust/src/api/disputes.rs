@@ -1959,7 +1959,7 @@ mod tests {
                 fiat_code: "VES".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                node_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: true,
