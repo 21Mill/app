@@ -8967,15 +8967,63 @@ pub(crate) async fn resubscribe_global_dm_filter() {
 ///
 /// Union, not replace: a session key inserted concurrently (create/take in
 /// flight while subscriptions restart) must never be evicted.
+///
+/// With every own trade key at hand, it also forgets a trade row's node that
+/// is one of them ([`forget_own_key_nodes`]) before the filter's `authors`
+/// are read from the rows.
 async fn seed_global_dm_coverage() -> Vec<nostr_sdk::prelude::PublicKey> {
     let derived = build_trade_key_map().await;
-    let mut map = global_dm_keys().write().await;
-    for (hex, entry) in derived {
-        map.entry(hex).or_insert(entry);
-    }
-    map.keys()
+    let own_keys: std::collections::HashSet<String> = {
+        let mut map = global_dm_keys().write().await;
+        for (hex, entry) in derived {
+            map.entry(hex).or_insert(entry);
+        }
+        map.keys().cloned().collect()
+    };
+    forget_own_key_nodes(&own_keys).await;
+    own_keys
+        .iter()
         .filter_map(|hex| nostr_sdk::prelude::PublicKey::from_hex(hex).ok())
         .collect()
+}
+
+/// Reset to unknown the node of every trade row that holds one of the
+/// user's own trade keys there (written by four paths before #809). Saves
+/// only the rows it changes, through [`persist_trade_row`], so a second pass
+/// writes nothing.
+async fn forget_own_key_nodes(own_keys: &std::collections::HashSet<String>) {
+    let Some(db) = crate::db::app_db::db() else {
+        return;
+    };
+    let trades = match db.list_trades().await {
+        Ok(trades) => trades,
+        Err(e) => {
+            crate::api::logging::blog_warn("orders", format!("own-key node check skipped: {e}"));
+            return;
+        }
+    };
+    for mut trade in trades {
+        let is_own_key = |node: &str| own_keys.contains(&node.to_lowercase());
+        if !crate::mostro::trade_node::forget_own_key_node(&mut trade, is_own_key) {
+            continue;
+        }
+        match persist_trade_row(db, &trade).await {
+            Ok(()) => crate::api::logging::blog_info(
+                "orders",
+                format!(
+                    "order={} held our own trade key as its node — now unknown",
+                    trade.order.id
+                ),
+            ),
+            Err(e) => crate::api::logging::blog_warn(
+                "orders",
+                format!(
+                    "could not forget the own-key node of order={}: {e}",
+                    trade.order.id
+                ),
+            ),
+        }
+    }
 }
 
 async fn build_trade_key_map() -> HashMap<String, (nostr_sdk::prelude::Keys, u32)> {
