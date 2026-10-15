@@ -12,6 +12,20 @@ const _kTradeKeyIndex = 'mostro_trade_key_index';
 const _kPrivacyMode = 'mostro_privacy_mode';
 const _kCreatedAt = 'mostro_identity_created_at';
 
+/// A replacement refused after the deletion of the identity it was to
+/// replace went through, when that identity could not be loaded again
+/// either: the session has no identity until a restart reloads it from
+/// secure storage (review of #573). [cause] is the refusal; [toString] is
+/// its own, so a caller matching the core's markers still finds them.
+class PreviousIdentityNotReloaded implements Exception {
+  PreviousIdentityNotReloaded(this.cause);
+
+  final Object cause;
+
+  @override
+  String toString() => cause.toString();
+}
+
 /// What secure storage holds about the identity, read in one go.
 class StoredIdentity {
   const StoredIdentity({
@@ -171,10 +185,14 @@ class IdentityService {
   /// Import an identity from a BIP-39 mnemonic phrase and persist it.
   ///
   /// Replaces any currently loaded identity. Throws if [words] is not a valid
-  /// 12- or 24-word BIP-39 phrase.
+  /// 12- or 24-word BIP-39 phrase — checked before the current identity is
+  /// deleted, since the deletion wipes its trades, chats and payout claims
+  /// (review of #573).
   static Future<void> importAndStore(List<String> words) async {
-    await identity_api.deleteIdentity();
-    await identity_api.importFromMnemonic(words: words, recover: false);
+    await identity_api.validateMnemonic(words: words);
+    await _replaceLoadedIdentity(
+      () => identity_api.importFromMnemonic(words: words, recover: false),
+    );
 
     await _storage.write(key: _kMnemonic, value: words.join(' '));
     await Future.wait([
@@ -210,31 +228,17 @@ class IdentityService {
     }
   }
 
-  /// Generate a new identity and atomically replace the stored one.
+  /// Generate a new identity and replace the stored one.
   ///
-  /// The new mnemonic is written to secure storage **before** the old metadata
-  /// is cleared, so the user is never left without a valid identity if the
-  /// operation is interrupted. Use this instead of [deleteAll] + [initialize]
-  /// when rotating identities.
+  /// The new mnemonic is written to secure storage only once the core holds
+  /// the new identity, and **before** the old metadata is cleared. A
+  /// generation the core refuses after the deletion loads the previous
+  /// identity again ([_replaceLoadedIdentity]). Use this instead of
+  /// [deleteAll] + [initialize] when rotating identities.
   static Future<List<String>> regenerate() async {
-    // Clear Rust's in-memory identity state first — createIdentity() returns
-    // AlreadyExists if any identity is currently loaded.
-    // deleteIdentity() may throw if no identity is loaded (e.g. fresh install
-    // followed immediately by regenerate); ignore that case and proceed.
-    try {
-      await identity_api.deleteIdentity();
-    } catch (e) {
-      final msg = e.toString().toLowerCase();
-      if (!msg.contains('noidentity') &&
-          !msg.contains('no identity') &&
-          !msg.contains('not loaded')) {
-        rethrow;
-      }
-      debugPrint(
-        '[identity] regenerate: no identity loaded, skipping deleteIdentity',
-      );
-    }
-    final result = await identity_api.createIdentity();
+    // createIdentity() returns AlreadyExists while any identity is loaded, so
+    // the current one is deleted first.
+    final result = await _replaceLoadedIdentity(identity_api.createIdentity);
     final words = result.mnemonicWords;
 
     // Write new mnemonic first — this is the critical write.
@@ -273,6 +277,71 @@ class IdentityService {
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /// Delete the identity Rust holds, then [install] the one replacing it.
+  ///
+  /// Once the deletion has gone through, Rust no longer serves the previous
+  /// identity — its subscriptions, push registrations and in-memory stores
+  /// are given back — while the screen and secure storage still hold it. So
+  /// when [install] is refused after that (`PendingWipeFailed`, issue #555,
+  /// or an import the core refuses), that identity is loaded again before
+  /// the error goes on, and the session is not left without one (review of
+  /// #573). The same holds when the slot was already empty — an earlier
+  /// refusal whose reload failed — so a retry also brings the stored
+  /// identity back. When it cannot be loaded, the error goes on as a
+  /// [PreviousIdentityNotReloaded]. A deletion that is itself refused
+  /// (`WipeNotRecorded`, `StorageUnavailable`) gave nothing up, and nothing
+  /// is reloaded.
+  static Future<T> _replaceLoadedIdentity<T>(
+    Future<T> Function() install,
+  ) async {
+    await _deleteLoadedIdentity();
+    try {
+      return await install();
+    } catch (e) {
+      // The slot is empty either way: deleted above, or found so.
+      if (!await _reloadRetiredIdentity()) {
+        throw PreviousIdentityNotReloaded(e);
+      }
+      rethrow;
+    }
+  }
+
+  /// Load the identity secure storage still holds into the core again, and
+  /// have Rust rebuild what its deletion gave up. Returns whether it is
+  /// loaded; never throws, since the caller reports the refusal that brought
+  /// it here, and a reload that fails leaves the next launch to load it.
+  static Future<bool> _reloadRetiredIdentity() async {
+    try {
+      final stored = StoredIdentity.fromEntries(await _storage.readAll());
+      if (stored == null) return false;
+      await _loadExisting(stored);
+      await identity_api.restoreIdentitySession();
+      debugPrint('[identity] replacement refused — previous identity reloaded');
+      return true;
+    } catch (e) {
+      debugPrint('[identity] previous identity not reloaded: $e');
+      return false;
+    }
+  }
+
+  /// Delete the identity Rust holds, if it holds one. An empty slot is not an
+  /// error for a replacement: a fresh install followed at once by a
+  /// regeneration has none, and neither has a session whose earlier
+  /// replacement was refused without the reload.
+  static Future<void> _deleteLoadedIdentity() async {
+    try {
+      await identity_api.deleteIdentity();
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (!msg.contains('noidentity') &&
+          !msg.contains('no identity') &&
+          !msg.contains('not loaded')) {
+        rethrow;
+      }
+      debugPrint('[identity] no identity loaded, nothing to delete');
+    }
+  }
 
   static Future<List<String>> _createAndStore() async {
     final result = await identity_api.createIdentity();

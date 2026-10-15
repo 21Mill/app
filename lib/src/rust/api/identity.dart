@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `current_bip39_seed`, `delete_identity_inner`, `derive_trade_key_with`, `ensure_trade_key_index_at_least_with`, `ensure_trade_key_index_at_least`, `forget_identity_state`, `get_active_keys`, `get_active_trade_keys_up_to`, `get_active_trade_keys`, `get_transport_identity_keys`, `identity_generation`, `identity_lock`, `publish_index`, `reconcile_and_publish_to`, `reconcile_trade_key_index`, `require_durable_storage`, `trade_key_index_tx`, `while_identity_current`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `IdentityState`, `RecoveryProgress`
+// These functions are ignored because they are not marked as `pub`: `clear_logs_and_report`, `create_in`, `current_bip39_seed`, `delete_identity_inner`, `delete_in`, `derive_trade_key_with`, `ensure_trade_key_index_at_least_with`, `ensure_trade_key_index_at_least`, `forget_identity_state`, `get_active_keys`, `get_active_trade_keys_up_to`, `get_active_trade_keys`, `get_transport_identity_keys`, `has_pending_wipe`, `identity_generation`, `identity_lock`, `identity_slot`, `import_in`, `import_nsec_in`, `load_in`, `load_unlocked`, `publish_index`, `reconcile_and_publish_to`, `reconcile_trade_key_index`, `record_wipe_intent`, `release_own_wipe_marker`, `require_durable_storage`, `retry_pending_wipe_if_vacant`, `retry_pending_wipe`, `trade_key_index_tx`, `while_identity_current`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RecoveryProgress`
 
 /// Subscribe to consumed trade-key indices. Flutter calls this once at startup
 /// and writes every value it receives to secure storage.
@@ -43,6 +43,18 @@ Future<IdentityInfo> loadIdentityFromMnemonic({
   createdAt: createdAt,
 );
 
+/// Check that `words` are a phrase the core accepts, without loading it: a
+/// bad word or a bad checksum fails with `invalid mnemonic: …`, as an import
+/// of them would.
+///
+/// The Account screen's import deletes the current identity before it
+/// imports, and the deletion wipes that identity's trades, chats and payout
+/// claims. So the words are checked first, here, by the same derivation the
+/// import runs (`derive_master_key` is the validation): a phrase the import
+/// would refuse never costs the previous identity its rows (review of #573).
+Future<void> validateMnemonic({required List<String> words}) =>
+    RustLib.instance.api.crateApiIdentityValidateMnemonic(words: words);
+
 /// Import identity from a BIP-39 mnemonic phrase (user-entered recovery).
 ///
 /// When `recover = true`, the daemon recovery flow is triggered (Phase 7).
@@ -58,6 +70,10 @@ Future<IdentityInfo> importFromMnemonic({
 
 /// Import identity from an nsec (bech32-encoded Nostr secret key).
 /// Note: nsec import produces a single key with no BIP-39 mnemonic backup.
+///
+/// When the slot is empty, a pending wipe is retried first, and a retry that
+/// fails refuses the import with `PendingWipeFailed` (issue #555). A slot
+/// already taken is installed over, as before, without a generation bump.
 Future<IdentityInfo> importFromNsec({required String nsec}) =>
     RustLib.instance.api.crateApiIdentityImportFromNsec(nsec: nsec);
 
@@ -70,6 +86,14 @@ Future<IdentityInfo?> getIdentity() =>
 Future<void> deleteIdentity() =>
     RustLib.instance.api.crateApiIdentityDeleteIdentity();
 
+/// Whether a previous identity deletion left its data wipe pending: the
+/// previous identity's rows may still be on disk and no retry has succeeded
+/// yet (issue #555). The Account screen shows a warning while this holds.
+/// A marker that cannot be read reads as none: the warning is diagnostic,
+/// and the retry does not depend on it.
+Future<bool> hasPendingIdentityWipe() =>
+    RustLib.instance.api.crateApiIdentityHasPendingIdentityWipe();
+
 /// What the current identity would lose if it were replaced now: locked
 /// escrow, locked or payable bonds, open payout claims, live trades — most
 /// serious first, empty when it is safe to go ahead (issue #533).
@@ -80,6 +104,20 @@ Future<void> deleteIdentity() =>
 /// lose track of, so that reads as empty.
 Future<List<FundsAtRisk>> fundsAtRisk() =>
     RustLib.instance.api.crateApiIdentityFundsAtRisk();
+
+/// Rebuild, for the identity loaded again after its replacement was refused,
+/// what its deletion gave up (review of #573): its claim nodes, the kind-14
+/// feed and the watched orders, its chats and trade sessions, the book marks
+/// of its own orders, its dispute chats, its push registrations and its own
+/// reputation — what a cold start builds for it. Its rows are still on disk:
+/// the refusal kept them, and the reload released their wipe-pending marker.
+///
+/// Dart calls this right after loading that identity from secure storage, so
+/// the session is never left on an identity Rust no longer serves. Held
+/// under the lifecycle lock like a transition: a deletion that started
+/// meanwhile finishes first, and then there is nothing to restore.
+Future<void> restoreIdentitySession() =>
+    RustLib.instance.api.crateApiIdentityRestoreIdentitySession();
 
 /// Derive a new trade key, auto-incrementing the index.
 /// Returns the new key's info and updates the stored `trade_key_index`.

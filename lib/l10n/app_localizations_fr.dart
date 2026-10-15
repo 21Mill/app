@@ -1170,6 +1170,30 @@ class AppLocalizationsFr extends AppLocalizations {
       'Échec de la génération de l\'identité. Veuillez réessayer.';
 
   @override
+  String get pendingWipeBannerTitle =>
+      'Les données de l\'utilisateur précédent sont toujours sur cet appareil';
+
+  @override
+  String get pendingWipeBannerBody =>
+      'La suppression de l\'identité précédente n\'a pas pu effacer ses échanges et ses discussions de cet appareil. L\'application réessaiera à la prochaine création ou importation d\'un nouvel utilisateur.';
+
+  @override
+  String get pendingWipeBlockedMessage =>
+      'Les données de l\'utilisateur précédent n\'ont pas pu être effacées de cet appareil : le nouvel utilisateur n\'a donc pas été configuré et votre utilisateur actuel a été conservé. Veuillez réessayer.';
+
+  @override
+  String get wipeNotRecordedMessage =>
+      'L\'utilisateur actuel n\'a pas pu être supprimé en toute sécurité : rien n\'a donc été modifié. Veuillez réessayer.';
+
+  @override
+  String get identitySwapStorageUnavailableMessage =>
+      'Le stockage de l\'appareil n\'est pas disponible pour le moment : l\'utilisateur actuel a donc été conservé et rien n\'a été modifié. Redémarrez l\'application et réessayez.';
+
+  @override
+  String get identitySwapPreviousNotReloadedMessage =>
+      'Le nouvel utilisateur n\'a pas été configuré, et l\'utilisateur actuel n\'a pas pu être entièrement restauré. Redémarrez l\'application pour le recharger.';
+
+  @override
   String get invalidMnemonicMessage =>
       'Mots secrets invalides. Veuillez vérifier vos mots et réessayer.';
 

@@ -51,6 +51,7 @@ Future<ProviderContainer> _pumpAccount(
   bool privacyMode = false,
   Object? privacyError,
   MyReputation? Function()? reputation,
+  Future<bool> Function()? pendingWipe,
 }) async {
   tester.view.physicalSize = const Size(360, 760);
   tester.view.devicePixelRatio = 1.0;
@@ -104,6 +105,7 @@ Future<ProviderContainer> _pumpAccount(
                 return privacyMode;
               },
               debugRestartOrders: () async {},
+              debugPendingWipe: pendingWipe ?? () async => false,
               // The restore sheet runs the same recovery: its count on
               // success, an error when it failed.
               debugRestoreRun:
@@ -678,6 +680,211 @@ void main() {
 
       expect(find.text(l10n.fundsAtRiskTitle), findsNothing);
       expect(generated, isTrue);
+    });
+  });
+
+  // Issue #555: the core refuses a new identity while the previous one's data
+  // wipe keeps failing, and the user must be told that is why. The service
+  // has loaded the current user again by then (review of #573).
+  group('a pending wipe that fails again', () {
+    testWidgets('refuses the generation, saying why, and keeps the old state', (
+      tester,
+    ) async {
+      final container = await _pumpAccount(
+        tester,
+        reminderArmed: false,
+        backedUp: true,
+        onRegenerate:
+            () async => throw StateError('AnyhowException(PendingWipeFailed)'),
+      );
+      await _seedPreviousUser(container);
+
+      await _generate(tester);
+
+      expect(find.text(l10n.pendingWipeBlockedMessage), findsOneWidget);
+      expect(find.text('home'), findsNothing);
+      expect(container.read(tradeRoleProvider), {'old': true});
+    });
+
+    testWidgets('refuses the import, not as a bad phrase', (tester) async {
+      await _pumpAccount(
+        tester,
+        reminderArmed: true,
+        backedUp: false,
+        onImport:
+            (_) async => throw StateError('AnyhowException(PendingWipeFailed)'),
+      );
+
+      await _submitImport(tester, l10n);
+
+      expect(find.text(l10n.pendingWipeBlockedMessage), findsOneWidget);
+      expect(find.text(l10n.invalidMnemonicMessage), findsNothing);
+      expect(find.text('home'), findsNothing);
+    });
+
+    // CodeRabbit on #573: the screen's first read of the marker may still be
+    // in flight when the refusal reads it again; the older answer must not
+    // hide the newer one.
+    testWidgets('a late first read does not hide the warning a refusal shows', (
+      tester,
+    ) async {
+      final first = Completer<bool>();
+      var reads = 0;
+      await _pumpAccount(
+        tester,
+        reminderArmed: false,
+        backedUp: true,
+        onRegenerate:
+            () async => throw StateError('AnyhowException(PendingWipeFailed)'),
+        pendingWipe: () => ++reads == 1 ? first.future : Future.value(true),
+      );
+
+      await _generate(tester);
+      expect(find.text(l10n.pendingWipeBannerTitle), findsOneWidget);
+
+      first.complete(false);
+      await tester.pumpAndSettle();
+
+      expect(reads, 2);
+      expect(find.text(l10n.pendingWipeBannerTitle), findsOneWidget);
+    });
+  });
+
+  // Review of #573: refused after the deletion, and the current user could
+  // not be loaded again either. Saying it was kept would be false.
+  group('a refusal the previous user could not survive', () {
+    testWidgets('says a restart is needed, not that the user was kept', (
+      tester,
+    ) async {
+      await _pumpAccount(
+        tester,
+        reminderArmed: false,
+        backedUp: true,
+        onRegenerate:
+            () async =>
+                throw PreviousIdentityNotReloaded(
+                  StateError('AnyhowException(PendingWipeFailed)'),
+                ),
+      );
+
+      await _generate(tester);
+
+      expect(
+        find.text(l10n.identitySwapPreviousNotReloadedMessage),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.pendingWipeBlockedMessage), findsNothing);
+      expect(find.text('home'), findsNothing);
+    });
+
+    testWidgets('on import too, not as a bad phrase', (tester) async {
+      await _pumpAccount(
+        tester,
+        reminderArmed: true,
+        backedUp: false,
+        onImport:
+            (_) async =>
+                throw PreviousIdentityNotReloaded(
+                  StateError('AnyhowException(PendingWipeFailed)'),
+                ),
+      );
+
+      await _submitImport(tester, l10n);
+
+      expect(
+        find.text(l10n.identitySwapPreviousNotReloadedMessage),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.invalidMnemonicMessage), findsNothing);
+    });
+  });
+
+  // Review round 3 of #573: a deletion that cannot record its pending wipe
+  // is refused before anything is given up. The current user stays, and the
+  // message must say so — not blame the phrase, nor a previous user's data.
+  group('a deletion that cannot record its wipe', () {
+    testWidgets('refuses the generation and keeps the current user', (
+      tester,
+    ) async {
+      final container = await _pumpAccount(
+        tester,
+        reminderArmed: false,
+        backedUp: true,
+        onRegenerate:
+            () async => throw StateError('AnyhowException(WipeNotRecorded)'),
+      );
+      await _seedPreviousUser(container);
+
+      await _generate(tester);
+
+      expect(find.text(l10n.wipeNotRecordedMessage), findsOneWidget);
+      expect(find.text(l10n.pendingWipeBlockedMessage), findsNothing);
+      expect(find.text('home'), findsNothing);
+      expect(container.read(tradeRoleProvider), {'old': true});
+    });
+
+    testWidgets('refuses the import, not as a bad phrase', (tester) async {
+      await _pumpAccount(
+        tester,
+        reminderArmed: true,
+        backedUp: false,
+        onImport:
+            (_) async => throw StateError('AnyhowException(WipeNotRecorded)'),
+      );
+
+      await _submitImport(tester, l10n);
+
+      expect(find.text(l10n.wipeNotRecordedMessage), findsOneWidget);
+      expect(find.text(l10n.invalidMnemonicMessage), findsNothing);
+      expect(find.text('home'), findsNothing);
+    });
+  });
+
+  // Review of #573, finding 2: a session without a database refuses every
+  // swap until the store comes back. Retrying cannot help there, so the
+  // message must not ask for one — it says what will.
+  group('a session without a database', () {
+    testWidgets('refuses the generation and says a restart is needed', (
+      tester,
+    ) async {
+      final container = await _pumpAccount(
+        tester,
+        reminderArmed: false,
+        backedUp: true,
+        onRegenerate:
+            () async => throw StateError('AnyhowException(StorageUnavailable)'),
+      );
+      await _seedPreviousUser(container);
+
+      await _generate(tester);
+
+      expect(
+        find.text(l10n.identitySwapStorageUnavailableMessage),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.wipeNotRecordedMessage), findsNothing);
+      expect(find.text('home'), findsNothing);
+      expect(container.read(tradeRoleProvider), {'old': true});
+    });
+
+    testWidgets('refuses the import, not as a bad phrase', (tester) async {
+      await _pumpAccount(
+        tester,
+        reminderArmed: true,
+        backedUp: false,
+        onImport:
+            (_) async =>
+                throw StateError('AnyhowException(StorageUnavailable)'),
+      );
+
+      await _submitImport(tester, l10n);
+
+      expect(
+        find.text(l10n.identitySwapStorageUnavailableMessage),
+        findsOneWidget,
+      );
+      expect(find.text(l10n.invalidMnemonicMessage), findsNothing);
+      expect(find.text('home'), findsNothing);
     });
   });
 

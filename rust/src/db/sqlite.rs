@@ -406,13 +406,6 @@ impl Storage for SqliteStorage {
         Ok(row.map(|(data,)| serde_json::from_str(&data)).transpose()?)
     }
 
-    async fn delete_identity(&self) -> Result<()> {
-        sqlx::query("DELETE FROM identity")
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
     async fn save_queued_message(&self, msg: &QueuedMessage) -> Result<()> {
         let data = serde_json::to_string(msg)?;
         let status = format!("{:?}", msg.status);
@@ -524,18 +517,13 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
-    async fn clear_trade_keys(&self) -> Result<()> {
-        sqlx::query("DELETE FROM trade_keys")
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
     async fn clear_identity_data(&self) -> Result<()> {
         // One transaction: a half-wiped database would show the new user
         // some of the old one's rows, which is the bug this exists to close.
         let mut tx = self.pool.begin().await?;
         for delete in [
+            "DELETE FROM identity",
+            "DELETE FROM trade_keys",
             "DELETE FROM trades",
             "DELETE FROM messages",
             "DELETE FROM bond_claims",
@@ -2681,38 +2669,6 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    #[tokio::test]
-    async fn delete_identity_clears_row_and_trade_keys() {
-        let path = temp_db_path();
-        let path_str = path.to_str().unwrap().to_string();
-        let storage = SqliteStorage::open(&path_str).await.unwrap();
-
-        let identity = IdentityInfo {
-            public_key: "abc123".to_string(),
-            display_name: None,
-            privacy_mode: false,
-            trade_key_index: 7,
-            created_at: 1_700_000_000,
-        };
-        storage.save_identity(&identity).await.unwrap();
-        storage.save_trade_key("order-1", 5).await.unwrap();
-        storage.save_trade_key("order-2", 6).await.unwrap();
-
-        storage.delete_identity().await.unwrap();
-        storage.clear_trade_keys().await.unwrap();
-
-        assert!(storage.get_identity().await.unwrap().is_none());
-        assert_eq!(storage.get_trade_key("order-1").await.unwrap(), None);
-        assert_eq!(storage.get_trade_key("order-2").await.unwrap(), None);
-
-        // Deleting again on empty tables is a no-op, not an error.
-        storage.delete_identity().await.unwrap();
-        storage.clear_trade_keys().await.unwrap();
-
-        drop(storage);
-        let _ = std::fs::remove_file(&path);
-    }
-
     /// Issue #533: a new user must find the app as a fresh install leaves it.
     /// The attachment cache (#589): blobs come back as stored, the newest
     /// survive the size cap, and a new identity starts with none.
@@ -2846,6 +2802,17 @@ mod tests {
         ] {
             storage.set_setting(&key, "1").await.unwrap();
         }
+        storage
+            .save_identity(&IdentityInfo {
+                public_key: "abc123".to_string(),
+                display_name: None,
+                privacy_mode: false,
+                trade_key_index: 7,
+                created_at: 1_700_000_000,
+            })
+            .await
+            .unwrap();
+        storage.save_trade_key("order-a", 1).await.unwrap();
         // The device's own.
         storage
             .save_active_mostro_pubkey("node-pubkey")
@@ -2862,6 +2829,8 @@ mod tests {
 
         storage.clear_identity_data().await.unwrap();
 
+        assert!(storage.get_identity().await.unwrap().is_none());
+        assert_eq!(storage.get_trade_key("order-a").await.unwrap(), None);
         assert!(storage.list_trades().await.unwrap().is_empty());
         assert!(storage.list_orders().await.unwrap().is_empty());
         assert!(storage.list_messages("order-a").await.unwrap().is_empty());
@@ -2909,6 +2878,58 @@ mod tests {
 
         // Wiping an already empty database is a no-op, not an error.
         storage.clear_identity_data().await.unwrap();
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A wipe that fails part way is rolled back whole: the identity row and
+    /// its trade-key mappings stay with the trades they name (review of
+    /// #573). The failure is a trigger aborting the last delete the
+    /// transaction runs, so every earlier one has already happened in it.
+    #[tokio::test]
+    async fn a_failed_identity_wipe_rolls_back_whole() {
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+        storage
+            .save_identity(&IdentityInfo {
+                public_key: "abc123".to_string(),
+                display_name: None,
+                privacy_mode: false,
+                trade_key_index: 7,
+                created_at: 1_700_000_000,
+            })
+            .await
+            .unwrap();
+        storage.save_trade_key("order-a", 5).await.unwrap();
+        storage
+            .set_setting(settings_keys::MY_REPUTATION, "1")
+            .await
+            .unwrap();
+        sqlx::query(&format!(
+            "CREATE TRIGGER wipe_fails BEFORE DELETE ON settings \
+             WHEN old.key = '{}' BEGIN SELECT RAISE(ABORT, 'wipe fails'); END",
+            settings_keys::MY_REPUTATION
+        ))
+        .execute(&storage.pool)
+        .await
+        .unwrap();
+
+        assert!(storage.clear_identity_data().await.is_err());
+
+        assert_eq!(
+            storage.get_identity().await.unwrap().map(|i| i.public_key),
+            Some("abc123".to_string())
+        );
+        assert_eq!(storage.get_trade_key("order-a").await.unwrap(), Some(5));
+        assert_eq!(
+            storage
+                .get_setting(settings_keys::MY_REPUTATION)
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("1")
+        );
 
         drop(storage);
         let _ = std::fs::remove_file(&path);

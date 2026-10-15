@@ -21,8 +21,23 @@ IdentityCreationResult {
 ```
 
 **Side effects**: Stores encrypted private key in platform secure storage.
+Retries a data wipe a previous deletion left pending (`identity_wipe_pending`,
+issue #555) before installing the new identity — safe there, since the empty
+slot guarantees the tables hold nothing of a live identity. A retry that fails
+again refuses the new identity: once one is installed nothing retries (the
+launch reload, `load_identity_from_mnemonic`, never does), so the previous
+user's rows would stay for the life of the install. A marker that cannot be
+read refuses it the same way, without wiping.
 
-**Errors**: `StorageError` if secure storage unavailable.
+**Errors**: `StorageError` if secure storage unavailable; `PendingWipeFailed`
+when the pending wipe failed again or its marker cannot be read (nothing
+installed, the marker stays).
+
+A first launch with nothing in secure storage over a store that still holds
+another identity's pending wipe, and whose wipe keeps failing, therefore
+starts with no identity, and *Generate new user* is refused the same way:
+there is nothing to reload. Deliberate — refusing beats installing over
+another user's rows — and the only way out is a store that wipes again.
 
 ---
 
@@ -32,6 +47,15 @@ sends `Action.restore` to Mostro daemon to recover active trades and
 disputes.
 
 **Validation**: Words MUST be valid BIP-39 English wordlist, 12 or 24 words.
+The phrase is validated before the pending-wipe retry below. The Account
+screen deletes the current identity before it imports, so it checks the
+words first with `validate_mnemonic`: a phrase the import would refuse never
+costs the current identity its rows (review of #573).
+
+**Pending wipe**: like `create_identity`, retries a pending data wipe before
+installing, and refuses with `PendingWipeFailed` when it fails again — but
+only while no identity is loaded. The Account screen deletes the current
+identity first, so that is every import it makes (issue #555).
 
 **Recovery flow** (when `recover = true`):
 1. Derive master key from mnemonic (BIP-32 path N=0).
@@ -66,7 +90,16 @@ disputes.
 **Note**: Recovery only works if identity is NOT in privacy mode.
 
 **Errors**: `InvalidMnemonic`, `StorageError`, `RecoveryFailed`,
-`PrivacyModeRecoveryUnavailable`.
+`PrivacyModeRecoveryUnavailable`, `PendingWipeFailed`.
+
+---
+
+### validate_mnemonic(words: Vec<String>) → ()
+Check that `words` are a phrase the core accepts, without loading it. Runs
+the same derivation as the import (`derive_master_key` is the validation),
+so there is one answer to what a valid phrase is.
+
+**Errors**: `InvalidMnemonic` — the import's own error for the same words.
 
 ---
 
@@ -75,7 +108,11 @@ Import identity from nsec (bech32-encoded private key).
 
 **Validation**: MUST be valid bech32 nsec format.
 
-**Errors**: `InvalidKey`, `StorageError`.
+**Pending wipe**: gated like `import_from_mnemonic` — retries a pending data
+wipe while no identity is loaded, and refuses with `PendingWipeFailed` when it
+fails again (issue #555). A slot already taken is installed over, as before.
+
+**Errors**: `InvalidKey`, `StorageError`, `PendingWipeFailed`.
 
 ---
 
@@ -133,7 +170,9 @@ it (issue #533).
   (its `is_mine` marks) and the per-order settings (chat and status cursors,
   dispute markers, invoice-step starts, wipe tombstones, retained claim
   nodes, the last restore's snapshot). `Storage::clear_identity_data`, one
-  transaction on native.
+  transaction on both stores (SQLite and IndexedDB): a wipe that fails keeps
+  all of it, the identity row and the trade-key mappings with the trades
+  they name (review of #573).
 - The restore snapshot also names the identity that took it. A history pass
   ignores (and drops) any snapshot that is not the loaded identity's,
   including one stored before snapshots named theirs, and any snapshot whose
@@ -141,8 +180,9 @@ it (issue #533).
   over, e.g. a re-import after a failed wipe). Read otherwise, its floor and
   live set would take this identity's new takes for history and wipe them
   mid-trade (#614).
-- Empties the in-memory stores: disputes, ratings, sessions, chats (unread
-  count published as zero), trade-key caches; then re-issues the public
+- Empties the in-memory stores: disputes, ratings, the user's own
+  reputation, sessions, chats (unread count published as zero), trade-key
+  caches; then re-issues the public
   subscriptions so the book refills with no order marked as own.
 - Clears the log buffer.
 
@@ -150,12 +190,79 @@ it (issue #533).
 caches, the push token and toggle, developer overrides. They belong to the
 device, not to the identity.
 
-A failed wipe is logged, never turned into a failed deletion: by then the
-identity is already gone. The Dart half — cached providers and the
-notifications store — is `resetIdentityScopedState`, run by the Account
-screen after a generate and, on import, **before** the recovery.
+Before giving anything up, the deletion records the `identity_wipe_pending`
+settings key — device-scoped on purpose, since the wipe that would drop it is
+the wipe that may fail — holding the identity's public key; a successful wipe
+clears it. A marker an earlier deletion left stays as it is. Clearing it is a
+write of its own after the wipe: if that write fails, the marker outlives a
+wipe that succeeded and the Account screen warns of rows that are gone — a
+false warning, never lost data. When the marker cannot be written or read,
+the deletion is refused with `WipeNotRecorded` while the identity is still
+loaded and whole: deleting without it would let the replacement install over
+the rows a failed wipe kept, with nothing left to say so. A session with no
+database (`init_db` failed) is refused for the same reason, with
+`StorageUnavailable`: no retry can succeed before a restart, and the Account
+screen says so. This keeps a possibly compromised identity until the store
+comes back — deliberately, since rotating it would leave the previous user's
+rows on disk with no trace (review of #573). A crash between the marker and
+the wipe leaves the identity's mnemonic in secure storage, so the next launch
+reloads it and drops the marker (below).
 
-**Errors**: `NoIdentity`.
+Every transition of the identity slot — `create_identity`,
+`load_identity_from_mnemonic`, `import_from_mnemonic`, `import_from_nsec` and
+this deletion — runs alone, from its first read of the slot to its last
+write: a deletion holds that turn through the wipe. Otherwise, while it waits
+on the relays, the push server or the store, a second deletion could retire
+the replacement installed after it, a reload of the same identity release
+the marker and then be retired, or a creation land before the wipe and lose
+its rows to it. Readers of the loaded identity never wait on a transition's
+I/O.
+
+A failed wipe is never turned into a failed deletion: by then the identity
+is already gone. It is reported **after** the log clear (so the failure is
+the first line of the fresh history, worded without orders or
+counterparties), and leaves the marker recorded ahead. `create_identity`,
+`import_from_mnemonic` and `import_from_nsec` retry the wipe off that marker
+while the slot is empty, clear it on success and refuse the new identity on
+failure. A refused replacement leaves the deleted identity's mnemonic in
+secure storage, and the Dart side loads that identity again in the same
+session — any refusal after the deletion went through, or with the slot
+already empty (an earlier refusal whose reload failed) — then calls
+`restore_identity_session`, so the session is not left without an identity
+(review of #573). Should that reload fail, the refusal reaches the Account
+screen as such, and the next launch loads the identity. Either way
+`load_identity_from_mnemonic` drops a marker naming its own public key,
+wiping nothing — the rows are its own. Otherwise the launch reload never
+touches the marker; `has_pending_identity_wipe` exposes it, and the Account
+screen shows a warning while it holds (issue #555). The Dart half — cached
+providers and the notifications store — is `resetIdentityScopedState`, run
+by the Account screen after a generate and, on import, **before** the
+recovery.
+
+**Errors**: `NoIdentity`; `WipeNotRecorded` when the pending-wipe marker
+cannot be recorded, `StorageUnavailable` when the session has no database
+(in both, nothing deleted and the identity stays loaded).
+
+---
+
+### restore_identity_session() → ()
+Rebuild, for the identity loaded again after its replacement was refused,
+what its deletion gave up — what a cold start builds for it: the claim nodes,
+the bulk kind-14 feed and the watched orders, its chats and trade sessions,
+the book's `is_mine` marks of its own orders (from its trade rows), its
+dispute chats, its push registrations and its own reputation. Per-trade
+receivers stay closed, as after a restart. Runs as a transition of the
+identity slot.
+
+**Errors**: `NoIdentity` when no identity is loaded.
+
+---
+
+### has_pending_identity_wipe() → bool
+True while a previous deletion's data wipe is pending retry (issue #555):
+the previous identity's rows may still be on disk. Read by the Account
+screen for its warning banner; false with no database or an unreadable
+marker.
 
 ---
 

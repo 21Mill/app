@@ -52,6 +52,7 @@ class AccountScreen extends ConsumerStatefulWidget {
     @visibleForTesting this.debugRestoreRun,
     @visibleForTesting this.debugPrivacyMode,
     @visibleForTesting this.debugRestartOrders,
+    @visibleForTesting this.debugPendingWipe,
   });
 
   /// Test-only word source for `Show words`, so widget tests do not reach the
@@ -77,6 +78,10 @@ class AccountScreen extends ConsumerStatefulWidget {
   /// Test seam: the book re-subscription behind `Actualizar`.
   final Future<void> Function()? debugRestartOrders;
 
+  /// Test seam: whether a deleted identity's data wipe is pending, instead
+  /// of the bridge's `hasPendingIdentityWipe`.
+  final Future<bool> Function()? debugPendingWipe;
+
   @override
   ConsumerState<AccountScreen> createState() => _AccountScreenState();
 }
@@ -92,10 +97,18 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   bool _copied = false;
   Timer? _copiedTimer;
 
+  /// Whether a deleted identity's data wipe is still pending (issue #555).
+  bool _pendingWipe = false;
+
+  /// The latest read of [_pendingWipe]: an earlier read that answers after a
+  /// later one must not overwrite it.
+  int _pendingWipeRead = 0;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadPublicKey());
+    unawaited(_loadPendingWipe());
     // A rating may have landed since the last answer: ask the node again
     // (user_info.md, Freshness). Full privacy mode has nothing to ask for.
     // After the first frame: the refresh changes provider state at once.
@@ -116,6 +129,41 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     } catch (e) {
       debugPrint('[account] public key unavailable: $e');
     }
+  }
+
+  /// A failed read hides the warning rather than breaking the screen: the
+  /// marker is diagnostic, and the retry does not depend on it being shown.
+  Future<void> _loadPendingWipe() async {
+    final read = ++_pendingWipeRead;
+    try {
+      final pending =
+          await (widget.debugPendingWipe?.call() ??
+              identity_api.hasPendingIdentityWipe());
+      if (!mounted || read != _pendingWipeRead) return;
+      setState(() => _pendingWipe = pending);
+    } catch (e) {
+      debugPrint('[account] pending-wipe flag unavailable: $e');
+    }
+  }
+
+  /// What to tell the user when the core refused an identity swap for a
+  /// reason that is neither a bad phrase nor a generation error (issue #555,
+  /// review of #573), or null for any other failure. The core's refusals
+  /// arrive as its stable markers.
+  static String? _swapRefusalMessage(Object error, AppLocalizations l10n) {
+    // First: its text carries the refusal it wraps.
+    if (error is PreviousIdentityNotReloaded) {
+      return l10n.identitySwapPreviousNotReloadedMessage;
+    }
+    final marker = error.toString();
+    if (marker.contains('PendingWipeFailed')) {
+      return l10n.pendingWipeBlockedMessage;
+    }
+    if (marker.contains('WipeNotRecorded')) return l10n.wipeNotRecordedMessage;
+    if (marker.contains('StorageUnavailable')) {
+      return l10n.identitySwapStorageUnavailableMessage;
+    }
+    return null;
   }
 
   @override
@@ -210,6 +258,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             BackupFillViewport(
               gap: 12,
               blocks: [
+                if (_pendingWipe) const _PendingWipeBanner(),
                 if (backedUp)
                   _SecretWordsCard(
                     words: _words,
@@ -404,9 +453,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   final swap = _IdentitySwap.of(context);
                   Navigator.pop(dialogContext);
                   try {
-                    // Atomically replaces the stored identity: new mnemonic is
-                    // written before old data is cleared, so there is no window
-                    // where the user is left without a valid identity.
+                    // The new mnemonic is stored only once the core holds the
+                    // new identity; a refusal after the deletion loads the
+                    // previous one again (IdentityService).
                     await (widget.debugRegenerate?.call() ??
                         IdentityService.regenerate());
                   } catch (e) {
@@ -414,12 +463,15 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                     swap.messenger.showSnackBar(
                       SnackBar(
                         content: Text(
-                          kDebugMode
-                              ? 'Failed to generate identity: $e'
-                              : swap.l10n.failedToGenerateIdentityMessage,
+                          _swapRefusalMessage(e, swap.l10n) ??
+                              (kDebugMode
+                                  ? 'Failed to generate identity: $e'
+                                  : swap.l10n.failedToGenerateIdentityMessage),
                         ),
                       ),
                     );
+                    // The refusal may have left a wipe pending, or settled one.
+                    if (mounted) unawaited(_loadPendingWipe());
                     return;
                   }
                   // Only reset and navigate once the new identity exists.
@@ -452,10 +504,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       swap.messenger.showSnackBar(
         SnackBar(
           content: Text(
-            kDebugMode ? 'Import failed: $e' : l10n.invalidMnemonicMessage,
+            _swapRefusalMessage(e, l10n) ??
+                (kDebugMode ? 'Import failed: $e' : l10n.invalidMnemonicMessage),
           ),
         ),
       );
+      // The refusal may have left a wipe pending, or settled one.
+      if (mounted) unawaited(_loadPendingWipe());
       return;
     }
     // Before the recovery below, not after: what it brings back belongs to
@@ -671,6 +726,69 @@ class _BackupBanner extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A deleted identity's data is still on the device: its wipe failed, and
+/// the next generation or import retries it (issue #555). The deletion
+/// itself went through, so this is the one trace the user can see.
+///
+/// A live region: the marker is read after the screen is up, so the warning
+/// can appear while the user watches, and is announced (DS-A11Y-2).
+class _PendingWipeBanner extends StatelessWidget {
+  const _PendingWipeBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final book = OrderBookPalette.of(context);
+    final pal = BackupPalette.of(context);
+    final l10n = AppLocalizations.of(context);
+
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Material(
+        color: pal.amberFill,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: pal.amberBorder),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 20, color: pal.amber),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.pendingWipeBannerTitle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: pal.amberTitle,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.pendingWipeBannerBody,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: book.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -299,6 +299,22 @@ pub mod settings_keys {
     pub fn trade_wiped(order_id: &str) -> String {
         format!("{TRADE_WIPED_PREFIX}{order_id}")
     }
+
+    /// A deleted identity's data wipe has not succeeded yet (issue #555):
+    /// recorded before the deletion gives anything up
+    /// (`api::identity::record_wipe_intent`) and cleared by the wipe that
+    /// succeeds. While it holds, the previous identity's rows may still be
+    /// on disk: the next identity creation or import retries the wipe and
+    /// clears it (`api::identity::retry_pending_wipe`). The value is the
+    /// deleted identity's public key: reloading that identity means the rows
+    /// are its own, and the marker goes without a wipe
+    /// (`api::identity::release_own_wipe_marker`).
+    ///
+    /// Device-scoped, deliberately absent from [`IDENTITY_SCOPED_PREFIXES`]
+    /// and [`IDENTITY_SCOPED_KEYS`]: the wipe that would drop it is the wipe
+    /// that may fail, and the marker must outlive the identity swap to drive
+    /// the retry.
+    pub const IDENTITY_WIPE_PENDING: &str = "identity_wipe_pending";
 }
 
 /// Storage trait — implemented by both SQLite (native) and IndexedDB (WASM).
@@ -352,10 +368,6 @@ pub trait Storage: Send + Sync {
     async fn save_identity(&self, identity: &crate::api::types::IdentityInfo) -> Result<()>;
     async fn get_identity(&self) -> Result<Option<crate::api::types::IdentityInfo>>;
 
-    /// Delete the persisted identity row, so a subsequently created or
-    /// imported identity starts with a fresh trade key counter.
-    async fn delete_identity(&self) -> Result<()>;
-
     async fn save_queued_message(&self, msg: &crate::queue::outbox::QueuedMessage) -> Result<()>;
     async fn list_queued_messages(&self) -> Result<Vec<crate::queue::outbox::QueuedMessage>>;
     async fn update_queued_message_status(
@@ -379,18 +391,18 @@ pub trait Storage: Send + Sync {
     /// Delete the trade key entry for `order_id`.
     async fn delete_trade_key(&self, order_id: &str) -> Result<()>;
 
-    /// Delete ALL trade key entries. Used on identity deletion — the
-    /// order→index mappings belong to the removed identity's derivation tree.
-    async fn clear_trade_keys(&self) -> Result<()>;
-
-    /// Delete everything the current identity produced: trades, chat
-    /// messages and their cached attachments, payout claims, the outbound
-    /// queue, the cached order book
+    /// Delete the current identity and everything it produced: its row, its
+    /// trade-key mappings, trades, chat messages and their cached
+    /// attachments, payout claims, the outbound queue, the cached order book
     /// (its `is_mine` marks are the identity's) and the per-order settings
     /// ([`settings_keys::IDENTITY_SCOPED_PREFIXES`] and
-    /// [`settings_keys::IDENTITY_SCOPED_KEYS`]). Used on identity deletion, next to [`Self::clear_trade_keys`]:
+    /// [`settings_keys::IDENTITY_SCOPED_KEYS`]). Used on identity deletion:
     /// a new user must start as on a fresh install (issue #533). Relays,
     /// the node choice and preferences stay — they belong to the device.
+    ///
+    /// All of it or none of it: the identity row and the mappings go in the
+    /// same transaction as the rows, so a wipe that fails leaves the identity
+    /// able to act on the trades it kept (review of #573).
     async fn clear_identity_data(&self) -> Result<()>;
 
     // ── Settings / Mostro node ────────────────────────────────────────────────

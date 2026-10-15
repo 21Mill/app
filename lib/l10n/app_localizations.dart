@@ -2128,6 +2128,42 @@ abstract class AppLocalizations {
   /// **'Failed to generate identity. Please try again.'**
   String get failedToGenerateIdentityMessage;
 
+  /// Title of the Account screen warning shown while a deleted identity's data wipe is pending retry (issue #555)
+  ///
+  /// In en, this message translates to:
+  /// **'Previous user\'s data is still on this device'**
+  String get pendingWipeBannerTitle;
+
+  /// Body of the pending-wipe warning on the Account screen
+  ///
+  /// In en, this message translates to:
+  /// **'Deleting the previous identity could not remove its trades and chats from this device. The app will retry the next time a new user is generated or imported.'**
+  String get pendingWipeBannerBody;
+
+  /// Snackbar shown when generating or importing a user is refused because the previous identity's pending data wipe failed again, and the current user was loaded back (issue #555)
+  ///
+  /// In en, this message translates to:
+  /// **'The previous user\'s data could not be removed from this device, so the new user was not set up and your current user was kept. Please try again.'**
+  String get pendingWipeBlockedMessage;
+
+  /// Snackbar shown when generating or importing a user is refused before the current identity is deleted, because the device could not record that its data wipe is pending (issue #555)
+  ///
+  /// In en, this message translates to:
+  /// **'The current user could not be removed safely, so nothing was changed. Please try again.'**
+  String get wipeNotRecordedMessage;
+
+  /// Snackbar shown when generating or importing a user is refused because this session has no database, so the current identity cannot be deleted safely until the app restarts (review of #573)
+  ///
+  /// In en, this message translates to:
+  /// **'This device\'s storage is not available right now, so the current user was kept and nothing was changed. Restart the app and try again.'**
+  String get identitySwapStorageUnavailableMessage;
+
+  /// Snackbar shown when generating or importing a user is refused after the current identity was deleted, and that identity could not be loaded again — or was loaded but its session could not be rebuilt — in this session (review of #573)
+  ///
+  /// In en, this message translates to:
+  /// **'The new user was not set up, and the current user could not be fully restored. Restart the app to load it again.'**
+  String get identitySwapPreviousNotReloadedMessage;
+
   /// Snackbar shown when an imported mnemonic is invalid on the Account screen
   ///
   /// In en, this message translates to:

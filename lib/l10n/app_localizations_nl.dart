@@ -1165,6 +1165,30 @@ class AppLocalizationsNl extends AppLocalizations {
       'De identiteit kon niet worden aangemaakt. Probeer het opnieuw.';
 
   @override
+  String get pendingWipeBannerTitle =>
+      'De gegevens van de vorige gebruiker staan nog op dit apparaat';
+
+  @override
+  String get pendingWipeBannerBody =>
+      'Bij het verwijderen van de vorige identiteit konden de trades en chats niet van dit apparaat worden gewist. De app probeert het opnieuw wanneer een nieuwe gebruiker wordt aangemaakt of geïmporteerd.';
+
+  @override
+  String get pendingWipeBlockedMessage =>
+      'De gegevens van de vorige gebruiker konden niet van dit apparaat worden verwijderd, dus de nieuwe gebruiker is niet ingesteld en je huidige gebruiker is behouden. Probeer het opnieuw.';
+
+  @override
+  String get wipeNotRecordedMessage =>
+      'De huidige gebruiker kon niet veilig worden verwijderd, dus er is niets gewijzigd. Probeer het opnieuw.';
+
+  @override
+  String get identitySwapStorageUnavailableMessage =>
+      'De opslag van het apparaat is nu niet beschikbaar, dus de huidige gebruiker is behouden en er is niets gewijzigd. Start de app opnieuw en probeer het nog eens.';
+
+  @override
+  String get identitySwapPreviousNotReloadedMessage =>
+      'De nieuwe gebruiker is niet ingesteld, en de huidige gebruiker kon niet volledig worden hersteld. Start de app opnieuw om hem opnieuw te laden.';
+
+  @override
   String get invalidMnemonicMessage =>
       'Ongeldige geheime woorden. Controleer je woorden en probeer het opnieuw.';
 
