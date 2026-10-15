@@ -4748,24 +4748,28 @@ async fn dispatch_mostro_message(
             // Map action → OrderStatus for DB sync (shared with the take
             // reply classification).
             let new_status = status_for_action(&kind.action);
+            // The node paid the destination it had (#823), before the
+            // `success` reaches a screen that shows where it went. Ahead of
+            // the status gate: the public Kind 38383 `success` can land the
+            // row in `Success` first, and the gate then refuses this message
+            // as a write, but it is still the only news of the payout. It
+            // writes no status here, and a replay finds nothing open.
+            if kind.action == Action::PurchaseCompleted {
+                crate::mostro::payout_route::record_news(
+                    &order_id,
+                    trade_index,
+                    crate::mostro::payout_route::PayoutNews::Paid {
+                        amount_sats: crate::api::invoice::payout_amount_of(&order_id).await,
+                    },
+                    event_ts,
+                )
+                .await;
+            }
             if let Some(status) = new_status {
                 if status_write_blocked(&order_id, &kind.action, event_ts).await {
                     return;
                 }
                 record_status_event(&order_id, event_ts).await;
-                // The node paid the destination it had (#823), before the
-                // `success` reaches a screen that shows where it went.
-                if kind.action == Action::PurchaseCompleted {
-                    crate::mostro::payout_route::record_news(
-                        &order_id,
-                        trade_index,
-                        crate::mostro::payout_route::PayoutNews::Paid {
-                            amount_sats: crate::api::invoice::payout_amount_of(&order_id).await,
-                        },
-                        event_ts,
-                    )
-                    .await;
-                }
                 // The bond, if any: a first trade-flow message means it
                 // locked; a terminal outcome without a slash notice means
                 // it was released (docs/ANTI_ABUSE_BOND.md §2.4, §6.1).
@@ -17405,6 +17409,47 @@ mod tests {
             2_000,
         )
         .await;
+        assert_eq!(payout_route::destinations(&order_id).await, route);
+    }
+
+    /// The public `success` can land before the buyer's `purchase-completed`
+    /// (two relay streams): the row is already terminal and the status gate
+    /// refuses the message, but the payout it reports is still recorded
+    /// (PR #824 review). The other order is the test above.
+    #[tokio::test]
+    async fn a_payout_is_recorded_paid_when_the_public_success_came_first() {
+        use crate::api::types::{PayoutOutcome, PayoutSource, TakePayout};
+        use crate::mostro::payout_route;
+        use mostro_core::message::Action;
+
+        let path = std::env::temp_dir()
+            .join(format!("mostro_payout_route_late_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        db.save_trade(&cancel_test_row(wire_order(&order_id, OrderStatus::Success)))
+            .await
+            .expect("save the trade row");
+        let address = payout_route::destination(
+            "alice@example.com",
+            PayoutSource::DefaultLightningAddress,
+            None,
+            1_000,
+            None,
+        );
+        payout_route::record_take(&order_id, 1, TakePayout::DefaultAddress, Some(address)).await;
+
+        dispatch_daemon_message_at(order_uuid, Action::PurchaseCompleted, None, 5_000).await;
+
+        let route = payout_route::destinations(&order_id).await;
+        assert_eq!(route[0].outcome, PayoutOutcome::Paid);
+        assert_eq!(route[0].outcome_at, Some(5_000));
+        let row = db.get_trade_by_order_id(&order_id).await.unwrap().unwrap();
+        assert_eq!(row.order.status, OrderStatus::Success, "the status stands");
+
+        // A replay, even a later-dated one, moves nothing.
+        dispatch_daemon_message_at(order_uuid, Action::PurchaseCompleted, None, 6_000).await;
         assert_eq!(payout_route::destinations(&order_id).await, route);
     }
 

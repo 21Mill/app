@@ -204,16 +204,34 @@ fn write_lock() -> &'static tokio::sync::Mutex<()> {
     LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
-async fn load(db: &impl Storage, order_id: &str) -> Option<PayoutRoute> {
-    let key = crate::db::settings_keys::payout_route(order_id);
-    let raw = db.get_setting(&key).await.ok().flatten()?;
-    match serde_json::from_str(&raw) {
+/// The record behind a store read: `Err` when the store could not be read,
+/// `Ok(None)` when there is no record or it does not decode. An undecodable
+/// record is replaced by the next write; a failed read must not be, or the
+/// write after it would drop every destination (PR #824 review).
+fn parse_stored(
+    order_id: &str,
+    read: anyhow::Result<Option<String>>,
+) -> anyhow::Result<Option<PayoutRoute>> {
+    let Some(raw) = read? else {
+        return Ok(None);
+    };
+    Ok(match serde_json::from_str(&raw) {
         Ok(route) => Some(route),
         Err(e) => {
             log::warn!("[payout] unreadable record for order={order_id}: {e}");
             None
         }
-    }
+    })
+}
+
+async fn try_load(db: &impl Storage, order_id: &str) -> anyhow::Result<Option<PayoutRoute>> {
+    let key = crate::db::settings_keys::payout_route(order_id);
+    parse_stored(order_id, db.get_setting(&key).await)
+}
+
+/// [`try_load`] for a reader, to whom an unreadable store has no record.
+async fn load(db: &impl Storage, order_id: &str) -> Option<PayoutRoute> {
+    try_load(db, order_id).await.ok().flatten()
 }
 
 /// Load, change and store `order_id`'s record under the write lock. Returns
@@ -224,7 +242,20 @@ async fn update(
     change: impl FnOnce(Option<PayoutRoute>) -> Option<PayoutRoute>,
 ) -> bool {
     let _guard = write_lock().lock().await;
-    let Some(route) = change(load(db, order_id).await) else {
+    let stored = match try_load(db, order_id).await {
+        Ok(stored) => stored,
+        Err(e) => {
+            crate::api::logging::blog_warn(
+                "payout",
+                format!(
+                    "record not read for order={}, left as it is: {e}",
+                    crate::api::logging::short_id(order_id),
+                ),
+            );
+            return false;
+        }
+    };
+    let Some(route) = change(stored) else {
         return false;
     };
     let value = match serde_json::to_string(&route) {
@@ -612,6 +643,25 @@ mod tests {
         // A maker's record never started at a take.
         let maker = with_destination(None, 7, sent(COFFEE, PayoutSource::Entered, 1)).unwrap();
         assert_eq!(take_address_for(&maker, 7), None);
+    }
+
+    #[test]
+    fn a_failed_read_is_not_an_empty_record() {
+        // The store could not answer: the update must stop, not start over.
+        assert!(parse_stored("order-1", Err(anyhow::anyhow!("database is locked"))).is_err());
+        // No record, or one that does not decode: a new one may be written.
+        assert_eq!(parse_stored("order-1", Ok(None)).unwrap(), None);
+        assert_eq!(parse_stored("order-1", Ok(Some("{not json".into()))).unwrap(), None);
+        let stored = serde_json::to_string(&take_route(7)).unwrap();
+        assert_eq!(parse_stored("order-1", Ok(Some(stored))).unwrap(), Some(take_route(7)));
+    }
+
+    #[test]
+    fn a_fraction_of_a_sat_is_no_amount() {
+        use crate::api::invoice::whole_sats;
+        assert_eq!(whole_sats(Some(1_677_000)), Some(1_677));
+        assert_eq!(whole_sats(Some(1_500)), None);
+        assert_eq!(whole_sats(None), None);
     }
 
     async fn temp_db() -> crate::db::sqlite::SqliteStorage {

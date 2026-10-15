@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `bolt11_facts`, `check`, `classify`, `is_lightning_address`, `lnd_network_name`, `network_matches`, `next_payout_amount`, `next_step_start`, `normalize`, `parse_payout_amount`, `parse_step_start`, `payout_amount_of`, `record_invoice_step_start`, `record_payout_amount`, `rejected_with`, `step_start_applies`, `summarize`
+// These functions are ignored because they are not marked as `pub`: `bolt11_facts`, `check`, `classify`, `is_lightning_address`, `lnd_network_name`, `network_matches`, `next_payout_amount`, `next_step_start`, `normalize`, `parse_payout_amount`, `parse_step_start`, `payout_amount_of`, `record_invoice_step_start`, `record_payout_amount`, `rejected_with`, `step_start_applies`, `summarize`, `whole_sats`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Bolt11Facts`
 
 /// Amount and expiry of `invoice`, or `None` when it is not a well-formed,

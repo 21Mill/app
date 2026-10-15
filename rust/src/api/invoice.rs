@@ -490,12 +490,19 @@ pub(crate) struct Bolt11Facts {
     pub payment_hash: String,
 }
 
+/// `msat` in whole sats, or `None` when it carries a fraction of one: a
+/// rounded figure would show the buyer an amount the invoice does not ask for
+/// (PR #824 review). A payout is always whole sats.
+pub(crate) fn whole_sats(msat: Option<u64>) -> Option<u64> {
+    msat.filter(|m| m % 1000 == 0).map(|m| m / 1000)
+}
+
 /// [`Bolt11Facts`] of `input`, or `None` when it is not a well-formed invoice.
 pub(crate) fn bolt11_facts(input: &str) -> Option<Bolt11Facts> {
     let bare = normalize(input);
     let parsed = Bolt11Invoice::from_str(&bare.to_ascii_lowercase()).ok()?;
     Some(Bolt11Facts {
-        amount_sats: parsed.amount_milli_satoshis().map(|msat| msat / 1000),
+        amount_sats: whole_sats(parsed.amount_milli_satoshis()),
         payment_hash: parsed.payment_hash().to_string(),
     })
 }
