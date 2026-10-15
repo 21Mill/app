@@ -83,6 +83,7 @@
   "orderAlreadyTaken": "Die Bestellung wurde bereits angenommen",
   "nodeProtocolUnsupported": "Dieser Mostro-Node nutzt eine Protokollversion, die diese App nicht unterstützt. Wähle in den Einstellungen einen anderen Node oder prüfe, ob ein App-Update verfügbar ist",
   "nodeCapabilitiesUnknown": "Es wird noch geprüft, was der ausgewählte Mostro-Node unterstützt. Versuche es gleich noch einmal",
+  "tradeOnOtherNode": "Dieser Handel gehört zu einem anderen Mostro-Node. Wechsle zu diesem Node, um ihn fortzusetzen",
   "mostroMaintenanceMode": "Der Mostro-Node, mit dem du verbunden bist, wird gerade gewartet. Versuche es später noch einmal oder verbinde dich in den Einstellungen mit einem anderen Mostro-Node",
   "storageUnavailable": "Die App kann keine Orders erstellen oder annehmen, solange ihre lokale Datenbank nicht verfügbar ist. Starte die App neu und versuche es erneut",
   "rangeOrderWithSats": "Eine Order mit Betragsspanne kann keinen festen Sats-Betrag haben: Sie wird bei der Annahme zum Marktpreis bewertet.",

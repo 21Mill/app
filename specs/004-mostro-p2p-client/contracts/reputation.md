@@ -15,7 +15,11 @@ Identity MUST NOT be in privacy mode.
 **Side effects**: Sends `rate` action to Mostro daemon via NIP-44 (Kind 14).
 
 **Errors**: `TradeNotComplete`, `PrivacyModeEnabled`, `AlreadyRated`,
-`ProtocolError`.
+`ProtocolError`, `RateUserDispatchFailed: TradeOnOtherNode` (the trade is not
+on the active node: nothing is sent and the rating is not kept, see
+`contracts/orders.md`, "Where a trade action goes"). The check is on the send:
+a trade with no persisted trade key sends nothing to any node, and its rating
+is kept in memory only, as before.
 
 ---
 

@@ -309,6 +309,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Still checking what the selected Mostro node supports. Try again in a moment';
 
   @override
+  String get tradeOnOtherNode =>
+      'This trade belongs to another Mostro node. Switch to that node to act on it';
+
+  @override
   String get mostroMaintenanceMode =>
       'The Mostro node you are connected to is under maintenance. Try again later, or connect to a different Mostro node in Settings';
 

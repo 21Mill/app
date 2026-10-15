@@ -39,6 +39,22 @@ void main() {
     );
   });
 
+  // #810: a trade action on another node's trade is refused before sending,
+  // and the wrappers of open_dispute and submit_rating prepend context.
+  test('maps the trade-on-other-node marker, bare or wrapped', () {
+    for (final raw in [
+      'TradeOnOtherNode',
+      'AnyhowException(TradeOnOtherNode)',
+      'RateUserDispatchFailed: TradeOnOtherNode',
+    ]) {
+      expect(
+        localizedDaemonError(l10n, raw, fallback: 'x'),
+        l10n.tradeOnOtherNode,
+        reason: raw,
+      );
+    }
+  });
+
   test('maps the range-with-sats marker of create_order', () {
     expect(
       localizedDaemonError(l10n, 'RangeOrderWithSats', fallback: 'x'),

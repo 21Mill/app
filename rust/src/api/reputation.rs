@@ -231,6 +231,7 @@ pub async fn submit_rating(trade_id: String, score: u8) -> Result<()> {
     // network error without hitting AlreadyRated.
     if let Some(trade_index) = crate::api::orders::trade_key_for_order(&trade_id).await {
         let dispatch_result: anyhow::Result<()> = async {
+            let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&trade_id).await?;
             let sender_keys =
                 crate::api::identity::get_active_trade_keys(trade_index).await?;
             // Rating is the one action that must land under the long-lived
@@ -239,9 +240,6 @@ pub async fn submit_rating(trade_id: String, score: u8) -> Result<()> {
             // resolve identity keys unconditionally via the same helper.
             let identity_keys =
                 crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-            let mostro_pubkey =
-                nostr_sdk::prelude::PublicKey::from_hex(&crate::config::active_mostro_pubkey())
-                    .map_err(|e| anyhow::anyhow!("invalid mostro pubkey: {e}"))?;
             let event_json = crate::mostro::actions::rate_user(
                 &identity_keys,
                 &sender_keys,
@@ -469,6 +467,47 @@ mod tests {
         submit_rating(trade_id.clone(), 3).await.unwrap();
         let err = submit_rating(trade_id, 5).await.unwrap_err();
         assert!(err.to_string().contains("AlreadyRated"));
+    }
+
+    /// #810: a rating goes to the trade's own node, which must be the active
+    /// one. On another node nothing is published and the slot is not kept, so
+    /// the rating can still be sent from its node.
+    #[tokio::test]
+    // The privacy lock must span the calls it guards.
+    #[allow(clippy::await_holding_lock)]
+    async fn a_rating_on_another_node_is_refused() {
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row, trade,
+        };
+        let guard = privacy_lock().lock().unwrap();
+        set_privacy_mode(false);
+        let mut outcomes = Vec::new();
+        for node in nodes_other_than_the_active_one() {
+            // Arrange
+            let order_id = uuid::Uuid::new_v4().to_string();
+            store_trade_row(&trade(
+                &order_id,
+                7,
+                crate::api::types::OrderStatus::Success,
+                &node,
+            ))
+            .await;
+
+            // Act
+            let outcome = submit_rating(order_id.clone(), 4).await;
+            let kept = get_rating_for_trade(order_id.clone()).await.unwrap();
+            forget_trade_row(&order_id).await;
+            outcomes.push((node, outcome, kept));
+        }
+        // A panic under the lock would poison it for every rating test.
+        drop(guard);
+
+        // Assert
+        for (node, outcome, kept) in outcomes {
+            let err = outcome.expect_err(&node).to_string();
+            assert!(err.contains("TradeOnOtherNode"), "node {node:?}: got {err}");
+            assert!(kept.is_none(), "node {node:?}: the rating slot was kept");
+        }
     }
 
     #[tokio::test]

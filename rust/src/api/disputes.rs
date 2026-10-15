@@ -302,6 +302,7 @@ pub async fn open_dispute(trade_id: String, reason: Option<String>) -> Result<Di
     let trade_index = crate::api::orders::trade_key_for_order(&trade_id)
         .await
         .ok_or_else(|| anyhow!("TradeNotDisputable: no trade key for trade {trade_id}"))?;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&trade_id).await?;
 
     // Correlation nonce for this request. The daemon echoes it in its reply —
     // DisputeInitiatedByYou on acceptance, CantDo on rejection — and only a
@@ -316,9 +317,6 @@ pub async fn open_dispute(trade_id: String, reason: Option<String>) -> Result<Di
             crate::api::identity::get_active_trade_keys(trade_index).await?;
         let identity_keys =
             crate::api::identity::get_transport_identity_keys(&sender_keys).await?;
-        let mostro_pubkey =
-            nostr_sdk::prelude::PublicKey::from_hex(&crate::config::active_mostro_pubkey())
-                .map_err(|e| anyhow!("invalid mostro pubkey: {e}"))?;
         let event_json = crate::mostro::actions::dispute(
             &identity_keys,
             &sender_keys,
@@ -1862,6 +1860,38 @@ mod tests {
             err.to_string().contains("TradeNotDisputable"),
             "expected TradeNotDisputable, got: {err}"
         );
+    }
+
+    /// #810: a dispute goes to the trade's own node, which must be the active
+    /// one. On another node nothing is published and no dispute is recorded.
+    #[tokio::test]
+    async fn a_dispute_on_another_node_is_refused() {
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row, trade,
+        };
+        for node in nodes_other_than_the_active_one() {
+            // Arrange
+            let order_id = uuid::Uuid::new_v4().to_string();
+            store_trade_row(&trade(
+                &order_id,
+                7,
+                crate::api::types::OrderStatus::FiatSent,
+                &node,
+            ))
+            .await;
+
+            // Act
+            let err = open_dispute(order_id.clone(), None).await.unwrap_err();
+
+            // Assert
+            assert!(
+                err.to_string().contains("TradeOnOtherNode"),
+                "node {node:?}: got {err}"
+            );
+            assert!(dispute_store().get(&order_id).await.is_none());
+            assert!(!pending_opens().lock().unwrap().contains(&order_id));
+            forget_trade_row(&order_id).await;
+        }
     }
 
     #[tokio::test]

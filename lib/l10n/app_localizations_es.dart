@@ -311,6 +311,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Aún se está comprobando qué soporta el nodo Mostro seleccionado. Inténtalo de nuevo en un momento';
 
   @override
+  String get tradeOnOtherNode =>
+      'Esta operación pertenece a otro nodo Mostro. Cambia a ese nodo para continuar con ella';
+
+  @override
   String get mostroMaintenanceMode =>
       'El nodo Mostro al que estás conectado está en mantenimiento. Inténtalo más tarde o conéctate a otro nodo Mostro desde Ajustes';
 

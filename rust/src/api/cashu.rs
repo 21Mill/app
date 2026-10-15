@@ -832,6 +832,11 @@ const RECORD_ATTEMPTS: usize = 3;
 /// `CashuEscrowNotPersisted`, `CashuEscrowRejected: <reason>`,
 /// `NoDaemonResponse`, plus the `CashuLockFailed` markers from construction.
 pub async fn lock_escrow(order_id: String) -> Result<()> {
+    // The mode checked next is the active node's: a trade of another node is
+    // refused as such before it (#810).
+    if load_trade(&order_id).await.is_ok() {
+        crate::mostro::trade_node::trade_action_node(&order_id).await?;
+    }
     ensure_enabled()?;
     let op = escrow_op_lock(&order_id);
     let _op = op.lock().await;
@@ -847,10 +852,10 @@ pub async fn lock_escrow(order_id: String) -> Result<()> {
     let trade_index = crate::api::orders::trade_key_for_order(&order_id)
         .await
         .ok_or_else(|| anyhow::anyhow!("no persisted trade key for order {order_id}"))?;
+    let mostro_pubkey = crate::mostro::trade_node::trade_action_node(&order_id).await?;
+    let mostro_hex = mostro_pubkey.to_hex();
     let seller_keys = crate::api::identity::get_active_trade_keys(trade_index).await?;
     let identity_keys = crate::api::identity::get_transport_identity_keys(&seller_keys).await?;
-    let mostro_hex = crate::config::active_mostro_pubkey();
-    let mostro_pubkey = nostr_sdk::prelude::PublicKey::from_hex(&mostro_hex)?;
 
     let seller_hex = seller_keys.public_key().to_hex();
 
@@ -1267,6 +1272,48 @@ mod tests {
                 err.to_string().contains("CashuNotEnabled"),
                 "expected the escrow gate to close, got {err}"
             );
+        }
+    }
+
+    /// #810: an escrow goes to the trade's own node, which must be the active
+    /// one. On another node it is refused before any ecash is swapped.
+    #[tokio::test]
+    // The globals lock must span the calls it guards.
+    #[allow(clippy::await_holding_lock)]
+    async fn an_escrow_for_a_trade_on_another_node_is_refused() {
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row,
+        };
+        // Arrange — the active node is a single-mint Cashu node, then a
+        // Lightning one: its escrow mode is not the trade's.
+        let _g = escrow_lock();
+        for mode in [
+            escrow_mode::EscrowMode::Cashu,
+            escrow_mode::EscrowMode::Lightning,
+        ] {
+            escrow_mode::set_from_tags(
+                mode,
+                escrow_mode::CashuNodeConfig {
+                    mint_urls: vec!["https://mint.a.com".to_string()],
+                    ..Default::default()
+                },
+            );
+            for node in nodes_other_than_the_active_one() {
+                let order_id = uuid::Uuid::new_v4().to_string();
+                let mut row = seller_trade(&order_id, Some("02"), "");
+                row.order.node_pubkey = node.clone();
+                store_trade_row(&row).await;
+
+                // Act
+                let err = lock_escrow(order_id.clone()).await.unwrap_err();
+
+                // Assert
+                assert!(
+                    err.to_string().contains("TradeOnOtherNode"),
+                    "{mode:?} node {node:?}: got {err}"
+                );
+                forget_trade_row(&order_id).await;
+            }
         }
     }
 

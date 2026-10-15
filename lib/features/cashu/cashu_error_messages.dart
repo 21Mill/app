@@ -64,6 +64,9 @@ final Map<String, String Function(AppLocalizations)> _messages = {
   'InvalidEscrowParties': (l) => l.lockEscrowInvalidToken,
   'InvalidEscrowToken': (l) => l.lockEscrowInvalidToken,
   'NotTheSeller': (l) => l.lockEscrowNotTheSeller,
+  // The trade is on another node than the selected one: nothing was swapped
+  // or sent (#810).
+  'TradeOnOtherNode': (l) => l.tradeOnOtherNode,
   'CashuLockFailed': (l) => l.lockEscrowFailed,
   'CashuNotEnabled': (l) => l.cashuErrorNotEnabled,
   'CashuNotConnected': (l) => l.cashuErrorNotConnected,
