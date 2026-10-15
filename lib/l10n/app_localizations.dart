@@ -7711,13 +7711,13 @@ abstract class AppLocalizations {
   /// No description provided for @reputationRebindBody.
   ///
   /// In en, this message translates to:
-  /// **'Moving to a new identity? Sign here, with the identity your reputation is bound to now, an authorization for the new one, then use it from the new identity.'**
+  /// **'Moving to a new identity? Sign an authorization for it here, with the identity your reputation is bound to now. Then, from the new identity, paste it in the authorization field above and export.'**
   String get reputationRebindBody;
 
   /// No description provided for @reputationNewIdentityHint.
   ///
   /// In en, this message translates to:
-  /// **'New identity (npub)'**
+  /// **'New identity (npub or hex)'**
   String get reputationNewIdentityHint;
 
   /// No description provided for @reputationRebindSign.
@@ -7729,8 +7729,26 @@ abstract class AppLocalizations {
   /// No description provided for @reputationInvalidIdentity.
   ///
   /// In en, this message translates to:
-  /// **'That is not a valid npub.'**
+  /// **'That is not a valid npub or hex key.'**
   String get reputationInvalidIdentity;
+
+  /// Reputation screen: optional field on export for the authorization signed by the identity the reputation is bound to now
+  ///
+  /// In en, this message translates to:
+  /// **'Authorization from your previous identity (optional)'**
+  String get reputationRebindInputHint;
+
+  /// Title of the dialog confirming the identity a rebind authorization is signed for
+  ///
+  /// In en, this message translates to:
+  /// **'Authorize this identity?'**
+  String get reputationRebindConfirmTitle;
+
+  /// Dialog body before signing a rebind authorization: the key that will take the reputation over
+  ///
+  /// In en, this message translates to:
+  /// **'Whoever holds this identity will be able to export your reputation from this Mostro, and your current identity no longer will:\n\n{npub}\n\nSign only for an identity that is yours.'**
+  String reputationRebindConfirmBody(String npub);
 }
 
 class _AppLocalizationsDelegate

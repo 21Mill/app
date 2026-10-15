@@ -4570,8 +4570,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String reputationFigures(int reviews, String rating, int days) {
-    final intl.NumberFormat reviewsNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
     final String reviewsString = reviewsNumberFormat.format(reviews);
     final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
       localeName,
@@ -4644,14 +4644,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reputationRebindBody =>
-      'Moving to a new identity? Sign here, with the identity your reputation is bound to now, an authorization for the new one, then use it from the new identity.';
+      'Moving to a new identity? Sign an authorization for it here, with the identity your reputation is bound to now. Then, from the new identity, paste it in the authorization field above and export.';
 
   @override
-  String get reputationNewIdentityHint => 'New identity (npub)';
+  String get reputationNewIdentityHint => 'New identity (npub or hex)';
 
   @override
   String get reputationRebindSign => 'Sign authorization';
 
   @override
-  String get reputationInvalidIdentity => 'That is not a valid npub.';
+  String get reputationInvalidIdentity =>
+      'That is not a valid npub or hex key.';
+
+  @override
+  String get reputationRebindInputHint =>
+      'Authorization from your previous identity (optional)';
+
+  @override
+  String get reputationRebindConfirmTitle => 'Authorize this identity?';
+
+  @override
+  String reputationRebindConfirmBody(String npub) {
+    return 'Whoever holds this identity will be able to export your reputation from this Mostro, and your current identity no longer will:\n\n$npub\n\nSign only for an identity that is yours.';
+  }
 }

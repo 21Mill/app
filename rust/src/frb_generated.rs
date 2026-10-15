@@ -6676,13 +6676,12 @@ fn wire__crate__api__reputation_transfer__reputation_identity_npub_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_identity_hex = <String>::sse_decode(&mut deserializer);
+            let api_identity = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                 (move || {
-                    let output_ok = crate::api::reputation_transfer::reputation_identity_npub(
-                        api_identity_hex,
-                    )?;
+                    let output_ok =
+                        crate::api::reputation_transfer::reputation_identity_npub(api_identity)?;
                     Ok(output_ok)
                 })(),
             )

@@ -68,6 +68,8 @@ from_pubkey: String
 
 ## Reputation portability UI
 
-The `/import_reputation` route and its local validation, Telegram handoff,
+The `/reputation` screen reached from Settings (export, rebind) is specified in
+[Reputation Transfer](reputation_transfer.md#reputation-screen). The
+`/import_reputation` route and its local validation, Telegram handoff,
 confirmation, and failure behavior are specified in
 [Reputation Transfer](reputation_transfer.md#import-screen).

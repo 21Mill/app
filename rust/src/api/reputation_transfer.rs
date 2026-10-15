@@ -93,11 +93,13 @@ pub fn get_reputation_support() -> ReputationSupportInfo {
     }
 }
 
-/// Encode the displayed identity as npub for comparison with lnp2pBot's
-/// confirmation. Dart supplies the same hex key used in the bot link.
+/// Encode an identity as npub, for the user to confirm before it is bound or
+/// authorised: the import screen compares it with lnp2pBot's confirmation,
+/// and the reputation screen shows it before a rebind is signed. Takes the
+/// key as hex or npub, so a typed npub is checked here too.
 #[flutter_rust_bridge::frb(sync)]
-pub fn reputation_identity_npub(identity_hex: String) -> Result<String> {
-    Ok(pubkey(&identity_hex)?.to_bech32()?)
+pub fn reputation_identity_npub(identity: String) -> Result<String> {
+    Ok(identity_pubkey(&identity)?.to_bech32()?)
 }
 
 /// Verify an attestation pasted or received, without sending anything: the
@@ -481,6 +483,25 @@ mod tests {
             .unwrap_err()
             .to_string()
             .starts_with("InvalidPubkey"));
+    }
+
+    #[test]
+    fn an_identity_is_read_as_hex_or_npub_and_nothing_else() {
+        let hex = "ab1db593a4d1196eb07335fdc702a314712ed29c631ceaebd84708a17d3bc2f7";
+        let npub = reputation_identity_npub(hex.into()).unwrap();
+        assert_eq!(identity_pubkey(hex).unwrap().to_hex(), hex);
+        assert_eq!(identity_pubkey(&format!("  {npub}\n")).unwrap().to_hex(), hex);
+        assert_eq!(reputation_identity_npub(npub.clone()).unwrap(), npub);
+        let broken_checksum = format!("{}q", &npub[..npub.len() - 1]);
+        for garbage in ["", "npub1", "nope", &hex[..63], &broken_checksum] {
+            assert!(
+                identity_pubkey(garbage)
+                    .unwrap_err()
+                    .to_string()
+                    .starts_with("InvalidPubkey"),
+                "{garbage:?} must be refused"
+            );
+        }
     }
 
     #[test]

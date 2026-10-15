@@ -1416,8 +1416,11 @@
   "reputationExportConfirmBody": "Je reputatie op deze Mostro wordt geëxporteerd voor deze identiteit:\n\n{npub}\n\nNa het exporteren is ze eraan gekoppeld: later exporteren voor een andere identiteit vereist een toestemming ondertekend met deze.",
   "reputationExportConfirmButton": "Exporteren",
   "reputationExported": "Je reputatie is klaar. Schakel over naar de Mostro waar je ze wilt en importeer ze; ze is 7 dagen geldig.",
-  "reputationRebindBody": "Stap je over op een nieuwe identiteit? Onderteken hier, met de identiteit waaraan je reputatie nu gekoppeld is, een toestemming voor de nieuwe en gebruik die vanaf de nieuwe identiteit.",
-  "reputationNewIdentityHint": "Nieuwe identiteit (npub)",
+  "reputationRebindBody": "Stap je over op een nieuwe identiteit? Onderteken hier een toestemming voor de nieuwe, met de identiteit waaraan je reputatie nu gekoppeld is. Plak die daarna vanaf de nieuwe identiteit in het toestemmingsveld hierboven en exporteer.",
+  "reputationNewIdentityHint": "Nieuwe identiteit (npub of hex)",
   "reputationRebindSign": "Toestemming ondertekenen",
-  "reputationInvalidIdentity": "Dat is geen geldige npub."
+  "reputationInvalidIdentity": "Dat is geen geldige npub- of hex-sleutel.",
+  "reputationRebindInputHint": "Toestemming van je vorige identiteit (optioneel)",
+  "reputationRebindConfirmTitle": "Deze identiteit toestemming geven?",
+  "reputationRebindConfirmBody": "Wie deze identiteit bezit, kan je reputatie van deze Mostro exporteren, en je huidige identiteit kan dat niet meer:\n\n{npub}\n\nOnderteken alleen voor een identiteit die van jou is."
 }

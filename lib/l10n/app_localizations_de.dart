@@ -4632,8 +4632,8 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String reputationFigures(int reviews, String rating, int days) {
-    final intl.NumberFormat reviewsNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
     final String reviewsString = reviewsNumberFormat.format(reviews);
     final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
       localeName,
@@ -4706,14 +4706,27 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get reputationRebindBody =>
-      'Wechselst du zu einer neuen Identität? Signiere hier mit der Identität, an die deine Reputation jetzt gebunden ist, eine Autorisierung für die neue und verwende sie dann von der neuen Identität aus.';
+      'Wechselst du zu einer neuen Identität? Signiere hier mit der Identität, an die deine Reputation jetzt gebunden ist, eine Autorisierung für die neue. Füge sie dann mit der neuen Identität oben in das Autorisierungsfeld ein und exportiere.';
 
   @override
-  String get reputationNewIdentityHint => 'Neue Identität (npub)';
+  String get reputationNewIdentityHint => 'Neue Identität (npub oder Hex)';
 
   @override
   String get reputationRebindSign => 'Autorisierung signieren';
 
   @override
-  String get reputationInvalidIdentity => 'Das ist kein gültiger npub.';
+  String get reputationInvalidIdentity =>
+      'Das ist kein gültiger npub- oder Hex-Schlüssel.';
+
+  @override
+  String get reputationRebindInputHint =>
+      'Autorisierung deiner bisherigen Identität (optional)';
+
+  @override
+  String get reputationRebindConfirmTitle => 'Diese Identität autorisieren?';
+
+  @override
+  String reputationRebindConfirmBody(String npub) {
+    return 'Wer diese Identität besitzt, kann deine Reputation von diesem Mostro exportieren, und deine aktuelle Identität kann es nicht mehr:\n\n$npub\n\nSigniere nur für eine Identität, die dir gehört.';
+  }
 }

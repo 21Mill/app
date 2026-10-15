@@ -1416,8 +1416,11 @@
   "reputationExportConfirmBody": "Tu reputación en este Mostro se exportará para esta identidad:\n\n{npub}\n\nUna vez exportada queda ligada a ella: exportarla después para otra identidad requiere una autorización firmada con esta.",
   "reputationExportConfirmButton": "Exportar",
   "reputationExported": "Tu reputación está lista. Cambia al Mostro donde la quieres e impórtala; es válida durante 7 días.",
-  "reputationRebindBody": "¿Te mudas a una identidad nueva? Firma aquí, con la identidad a la que está ligada tu reputación ahora, una autorización para la nueva y luego úsala desde la nueva identidad.",
-  "reputationNewIdentityHint": "Identidad nueva (npub)",
+  "reputationRebindBody": "¿Te mudas a una identidad nueva? Firma aquí una autorización para ella, con la identidad a la que está ligada tu reputación ahora. Luego, desde la identidad nueva, pégala en el campo de autorización de arriba y exporta.",
+  "reputationNewIdentityHint": "Identidad nueva (npub o hex)",
   "reputationRebindSign": "Firmar autorización",
-  "reputationInvalidIdentity": "Ese no es un npub válido."
+  "reputationInvalidIdentity": "Ese no es un npub ni una clave hex válidos.",
+  "reputationRebindInputHint": "Autorización de tu identidad anterior (opcional)",
+  "reputationRebindConfirmTitle": "¿Autorizar esta identidad?",
+  "reputationRebindConfirmBody": "Quien tenga esta identidad podrá exportar tu reputación de este Mostro, y tu identidad actual ya no podrá:\n\n{npub}\n\nFirma solo para una identidad que sea tuya."
 }

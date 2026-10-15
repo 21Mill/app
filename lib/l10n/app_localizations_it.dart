@@ -4616,8 +4616,8 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String reputationFigures(int reviews, String rating, int days) {
-    final intl.NumberFormat reviewsNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
     final String reviewsString = reviewsNumberFormat.format(reviews);
     final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
       localeName,
@@ -4690,14 +4690,27 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get reputationRebindBody =>
-      'Passi a una nuova identità? Firma qui, con l\'identità a cui è legata ora la tua reputazione, un\'autorizzazione per la nuova, poi usala dalla nuova identità.';
+      'Passi a una nuova identità? Firma qui un\'autorizzazione per la nuova, con l\'identità a cui è legata ora la tua reputazione. Poi, dalla nuova identità, incollala nel campo di autorizzazione qui sopra ed esporta.';
 
   @override
-  String get reputationNewIdentityHint => 'Nuova identità (npub)';
+  String get reputationNewIdentityHint => 'Nuova identità (npub o hex)';
 
   @override
   String get reputationRebindSign => 'Firma autorizzazione';
 
   @override
-  String get reputationInvalidIdentity => 'Questo non è un npub valido.';
+  String get reputationInvalidIdentity =>
+      'Questo non è un npub né una chiave hex valida.';
+
+  @override
+  String get reputationRebindInputHint =>
+      'Autorizzazione dalla tua identità precedente (facoltativa)';
+
+  @override
+  String get reputationRebindConfirmTitle => 'Autorizzare questa identità?';
+
+  @override
+  String reputationRebindConfirmBody(String npub) {
+    return 'Chi possiede questa identità potrà esportare la tua reputazione da questo Mostro, e la tua identità attuale non potrà più farlo:\n\n$npub\n\nFirma solo per un\'identità che è tua.';
+  }
 }

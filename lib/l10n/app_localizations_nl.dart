@@ -4608,8 +4608,8 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String reputationFigures(int reviews, String rating, int days) {
-    final intl.NumberFormat reviewsNumberFormat =
-        intl.NumberFormat.decimalPattern(localeName);
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
     final String reviewsString = reviewsNumberFormat.format(reviews);
     final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
       localeName,
@@ -4682,14 +4682,28 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get reputationRebindBody =>
-      'Stap je over op een nieuwe identiteit? Onderteken hier, met de identiteit waaraan je reputatie nu gekoppeld is, een toestemming voor de nieuwe en gebruik die vanaf de nieuwe identiteit.';
+      'Stap je over op een nieuwe identiteit? Onderteken hier een toestemming voor de nieuwe, met de identiteit waaraan je reputatie nu gekoppeld is. Plak die daarna vanaf de nieuwe identiteit in het toestemmingsveld hierboven en exporteer.';
 
   @override
-  String get reputationNewIdentityHint => 'Nieuwe identiteit (npub)';
+  String get reputationNewIdentityHint => 'Nieuwe identiteit (npub of hex)';
 
   @override
   String get reputationRebindSign => 'Toestemming ondertekenen';
 
   @override
-  String get reputationInvalidIdentity => 'Dat is geen geldige npub.';
+  String get reputationInvalidIdentity =>
+      'Dat is geen geldige npub- of hex-sleutel.';
+
+  @override
+  String get reputationRebindInputHint =>
+      'Toestemming van je vorige identiteit (optioneel)';
+
+  @override
+  String get reputationRebindConfirmTitle =>
+      'Deze identiteit toestemming geven?';
+
+  @override
+  String reputationRebindConfirmBody(String npub) {
+    return 'Wie deze identiteit bezit, kan je reputatie van deze Mostro exporteren, en je huidige identiteit kan dat niet meer:\n\n$npub\n\nOnderteken alleen voor een identiteit die van jou is.';
+  }
 }

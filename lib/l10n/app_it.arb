@@ -1416,8 +1416,11 @@
   "reputationExportConfirmBody": "La tua reputazione su questo Mostro verrà esportata per questa identità:\n\n{npub}\n\nUna volta esportata resta legata a essa: esportarla poi per un'altra identità richiede un'autorizzazione firmata con questa.",
   "reputationExportConfirmButton": "Esporta",
   "reputationExported": "La tua reputazione è pronta. Passa al Mostro dove la vuoi e importala; è valida per 7 giorni.",
-  "reputationRebindBody": "Passi a una nuova identità? Firma qui, con l'identità a cui è legata ora la tua reputazione, un'autorizzazione per la nuova, poi usala dalla nuova identità.",
-  "reputationNewIdentityHint": "Nuova identità (npub)",
+  "reputationRebindBody": "Passi a una nuova identità? Firma qui un'autorizzazione per la nuova, con l'identità a cui è legata ora la tua reputazione. Poi, dalla nuova identità, incollala nel campo di autorizzazione qui sopra ed esporta.",
+  "reputationNewIdentityHint": "Nuova identità (npub o hex)",
   "reputationRebindSign": "Firma autorizzazione",
-  "reputationInvalidIdentity": "Questo non è un npub valido."
+  "reputationInvalidIdentity": "Questo non è un npub né una chiave hex valida.",
+  "reputationRebindInputHint": "Autorizzazione dalla tua identità precedente (facoltativa)",
+  "reputationRebindConfirmTitle": "Autorizzare questa identità?",
+  "reputationRebindConfirmBody": "Chi possiede questa identità potrà esportare la tua reputazione da questo Mostro, e la tua identità attuale non potrà più farlo:\n\n{npub}\n\nFirma solo per un'identità che è tua."
 }
