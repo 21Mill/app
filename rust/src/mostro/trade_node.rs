@@ -13,7 +13,9 @@
 //! where every trade action takes its destination from (#810).
 //!
 //! A daemon message is heard according to who its author is to the trade it
-//! is addressed to ([`speaker`], [`heard`]).
+//! is addressed to ([`speaker`], [`heard`]): the active node, and the trade's
+//! own node whichever is active (#811), so a trade on another node moves to
+//! its real status.
 
 use crate::api::types::TradeInfo;
 use nostr_sdk::prelude::PublicKey;
@@ -58,6 +60,8 @@ pub(crate) async fn trade_action_node(order_id: &str) -> anyhow::Result<PublicKe
 pub(crate) enum Speaker {
     /// The active node.
     ActiveNode,
+    /// The node that issued the trade, while another one is active.
+    TradesNode,
     /// A node still owed a payout claim's traffic (docs/ANTI_ABUSE_BOND.md
     /// §6.4): heard about claims only.
     ClaimNode,
@@ -66,11 +70,20 @@ pub(crate) enum Speaker {
 }
 
 /// Who `sender_hex`, the verified author of a daemon message addressed to
-/// the trade key at `trade_index`, is to that trade. The trade itself is not
-/// consulted yet.
-pub(crate) async fn speaker(sender_hex: &str, _trade_index: u32) -> Speaker {
+/// the trade key at `trade_index`, is to that trade.
+///
+/// The trade is the row bound to that key. A row that does not know its
+/// node, or a key bound to no row, has no node to hear: only the active one
+/// is, as before #811. Anyone may p-tag a trade key, which is public, so the
+/// author must be the node the row names.
+pub(crate) async fn speaker(sender_hex: &str, trade_index: u32) -> Speaker {
     if sender_hex.eq_ignore_ascii_case(&crate::config::active_mostro_pubkey()) {
         Speaker::ActiveNode
+    } else if node_of_trade_key(trade_index)
+        .await
+        .is_some_and(|node| node.eq_ignore_ascii_case(sender_hex))
+    {
+        Speaker::TradesNode
     } else if crate::mostro::bond_claims::is_claim_node(sender_hex) {
         Speaker::ClaimNode
     } else {
@@ -78,11 +91,20 @@ pub(crate) async fn speaker(sender_hex: &str, _trade_index: u32) -> Speaker {
     }
 }
 
-/// Whether a message from `speaker` is heard: the active node's always, a
-/// claim node's about claims only, anyone else's never.
+/// The recorded node of the trade bound to the trade key at `trade_index`.
+async fn node_of_trade_key(trade_index: u32) -> Option<String> {
+    use crate::db::Storage as _;
+    let db = crate::db::app_db::db()?;
+    let order_id = db.get_order_id_by_trade_index(trade_index).await.ok()??;
+    let trade = db.get_trade_by_order_id(&order_id).await.ok()??;
+    trade_node(&trade).map(str::to_owned)
+}
+
+/// Whether a message from `speaker` is heard: the active node's and the
+/// trade's own always, a claim node's about claims only, anyone else's never.
 pub(crate) fn heard(speaker: Speaker, claim_action: bool) -> bool {
     match speaker {
-        Speaker::ActiveNode => true,
+        Speaker::ActiveNode | Speaker::TradesNode => true,
         Speaker::ClaimNode => claim_action,
         Speaker::Stranger => false,
     }

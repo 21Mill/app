@@ -9318,6 +9318,63 @@ async fn replace_global_dm_filter(
         return Ok(());
     }
     let p_count = trade_pubkeys.len();
+    let authors = dm_filter_authors(mostro_pubkey).await;
+    let heard: std::collections::BTreeSet<String> = authors.iter().map(|a| a.to_hex()).collect();
+    let dm_filter = nostr_sdk::prelude::Filter::new()
+        .kind(nostr_sdk::prelude::Kind::PrivateDirectMessage)
+        .authors(authors)
+        .pubkeys(trade_pubkeys);
+    replace_subscription(client, mostro_dm_subscription_id(), dm_filter).await?;
+    *dm_filter_heard()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(heard);
+    crate::api::logging::blog_info(
+        "relay",
+        format!(
+            "sub replaced id={} kinds=[14] p_count={p_count}",
+            mostro_dm_subscription_id(),
+        ),
+    );
+    Ok(())
+}
+
+/// The authors the bulk kind-14 filter was last issued with.
+fn dm_filter_heard() -> &'static std::sync::Mutex<Option<std::collections::BTreeSet<String>>> {
+    static HEARD: std::sync::Mutex<Option<std::collections::BTreeSet<String>>> =
+        std::sync::Mutex::new(None);
+    &HEARD
+}
+
+static DM_AUTHORS_REFRESH: crate::nostr::coalesce::Coalesced =
+    crate::nostr::coalesce::Coalesced::new();
+
+/// Re-issue the bulk kind-14 filter when the nodes it should hear differ
+/// from those it was issued with: a trade that ended may leave its node
+/// with nothing to be heard about (#811). Re-issuing replays every
+/// history, so an unchanged set leaves the filter alone.
+async fn refresh_dm_authors_if_changed() {
+    let Ok(mostro_pubkey) = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey()) else {
+        return;
+    };
+    let wanted: std::collections::BTreeSet<String> = dm_filter_authors(mostro_pubkey)
+        .await
+        .iter()
+        .map(|a| a.to_hex())
+        .collect();
+    let issued = dm_filter_heard()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    if issued.is_some_and(|issued| issued != wanted) {
+        resubscribe_global_dm_filter().await;
+    }
+}
+
+/// Who the bulk kind-14 filter hears: the active node, every node holding
+/// an open payout claim, and the issuing node of every live trade.
+async fn dm_filter_authors(
+    mostro_pubkey: nostr_sdk::prelude::PublicKey,
+) -> Vec<nostr_sdk::prelude::PublicKey> {
     // The active node, plus every node holding an open payout claim: its
     // `add-bond-invoice` retries and acknowledgements must keep arriving
     // after a node switch (docs/ANTI_ABUSE_BOND.md §6.4).
@@ -9340,19 +9397,7 @@ async fn replace_global_dm_filter(
             }
         }
     }
-    let dm_filter = nostr_sdk::prelude::Filter::new()
-        .kind(nostr_sdk::prelude::Kind::PrivateDirectMessage)
-        .authors(authors)
-        .pubkeys(trade_pubkeys);
-    replace_subscription(client, mostro_dm_subscription_id(), dm_filter).await?;
-    crate::api::logging::blog_info(
-        "relay",
-        format!(
-            "sub replaced id={} kinds=[14] p_count={p_count}",
-            mostro_dm_subscription_id(),
-        ),
-    );
-    Ok(())
+    authors
 }
 
 /// Re-target the live order-book and Mostro-reply subscriptions to the
@@ -9642,6 +9687,29 @@ async fn build_trade_key_map() -> HashMap<String, (nostr_sdk::prelude::Keys, u32
 async fn resolve_dm_recipient(
     event: &nostr_sdk::prelude::Event,
 ) -> Option<(String, nostr_sdk::prelude::Keys, u32)> {
+    if let Some(recipient) = find_dm_recipient(event).await {
+        return Some(recipient);
+    }
+    let map_len = global_dm_keys().read().await.len();
+    // The bulk filter pins author + our own p-tags, so a kind-14 that reaches
+    // here without a matching key is an anomaly (stale filter after
+    // regenerate? key map gap?) — worth a warn.
+    crate::api::logging::blog_warn(
+        "daemon-msg",
+        format!(
+            "drop ev={} reason=no-matching-p-tag map={}",
+            crate::api::logging::short_id(&event.id.to_hex()),
+            map_len,
+        ),
+    );
+    None
+}
+
+/// [`resolve_dm_recipient`] without its warning, for a kind-14 that may well
+/// be peer chat: the key map is read only for the lookup itself.
+async fn find_dm_recipient(
+    event: &nostr_sdk::prelude::Event,
+) -> Option<(String, nostr_sdk::prelude::Keys, u32)> {
     let map = global_dm_keys().read().await;
     for tag in event.tags.iter() {
         let s = tag.as_slice();
@@ -9653,24 +9721,14 @@ async fn resolve_dm_recipient(
             }
         }
     }
-    // The bulk filter pins author + our own p-tags, so a kind-14 that reaches
-    // here without a matching key is an anomaly (stale filter after
-    // regenerate? key map gap?) — worth a warn.
-    crate::api::logging::blog_warn(
-        "daemon-msg",
-        format!(
-            "drop ev={} reason=no-matching-p-tag map={}",
-            crate::api::logging::short_id(&event.id.to_hex()),
-            map.len(),
-        ),
-    );
     None
 }
 
 /// Handle a kind-14 Mostro reply received on the global subscription.
 ///
-/// The caller has already pinned the author to the active Mostro pubkey and
-/// resolved the addressed trade key via [`resolve_dm_recipient`]. Decrypts
+/// The caller has already resolved the addressed trade key and found the
+/// author may speak about that trade ([`crate::mostro::trade_node::speaker`]),
+/// so nothing it records as seen here was refused. Decrypts
 /// via `mostro_core::transport::unwrap_incoming` and dispatches the recovered
 /// `Message` through `dispatch_mostro_message`.
 async fn handle_global_daemon_message(
@@ -10067,17 +10125,29 @@ async fn _run_order_subscription() {
 
                 // ── Kind 14 NIP-44 Mostro reply: decrypt and dispatch ──
                 if event.kind == nostr_sdk::prelude::Kind::PrivateDirectMessage {
-                    // Disambiguate from NIP-17 peer chat (also kind 14): only
-                    // the active node may author a Mostro reply — or a node
-                    // still owed a payout claim's traffic (§6.4).
-                    if event.pubkey != active_mostro
-                        && !crate::mostro::bond_claims::is_claim_node(&event.pubkey.to_hex())
+                    // Disambiguate from NIP-17 peer chat (also kind 14): a
+                    // Mostro reply is p-tagged to one of our trade keys. Only
+                    // a node's traffic missing a key is an anomaly worth a
+                    // warning; peer chat never carries one.
+                    let author = event.pubkey.to_hex();
+                    let recipient = if event.pubkey == active_mostro
+                        || crate::mostro::bond_claims::is_claim_node(&author)
                     {
+                        resolve_dm_recipient(&event).await
+                    } else {
+                        find_dm_recipient(&event).await
+                    };
+                    let Some(recipient) = recipient else {
+                        continue;
+                    };
+                    // Who may speak about this trade is decided before the
+                    // message is recorded as seen: one recorded and refused
+                    // is never handled again in this process (#811).
+                    let speaker = crate::mostro::trade_node::speaker(&author, recipient.2).await;
+                    if speaker == crate::mostro::trade_node::Speaker::Stranger {
                         continue;
                     }
-                    if let Some(recipient) = resolve_dm_recipient(&event).await {
-                        handle_global_daemon_message(&event, recipient).await;
-                    }
+                    handle_global_daemon_message(&event, recipient).await;
                     continue;
                 }
 
@@ -10342,6 +10412,9 @@ pub(crate) async fn release_identity_subscriptions() {
         // filter would stay; the next key derived re-opens the feed.
         subs.close(&client, &mostro_dm_subscription_id()).await;
     }
+    *dm_filter_heard()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     crate::api::messages::forget_identity_chats().await;
 
     if let Ok(mut map) = trade_key_map().write() {
@@ -10450,6 +10523,8 @@ fn release_finished_trade_subscriptions(order_id: &str, known_index: Option<u32>
                 chats.len()
             ),
         );
+        // Its node may have no live trade left to be heard about (#811).
+        DM_AUTHORS_REFRESH.request(DM_FILTER_REFRESH_WINDOW, refresh_dm_authors_if_changed);
     });
 }
 
