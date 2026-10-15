@@ -40,6 +40,14 @@ import 'package:mostro/src/rust/api/types.dart'
 /// Whether a trade in [status] no longer wants the buyer's invoice because it
 /// moved on: the daemon took one, and the trade screen is where it continues.
 ///
+/// Which status an accepted invoice leaves depends on the side (#711). On a
+/// buy order the seller has already paid, so it reads `active`. On a sell
+/// order the buyer sends it first and the seller pays next, so it reads
+/// `waitingPayment`. That is only ever an acceptance here: every way into
+/// this screen opens it in `waitingBuyerInvoice` (or `settledHoldInvoice`,
+/// for a replacement payout), and mostrod moves from there to
+/// `waitingPayment` only by accepting a sell order's invoice.
+///
 /// `settledHoldInvoice` is not over: after a failed payout the daemon asks
 /// for a new invoice while the order still reads settled — also after an
 /// admin settle, which mostrod records as `settled-hold-invoice` before
@@ -47,6 +55,7 @@ import 'package:mostro/src/rust/api/types.dart'
 /// too, but leave for home with their own notice
 /// (`_AddLightningInvoiceScreenState._leaveIfEnded`).
 bool invoiceStepIsOver(OrderStatus status) => switch (status) {
+  OrderStatus.waitingPayment ||
   OrderStatus.active ||
   OrderStatus.fiatSent ||
   OrderStatus.dispute ||
