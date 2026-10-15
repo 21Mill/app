@@ -2,6 +2,8 @@
 /// payout destinations (#823), oldest first as Rust keeps them.
 library;
 
+import 'package:mostro/features/order/models/invoice_rules.dart'
+    show normalizeInvoiceInput;
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/src/rust/api/types.dart'
     show OrderStatus, PayoutDestination, PayoutOutcome, PayoutSource;
@@ -54,16 +56,19 @@ PayoutDestination? unreplacedFailure(List<PayoutDestination> route) =>
 /// How a submission's destination was chosen: by the NWC wallet when it made
 /// the invoice, the default address when the buyer sent that one unchanged,
 /// and the buyer otherwise.
+///
+/// Both sides are compared as the invoice field holds them: Settings keeps
+/// the address as typed, `lightning:` included, while the field pre-fills it
+/// without (PR #824 review).
 PayoutSource payoutSourceFor({
   required bool fromWallet,
   required String submitted,
   String? defaultAddress,
 }) {
   if (fromWallet) return PayoutSource.nwcWallet;
-  final saved = defaultAddress?.trim().toLowerCase();
-  if (saved != null &&
-      saved.isNotEmpty &&
-      submitted.trim().toLowerCase() == saved) {
+  final saved = normalizeInvoiceInput(defaultAddress ?? '').toLowerCase();
+  if (saved.isNotEmpty &&
+      normalizeInvoiceInput(submitted).toLowerCase() == saved) {
     return PayoutSource.defaultLightningAddress;
   }
   return PayoutSource.entered;
