@@ -416,18 +416,22 @@ class _LightningAddressDialogState
     Navigator.of(context).pop();
   }
 
-  void _onSave(AppLocalizations l10n) {
+  Future<void> _onSave(AppLocalizations l10n) async {
     final input = _controller.text.trim();
     if (input.isEmpty) {
       _saveAndClose(null);
       return;
     }
-    final parts = input.split('@');
-    if (parts.length != 2 || parts[0].isEmpty || parts[1].isEmpty) {
+    // The core decides: what it refuses, a take would never send.
+    final saved = await ref
+        .read(settingsProvider.notifier)
+        .saveDefaultLightningAddress(input);
+    if (!mounted) return;
+    if (!saved) {
       setState(() => _errorText = l10n.invalidLightningAddressFormat);
       return;
     }
-    _saveAndClose(input);
+    Navigator.of(context).pop();
   }
 
   @override

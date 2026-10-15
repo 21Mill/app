@@ -16,6 +16,7 @@ import 'package:mostro/features/settings/providers/nwc_provider.dart';
 import 'package:mostro/features/settings/providers/push_settings_provider.dart';
 import 'package:mostro/features/settings/providers/relay_auto_sync_provider.dart';
 import 'package:mostro/features/settings/providers/relays_provider.dart';
+import 'package:mostro/features/settings/providers/settings_provider.dart';
 import 'package:mostro/features/settings/screens/notification_settings_screen.dart';
 import 'package:mostro/features/settings/screens/relays_screen.dart';
 import 'package:mostro/features/settings/screens/settings_screen.dart';
@@ -233,7 +234,17 @@ void main() {
     testWidgets('saving a lightning address closes the dialog cleanly', (
       tester,
     ) async {
-      await _pump(tester, const SettingsScreen());
+      await _pump(
+        tester,
+        const SettingsScreen(),
+        overrides: [
+          ..._overrides(),
+          // The core takes it.
+          settingsProvider.overrideWith(
+            (ref) => SettingsNotifier(syncLightningAddress: (_) async {}),
+          ),
+        ],
+      );
 
       await tester.tap(find.text('Not set'));
       await tester.pumpAndSettle();
@@ -250,6 +261,42 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(MostroDialog), findsNothing);
       expect(find.text('alice@example.com'), findsOneWidget);
+    });
+
+    // PR #824 review: what the core refuses, a take would never send, so the
+    // dialog does not save it.
+    testWidgets('an address the core refuses keeps the dialog open', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const SettingsScreen(),
+        overrides: [
+          ..._overrides(),
+          settingsProvider.overrideWith(
+            (ref) => SettingsNotifier(
+              syncLightningAddress:
+                  (address) async =>
+                      throw Exception('InvalidLightningAddress: $address'),
+            ),
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Not set'));
+      await tester.pumpAndSettle();
+      final dialog = find.byType(MostroDialog);
+      await tester.enterText(
+        find.descendant(of: dialog, matching: find.byType(TextField)),
+        'a@b',
+      );
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Save')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MostroDialog), findsOneWidget);
+      expect(find.text('Must be in user@domain format'), findsOneWidget);
     });
 
     testWidgets('shows a connected wallet by name, un-warned', (tester) async {

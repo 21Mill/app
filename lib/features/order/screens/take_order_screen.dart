@@ -27,7 +27,6 @@ import 'package:mostro/features/order/widgets/hero_amount_card.dart';
 import 'package:mostro/features/order/widgets/order_detail_cards.dart';
 import 'package:mostro/features/order/widgets/range_amount_modal.dart';
 import 'package:mostro/features/order/widgets/take_payout_sheet.dart';
-import 'package:mostro/features/settings/providers/settings_provider.dart';
 import 'package:mostro/features/trades/providers/trades_providers.dart'
     show refreshTrades;
 import 'package:mostro/l10n/app_localizations.dart';
@@ -445,10 +444,9 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
     final privacyMode = ref.watch(privacyModeProvider);
     // A buyer with a default Lightning address sees where the sats go and can
     // change it for this trade (#823): the take sends it without asking.
-    final savedAddress = ref.watch(settingsProvider).defaultLightningAddress;
     final defaultAddress =
-        widget.isBuying && savedAddress != null && savedAddress.isNotEmpty
-            ? savedAddress
+        widget.isBuying
+            ? ref.watch(takeDefaultAddressProvider).valueOrNull
             : null;
     // Not while a take is in flight: the user's own take moves the order out
     // of `pending` before it settles (Rust updates the book entry as soon as

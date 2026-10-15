@@ -6,7 +6,9 @@ import 'package:mostro/core/create_order_palette.dart';
 import 'package:mostro/core/order_detail_palette.dart';
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/shared/widgets/mostro_modal.dart';
+import 'package:mostro/features/settings/providers/settings_provider.dart';
 import 'package:mostro/src/rust/api/invoice.dart' as invoice_api;
+import 'package:mostro/src/rust/api/settings.dart' as settings_api;
 import 'package:mostro/src/rust/api/types.dart'
     show
         PaymentDestination_LightningAddress,
@@ -22,6 +24,24 @@ final lightningAddressCheckProvider = Provider<Future<bool> Function(String)>(
           await invoice_api.classifyPaymentDestination(input: input)
               is PaymentDestination_LightningAddress,
 );
+
+/// The default Lightning address a take sends: the core's copy, which only
+/// ever holds an address the core accepted. Settings can still hold one the
+/// core refused (saved before the dialog asked it), and naming that one
+/// would promise a destination the take never sends (PR #824 review).
+/// Re-read when the saved address changes.
+final takeDefaultAddressProvider = FutureProvider.autoDispose<String?>((
+  ref,
+) async {
+  ref.watch(settingsProvider.select((s) => s.defaultLightningAddress));
+  try {
+    final address = (await settings_api.getSettings()).defaultLightningAddress;
+    return address == null || address.isEmpty ? null : address;
+  } catch (e) {
+    debugPrint('[TakePayoutSheet] default address unreadable: $e');
+    return null;
+  }
+});
 
 /// Asks where a buyer's sats go for this trade (#823): the default Lightning
 /// address, another one, or an invoice added after the take. Null when the

@@ -58,6 +58,7 @@ Future<StreamController<List<OrderItem>>> _pump(
   instance.MostroInstance? node,
   int? bondEstimate,
   String? defaultAddress,
+  String? settingsAddress,
   Future<bool> Function(String)? isLightningAddress,
 }) async {
   tester.view.physicalSize = const Size(360, 760);
@@ -75,12 +76,15 @@ Future<StreamController<List<OrderItem>>> _pump(
         readTrades ?? () async => trades,
       ),
       if (take != null) takeOrderActionProvider.overrideWithValue(take),
-      if (defaultAddress != null)
-        settingsProvider.overrideWith(
-          (ref) => SettingsNotifier(
-            initial: AppSettingsState(defaultLightningAddress: defaultAddress),
+      // The core's copy, which the row shows; Settings' own may differ.
+      takeDefaultAddressProvider.overrideWith((ref) async => defaultAddress),
+      settingsProvider.overrideWith(
+        (ref) => SettingsNotifier(
+          initial: AppSettingsState(
+            defaultLightningAddress: settingsAddress ?? defaultAddress,
           ),
         ),
+      ),
       if (isLightningAddress != null)
         lightningAddressCheckProvider.overrideWithValue(isLightningAddress),
       exchangeRateProvider.overrideWith((ref, code) async => rate),
@@ -1066,6 +1070,31 @@ void main() {
       await withClock(Clock.fixed(kFakeNow), () async {
         await _pump(tester, order: _order());
         expect(find.text('Your sats go to'), findsNothing);
+      });
+    });
+
+    testWidgets('an address the core refused is not named (PR #824 review)', (
+      tester,
+    ) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        TakePayout? sent = const TakePayout.askForInvoice();
+        // Saved in Settings, refused by the core: the take sends none.
+        await _pump(
+          tester,
+          order: _order(),
+          settingsAddress: 'a@b',
+          take: ({required orderId, required role, fiatAmount, payout}) {
+            sent = payout;
+            return Completer<TradeInfo>().future;
+          },
+        );
+
+        expect(find.text('Your sats go to'), findsNothing);
+        expect(find.textContaining('a@b'), findsNothing);
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        await tester.pump();
+        expect(sent, isNull);
       });
     });
 
