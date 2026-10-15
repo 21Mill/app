@@ -60,13 +60,14 @@ pub(crate) async fn trade_action_node(order_id: &str) -> anyhow::Result<PublicKe
 /// about a trade happens on its own node. `TradeOnOtherNode` when the row
 /// names a node other than the active one. A row that does not know its
 /// node counts as the active node's, as for a trade action (#810), and no
-/// row is let through, leaving the caller's own error.
+/// row is let through, leaving the caller's own error. A row that cannot be
+/// read is an error: its node is not known to be the active one.
 pub(crate) async fn refuse_other_node(order_id: &str) -> anyhow::Result<()> {
     use crate::db::Storage as _;
     let Some(db) = crate::db::app_db::db() else {
         return Ok(());
     };
-    let Ok(Some(trade)) = db.get_trade_by_order_id(order_id).await else {
+    let Some(trade) = db.get_trade_by_order_id(order_id).await? else {
         return Ok(());
     };
     let active = crate::config::active_mostro_pubkey();

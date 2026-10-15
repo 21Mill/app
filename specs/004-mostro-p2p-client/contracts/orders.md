@@ -33,13 +33,22 @@ issued the claim ([bond](bond.md)).
 
 A daemon message (kind 14) is heard from the active node, and from **the node
 that issued the trade it is addressed to**, whichever node is active, so a
-trade on another node moves to its real status. The trade is the row bound to
-the p-tagged trade key (`get_order_id_by_trade_index`), and its node is
+trade on another node moves to its real status. The trade is found among the
+rows that use the p-tagged trade key (`trade_key_index`), not through the key
+binding: a maker's key stays bound to the provisional id its create was sent
+with, next to the daemon's id, and that leftover has no row. Its node is
 `order.node_pubkey`. A trade key's p-tag is public, so no other node is heard:
-a row that does not know its node, or a key bound to no row, hears the active
-node only. A node with an open payout claim keeps its exception, for claim
-actions only ([bond](bond.md)). The rule is `mostro::trade_node::speaker` and
-`heard`; both the global feed and `dispatch_mostro_message` apply it.
+a key whose rows do not know their node, or a key no row uses, hears the
+active node only. And the trade's node is heard only about the trade it
+issued: the order the message names must have a row that uses that key and
+names that node, or the message is refused — a key would otherwise open any
+order it names, since the generation gate refuses only an older key. A range
+order's remainder, which has no row yet, is therefore heard from its node
+only while that node is active. A node with an open payout claim keeps its
+exception, for claim actions only ([bond](bond.md)). The rule is
+`mostro::trade_node::speaker`, `heard` and `heard_about`: the global feed
+applies the first two before recording the event, and
+`dispatch_mostro_message` all three once the message names its order.
 
 - The global feed decides who is heard **before** it records the event as
   seen (`is_duplicate_daemon_message`). A message recorded and then refused
