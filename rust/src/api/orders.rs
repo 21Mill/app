@@ -7915,8 +7915,9 @@ async fn apply_single_order_update(mut order: OrderInfo, revision_at: Option<i64
     );
     let completes = applies && completes_trade(local.as_ref(), &order.status);
     // The node paid the buyer even if its `purchase-completed` never reaches
-    // this device (PR #824 review).
-    if completes && order.status == crate::api::types::OrderStatus::Success {
+    // this device, and whether or not the row already reads `Success` (PR
+    // #824 review).
+    if order.status == crate::api::types::OrderStatus::Success {
         note_payout_paid_from_book(&order.id, revision_at).await;
     }
     // Gated whole on `applies`: a public bucket that may not replace the
@@ -8440,6 +8441,11 @@ async fn close_rating_step(order_id: &str, rated_at: i64) {
 /// never reach this device (PR #824 review). Only an open destination is
 /// marked, and a paid one never changes again, so whichever of the two
 /// arrives second changes nothing.
+///
+/// The one funnel for every public `success` of an order of ours: the d-tag
+/// subscription (`apply_single_order_update`), the global book feed
+/// (`note_public_success`) and the payout check (`apply_payout_completed`).
+/// None of them asks what the row reads first.
 async fn note_payout_paid_from_book(order_id: &str, at: Option<i64>) {
     let Some(db) = crate::db::app_db::db() else {
         return;
@@ -10560,12 +10566,18 @@ async fn record_completion(db: &impl Storage, order_id: &str, at: i64) {
 /// the public book, and this feed does not sync a taker's row, so once the
 /// d-tag task has idled out nothing else would complete it until the sweep.
 /// Spawned: it takes the order lock, which the book loop must not wait on.
+///
+/// For a buyer it is also the news that the node paid them, whatever the row
+/// reads by now: the ingest that brought it may already have written
+/// `Success`, and the buyer's `purchase-completed` may never arrive (PR #824
+/// review). That half runs first and on its own.
 async fn note_public_success(order_id: &str, revision_at: i64) {
-    if local_trade_status(order_id).await != Some(OrderStatus::SettledHoldInvoice) {
-        return;
-    }
     let order_id = order_id.to_string();
     crate::rt::spawn(async move {
+        note_payout_paid_from_book(&order_id, Some(revision_at)).await;
+        if local_trade_status(&order_id).await != Some(OrderStatus::SettledHoldInvoice) {
+            return;
+        }
         apply_payout_completed(&order_id, Some(revision_at)).await;
     });
 }
@@ -17666,6 +17678,57 @@ mod tests {
         // As any key of the step does.
         assert!(!clear_maker_step_start(&PersistProbe::FailDelete(PAYOUT_AMOUNT_PREFIX), "o").await);
         assert!(clear_maker_step_start(&PersistProbe::FailDelete("nothing:"), "o").await);
+    }
+
+    /// The global book feed brings a maker-buyer's public `success` first, and
+    /// its ingest may write `Success` to the row before anything else looks:
+    /// the payout is recorded as paid all the same (PR #824 review).
+    #[tokio::test]
+    async fn the_global_book_success_records_the_buyers_payout() {
+        use crate::api::types::{PayoutOutcome, PayoutSource};
+        use crate::mostro::payout_route;
+
+        let path = std::env::temp_dir()
+            .join(format!("mostro_payout_route_feed_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let mut row = cancel_test_row(wire_order(&order_id, OrderStatus::SettledHoldInvoice));
+        row.order.is_mine = true;
+        db.save_trade(&row).await.expect("save the trade row");
+        order_book().upsert_order(dummy_order_info(&order_id)).await;
+        store_trade_key_index(&order_id, 1).await;
+        let address = payout_route::destination(
+            "alice@example.com",
+            PayoutSource::Entered,
+            None,
+            1_000,
+            None,
+        );
+        payout_route::record_destination_since(
+            &order_id,
+            1,
+            address,
+            payout_route::clear_epoch(&order_id),
+        )
+        .await;
+
+        ingest_order_event_with(&book_event(&order_id, "success"), Publish::WhenBatchEnds).await;
+
+        // Recorded by a spawned task: give it its turn.
+        let mut outcome = None;
+        for _ in 0..100 {
+            outcome = payout_route::destinations(&order_id)
+                .await
+                .first()
+                .map(|d| d.outcome);
+            if outcome == Some(PayoutOutcome::Paid) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(outcome, Some(PayoutOutcome::Paid));
+        order_book().remove_order(&order_id).await;
     }
 
     /// The buyer's `purchase-completed` never arrives, only the public
