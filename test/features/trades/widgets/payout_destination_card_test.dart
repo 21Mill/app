@@ -109,7 +109,34 @@ void main() {
         '0001020304050607080900010203040506070809000102030405060708090102',
       );
       expect(find.text('Payment hash copied'), findsOneWidget);
+
+      // The wallet's name alone does not say which invoice: its row does,
+      // and copies it whole (PR #824 review).
+      expect(find.text('Invoice'), findsOneWidget);
+      await tester.tap(find.text('Invoice'));
+      await tester.pump();
+      expect(copied, fakePayoutInvoice);
       semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'a destination tried before opens to its own details (PR #824 review)',
+    (tester) async {
+      // Arrange
+      await _pump(tester, fakeFailedThenPaidRoute());
+      expect(find.text('Your default address'), findsNothing);
+
+      // Act
+      await tester.tap(find.text('Tried before'));
+      await tester.pumpAndSettle();
+
+      // Assert: who chose it and what it was for; tapping again closes it.
+      expect(find.text('Your default address'), findsOneWidget);
+      expect(find.text('1,677 sats'), findsNWidgets(2));
+      await tester.tap(find.text('Tried before'));
+      await tester.pumpAndSettle();
+      expect(find.text('Your default address'), findsNothing);
     },
   );
 

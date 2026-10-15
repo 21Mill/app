@@ -1120,6 +1120,43 @@ void main() {
       });
     });
 
+    testWidgets('a check that ends after the buyer switched options is '
+        'dropped (PR #824 review)', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        final check = Completer<bool>();
+        await _pump(
+          tester,
+          order: _order(),
+          defaultAddress: 'alice@example.com',
+          isLightningAddress: (_) => check.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  Completer<TradeInfo>().future,
+        );
+        await tester.tap(find.text('Your sats go to'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Another Lightning address'));
+        await tester.pump();
+        await tester.enterText(find.byType(TextField), 'bob@example.org');
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pump();
+
+        // The buyer moves on while the check runs, then it answers "yes".
+        await tester.tap(find.text('An invoice I add after taking'));
+        await tester.pump();
+        check.complete(true);
+        await tester.pumpAndSettle();
+
+        // The address the buyer left is not used: the sheet stays, and takes
+        // the choice on screen.
+        expect(find.text('Use for this trade'), findsOneWidget);
+        expect(find.text('bob@example.org'), findsNothing);
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pumpAndSettle();
+        expect(find.text('An invoice you add'), findsOneWidget);
+      });
+    });
+
     testWidgets('another address is checked, then used for this trade only', (
       tester,
     ) async {

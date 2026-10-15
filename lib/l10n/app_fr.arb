@@ -1466,6 +1466,8 @@
   "invoicePayoutFailedNwc": "Ton portefeuille NWC crée une nouvelle facture pour ces sats.",
   "invoicePayoutFailedNwcNamed": "{name} crée une nouvelle facture pour ces sats.",
   "invoicePayoutFailedManual": "Ajoute une nouvelle facture pour recevoir tes sats.",
-  "tradeCardPayoutFailedTitle": "Ton paiement a échoué",
-  "tradeCardPayoutFailedMessage": "Mostro n'a pas pu payer l'adresse ou la facture que tu as donnée. Ouvre la transaction pour voir où iront tes sats."
+  "tradeCardPayoutFailedTitle": "Mostro n'a pas pu t'envoyer tes sats",
+  "tradeCardPayoutFailedMessage": "Mostro n'a pas pu envoyer tes sats à l'adresse ou à la facture que tu as donnée. Ouvre la transaction pour voir laquelle a échoué, et ajoute une nouvelle facture si c'est encore nécessaire.",
+  "payoutInvoiceLabel": "Facture",
+  "payoutInvoiceCopied": "Facture copiée"
 }

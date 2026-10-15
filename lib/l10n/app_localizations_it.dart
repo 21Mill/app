@@ -4886,9 +4886,16 @@ class AppLocalizationsIt extends AppLocalizations {
       'Aggiungi una nuova fattura per ricevere i tuoi sats.';
 
   @override
-  String get tradeCardPayoutFailedTitle => 'Il tuo pagamento non è riuscito';
+  String get tradeCardPayoutFailedTitle =>
+      'Mostro non è riuscito a inviarti i tuoi sats';
 
   @override
   String get tradeCardPayoutFailedMessage =>
-      'Mostro non è riuscito a pagare l\'indirizzo o la fattura che hai dato. Apri l\'operazione per vedere dove andranno i tuoi sats.';
+      'Mostro non è riuscito a inviare i tuoi sats all\'indirizzo o alla fattura che hai dato. Apri l\'operazione per vedere quale non è riuscito e aggiungi una nuova fattura se serve ancora.';
+
+  @override
+  String get payoutInvoiceLabel => 'Fattura';
+
+  @override
+  String get payoutInvoiceCopied => 'Fattura copiata';
 }

@@ -1466,6 +1466,8 @@
   "invoicePayoutFailedNwc": "Je NWC-wallet maakt een nieuwe invoice voor deze sats.",
   "invoicePayoutFailedNwcNamed": "{name} maakt een nieuwe invoice voor deze sats.",
   "invoicePayoutFailedManual": "Voeg een nieuwe invoice toe om je sats te ontvangen.",
-  "tradeCardPayoutFailedTitle": "Je betaling is mislukt",
-  "tradeCardPayoutFailedMessage": "Mostro kon het adres of de invoice die je gaf niet betalen. Open de trade om te zien waar je sats naartoe gaan."
+  "tradeCardPayoutFailedTitle": "Mostro kon je sats niet versturen",
+  "tradeCardPayoutFailedMessage": "Mostro kon je sats niet versturen naar het adres of de invoice die je gaf. Open de trade om te zien welke mislukte, en voeg een nieuwe invoice toe als dat nog nodig is.",
+  "payoutInvoiceLabel": "Invoice",
+  "payoutInvoiceCopied": "Invoice gekopieerd"
 }

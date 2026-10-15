@@ -4873,9 +4873,15 @@ class AppLocalizationsEs extends AppLocalizations {
       'Agrega una nueva factura para recibir tus sats.';
 
   @override
-  String get tradeCardPayoutFailedTitle => 'Tu pago falló';
+  String get tradeCardPayoutFailedTitle => 'Mostro no pudo enviarte tus sats';
 
   @override
   String get tradeCardPayoutFailedMessage =>
-      'Mostro no pudo pagar a la dirección o factura que diste. Abre la operación para ver a dónde irán tus sats.';
+      'Mostro no pudo enviar tus sats a la dirección o factura que diste. Abre la operación para ver cuál falló y agrega una nueva factura si todavía hace falta.';
+
+  @override
+  String get payoutInvoiceLabel => 'Factura';
+
+  @override
+  String get payoutInvoiceCopied => 'Factura copiada';
 }

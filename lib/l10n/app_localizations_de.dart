@@ -4901,9 +4901,16 @@ class AppLocalizationsDe extends AppLocalizations {
       'Füge eine neue Rechnung hinzu, um deine Sats zu erhalten.';
 
   @override
-  String get tradeCardPayoutFailedTitle => 'Deine Zahlung ist fehlgeschlagen';
+  String get tradeCardPayoutFailedTitle =>
+      'Mostro konnte dir deine Sats nicht senden';
 
   @override
   String get tradeCardPayoutFailedMessage =>
-      'Mostro konnte die angegebene Adresse oder Rechnung nicht bezahlen. Öffne den Trade, um zu sehen, wohin deine Sats gehen.';
+      'Mostro konnte deine Sats nicht an die angegebene Adresse oder Rechnung senden. Öffne den Trade, um zu sehen, welche fehlgeschlagen ist, und füge eine neue Rechnung hinzu, falls noch nötig.';
+
+  @override
+  String get payoutInvoiceLabel => 'Rechnung';
+
+  @override
+  String get payoutInvoiceCopied => 'Rechnung kopiert';
 }

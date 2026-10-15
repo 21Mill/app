@@ -4906,9 +4906,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ajoute une nouvelle facture pour recevoir tes sats.';
 
   @override
-  String get tradeCardPayoutFailedTitle => 'Ton paiement a échoué';
+  String get tradeCardPayoutFailedTitle =>
+      'Mostro n\'a pas pu t\'envoyer tes sats';
 
   @override
   String get tradeCardPayoutFailedMessage =>
-      'Mostro n\'a pas pu payer l\'adresse ou la facture que tu as donnée. Ouvre la transaction pour voir où iront tes sats.';
+      'Mostro n\'a pas pu envoyer tes sats à l\'adresse ou à la facture que tu as donnée. Ouvre la transaction pour voir laquelle a échoué, et ajoute une nouvelle facture si c\'est encore nécessaire.';
+
+  @override
+  String get payoutInvoiceLabel => 'Facture';
+
+  @override
+  String get payoutInvoiceCopied => 'Facture copiée';
 }

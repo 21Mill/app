@@ -4837,9 +4837,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'Add a new invoice to receive your sats.';
 
   @override
-  String get tradeCardPayoutFailedTitle => 'Your payment failed';
+  String get tradeCardPayoutFailedTitle => 'Mostro could not send your sats';
 
   @override
   String get tradeCardPayoutFailedMessage =>
-      'Mostro could not pay the address or invoice you gave. Open the trade to see where your sats will go.';
+      'Mostro could not send your sats to the address or invoice you gave. Open the trade to see which one failed, and add a new invoice if it is still needed.';
+
+  @override
+  String get payoutInvoiceLabel => 'Invoice';
+
+  @override
+  String get payoutInvoiceCopied => 'Invoice copied';
 }

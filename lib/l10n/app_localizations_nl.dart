@@ -4877,9 +4877,15 @@ class AppLocalizationsNl extends AppLocalizations {
       'Voeg een nieuwe invoice toe om je sats te ontvangen.';
 
   @override
-  String get tradeCardPayoutFailedTitle => 'Je betaling is mislukt';
+  String get tradeCardPayoutFailedTitle => 'Mostro kon je sats niet versturen';
 
   @override
   String get tradeCardPayoutFailedMessage =>
-      'Mostro kon het adres of de invoice die je gaf niet betalen. Open de trade om te zien waar je sats naartoe gaan.';
+      'Mostro kon je sats niet versturen naar het adres of de invoice die je gaf. Open de trade om te zien welke mislukte, en voeg een nieuwe invoice toe als dat nog nodig is.';
+
+  @override
+  String get payoutInvoiceLabel => 'Invoice';
+
+  @override
+  String get payoutInvoiceCopied => 'Invoice gekopieerd';
 }

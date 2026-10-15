@@ -11,7 +11,7 @@ import 'package:mostro/features/order/widgets/order_detail_cards.dart';
 import 'package:mostro/features/trades/models/payout_route_rules.dart';
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/src/rust/api/types.dart'
-    show PayoutDestination, PayoutOutcome;
+    show PayoutDestination, PayoutOutcome, PayoutSource;
 
 /// Where the buyer's sats went (#823): the destination the node paid, or the
 /// one it is paying, how it was chosen, the amount, what became of it, the
@@ -43,18 +43,33 @@ class PayoutDestinationCard extends ConsumerWidget {
 }
 
 /// The rows of [PayoutDestinationCard] over [route], which holds at least
-/// one destination.
-class PayoutDestinationRows extends StatelessWidget {
+/// one destination. Each destination tried before is one row that opens in
+/// place to the same details as the leading one (PR #824 review).
+class PayoutDestinationRows extends StatefulWidget {
   const PayoutDestinationRows({super.key, required this.route});
 
   final List<PayoutDestination> route;
 
   @override
+  State<PayoutDestinationRows> createState() => _PayoutDestinationRowsState();
+}
+
+class _PayoutDestinationRowsState extends State<PayoutDestinationRows> {
+  /// The earlier destinations opened, by [_key].
+  final Set<String> _open = {};
+
+  static String _key(PayoutDestination d) =>
+      '${d.submittedAt}|${d.destination}';
+
+  void _toggle(PayoutDestination d) => setState(() {
+    final key = _key(d);
+    if (!_open.remove(key)) _open.add(key);
+  });
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final lead = leadingDestination(route)!;
-    final sats = lead.amountSats?.toInt();
-    final hash = lead.paymentHash;
+    final lead = leadingDestination(widget.route)!;
     return OrderDataCard(
       rows: [
         OrderDataRow(
@@ -69,53 +84,102 @@ class PayoutDestinationRows extends StatelessWidget {
           value: OrderDataValue(destinationLabel(l10n, lead)),
         ),
         OrderDataRow(
-          icon: Icons.person_outline_rounded,
-          label: l10n.payoutChosenByLabel,
-          value: OrderDataValue(sourceLabel(l10n, lead.source)),
-        ),
-        if (sats != null)
-          OrderDataRow(
-            icon: Icons.account_balance_wallet_outlined,
-            label: l10n.payoutAmountLabel,
-            value: OrderDataValue(
-              l10n.satsAmount(formatInvoiceSats(sats, l10n.localeName)),
-              figures: true,
-            ),
-          ),
-        OrderDataRow(
           icon: Icons.info_outline_rounded,
           label: l10n.statusLabel,
           value: OrderDataValue(outcomeLabel(l10n, lead)),
         ),
-        if (hash != null)
-          OrderDataRow(
-            icon: Icons.tag_rounded,
-            label: l10n.payoutHashLabel,
-            value: _CopyValue(text: shortPaymentHash(hash)),
-            onTap: () => _copyHash(context, hash),
-          ),
-        for (final earlier in earlierDestinations(route))
-          OrderDataRow(
-            icon: Icons.history_rounded,
-            label: l10n.payoutTriedBeforeLabel,
-            value: OrderDataValue(
-              l10n.payoutTriedBeforeValue(
-                destinationLabel(l10n, earlier),
-                outcomeLabel(l10n, earlier),
-              ),
-            ),
-          ),
+        ..._details(context, l10n, lead),
+        for (final earlier in earlierDestinations(widget.route)) ...[
+          _earlierRow(l10n, earlier),
+          if (_open.contains(_key(earlier)))
+            ..._details(context, l10n, earlier),
+        ],
       ],
     );
   }
 
-  static void _copyHash(BuildContext context, String hash) {
-    Clipboard.setData(ClipboardData(text: hash));
-    HapticFeedback.selectionClick();
-    showOrderDetailSnackBar(
-      context,
-      AppLocalizations.of(context).payoutHashCopied,
+  /// `Tried before · alice@example.com · Failed ⌄`: opens or closes the
+  /// destination's details in place.
+  Widget _earlierRow(AppLocalizations l10n, PayoutDestination d) {
+    final open = _open.contains(_key(d));
+    final book = OrderBookPalette.of(context);
+    return Semantics(
+      expanded: open,
+      child: OrderDataRow(
+        icon: Icons.history_rounded,
+        label: l10n.payoutTriedBeforeLabel,
+        value: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: OrderDataValue(
+                l10n.payoutTriedBeforeValue(
+                  destinationLabel(l10n, d),
+                  outcomeLabel(l10n, d),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              open ? Icons.expand_less : Icons.expand_more,
+              size: 16,
+              color: book.textTertiary,
+            ),
+          ],
+        ),
+        onTap: () => _toggle(d),
+      ),
     );
+  }
+
+  /// Who chose [d], what it pays, and what identifies it in a wallet: the
+  /// invoice an NWC wallet made (its name alone does not say which one) and
+  /// the payment hash, each copied whole by its row.
+  List<Widget> _details(
+    BuildContext context,
+    AppLocalizations l10n,
+    PayoutDestination d,
+  ) {
+    final sats = d.amountSats?.toInt();
+    final hash = d.paymentHash;
+    final walletInvoice =
+        !d.isLightningAddress && d.source == PayoutSource.nwcWallet;
+    return [
+      OrderDataRow(
+        icon: Icons.person_outline_rounded,
+        label: l10n.payoutChosenByLabel,
+        value: OrderDataValue(sourceLabel(l10n, d.source)),
+      ),
+      if (sats != null)
+        OrderDataRow(
+          icon: Icons.account_balance_wallet_outlined,
+          label: l10n.payoutAmountLabel,
+          value: OrderDataValue(
+            l10n.satsAmount(formatInvoiceSats(sats, l10n.localeName)),
+            figures: true,
+          ),
+        ),
+      if (walletInvoice)
+        OrderDataRow(
+          icon: Icons.receipt_long_outlined,
+          label: l10n.payoutInvoiceLabel,
+          value: _CopyValue(text: shortInvoice(d.destination)),
+          onTap: () => _copy(context, d.destination, l10n.payoutInvoiceCopied),
+        ),
+      if (hash != null)
+        OrderDataRow(
+          icon: Icons.tag_rounded,
+          label: l10n.payoutHashLabel,
+          value: _CopyValue(text: shortPaymentHash(hash)),
+          onTap: () => _copy(context, hash, l10n.payoutHashCopied),
+        ),
+    ];
+  }
+
+  static void _copy(BuildContext context, String text, String confirmation) {
+    Clipboard.setData(ClipboardData(text: text));
+    HapticFeedback.selectionClick();
+    showOrderDetailSnackBar(context, confirmation);
   }
 }
 

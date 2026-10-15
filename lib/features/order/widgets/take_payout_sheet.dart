@@ -96,6 +96,14 @@ class _TakePayoutSheetState extends ConsumerState<TakePayoutSheet> {
           }
         }
         if (!mounted) return;
+        // The buyer picked another option, or edited the address, while the
+        // check ran: its answer is about something no longer on screen
+        // (PR #824 review). The next Use checks what is.
+        if (_choice != _Choice.otherAddress ||
+            _address.text.trim() != address) {
+          setState(() => _checking = false);
+          return;
+        }
         if (!valid) {
           setState(() {
             _checking = false;

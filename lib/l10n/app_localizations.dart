@@ -8008,17 +8008,29 @@ abstract class AppLocalizations {
   /// **'Add a new invoice to receive your sats.'**
   String get invoicePayoutFailedManual;
 
-  /// Notifications card title (#823): the node could not pay the buyer and asks for a new invoice
+  /// Notifications card title (#823): the node could not send the buyer's sats to the address or invoice they gave, and asks for a new invoice. About the sats the buyer receives, never the fiat they pay
   ///
   /// In en, this message translates to:
-  /// **'Your payment failed'**
+  /// **'Mostro could not send your sats'**
   String get tradeCardPayoutFailedTitle;
 
-  /// Notifications card body (#823): the node could not pay the address or invoice the buyer gave
+  /// Notifications card body (#823): the node could not send the buyer's sats to the destination they gave; the trade shows which one failed, and a new invoice may be needed (an NWC wallet may already have sent it)
   ///
   /// In en, this message translates to:
-  /// **'Mostro could not pay the address or invoice you gave. Open the trade to see where your sats will go.'**
+  /// **'Mostro could not send your sats to the address or invoice you gave. Open the trade to see which one failed, and add a new invoice if it is still needed.'**
   String get tradeCardPayoutFailedMessage;
+
+  /// Trade detail payout card (#823): row label before the invoice an NWC wallet generated, shortened; the whole row copies it
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice'**
+  String get payoutInvoiceLabel;
+
+  /// Snackbar after copying a payout invoice (#823)
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice copied'**
+  String get payoutInvoiceCopied;
 }
 
 class _AppLocalizationsDelegate

@@ -1466,6 +1466,8 @@
   "invoicePayoutFailedNwc": "Il tuo portafoglio NWC sta creando una nuova fattura per questi sats.",
   "invoicePayoutFailedNwcNamed": "{name} sta creando una nuova fattura per questi sats.",
   "invoicePayoutFailedManual": "Aggiungi una nuova fattura per ricevere i tuoi sats.",
-  "tradeCardPayoutFailedTitle": "Il tuo pagamento non è riuscito",
-  "tradeCardPayoutFailedMessage": "Mostro non è riuscito a pagare l'indirizzo o la fattura che hai dato. Apri l'operazione per vedere dove andranno i tuoi sats."
+  "tradeCardPayoutFailedTitle": "Mostro non è riuscito a inviarti i tuoi sats",
+  "tradeCardPayoutFailedMessage": "Mostro non è riuscito a inviare i tuoi sats all'indirizzo o alla fattura che hai dato. Apri l'operazione per vedere quale non è riuscito e aggiungi una nuova fattura se serve ancora.",
+  "payoutInvoiceLabel": "Fattura",
+  "payoutInvoiceCopied": "Fattura copiata"
 }
