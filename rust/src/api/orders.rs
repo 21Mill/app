@@ -10955,6 +10955,25 @@ pub async fn get_trade_role(order_id: String) -> Result<Option<crate::api::types
     }
 }
 
+/// The node that issued the trade `order_id`, or empty when its row does not
+/// know it or there is no row. Dart tells a trade of another node apart with
+/// it (#811): no card and no automatic navigation for one.
+pub async fn trade_node_of(order_id: String) -> String {
+    let Some(db) = crate::db::app_db::db() else {
+        return String::new();
+    };
+    match db.get_trade_by_order_id(&order_id).await {
+        Ok(Some(trade)) => crate::mostro::trade_node::trade_node(&trade)
+            .unwrap_or_default()
+            .to_string(),
+        Ok(None) => String::new(),
+        Err(e) => {
+            log::warn!("[orders] trade_node_of DB error for order={order_id}: {e}");
+            String::new()
+        }
+    }
+}
+
 /// Coerce a wire trade index (`i64`) into a usable counter value, or `None`.
 ///
 /// Trade indexes cross the wire as `i64` (restore payloads, the
@@ -25185,6 +25204,28 @@ mod tests {
                 forget_trade_row(&order_id).await;
             }
         }
+    }
+
+    /// #811: Dart learns the node a trade lives on, to tell another node's
+    /// apart; a row that does not know it, or no row, reads as empty.
+    #[tokio::test]
+    async fn trade_node_of_names_the_rows_node() {
+        use crate::mostro::test_fixtures::{forget_trade_row, store_trade_row, trade};
+        let node = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let known = uuid::Uuid::new_v4().to_string();
+        let unknown = uuid::Uuid::new_v4().to_string();
+        store_trade_row(&trade(&known, 7, OrderStatus::Active, &node)).await;
+        store_trade_row(&trade(&unknown, 7, OrderStatus::Active, "")).await;
+
+        let named = trade_node_of(known.clone()).await;
+        let unnamed = trade_node_of(unknown.clone()).await;
+        let no_row = trade_node_of(uuid::Uuid::new_v4().to_string()).await;
+        forget_trade_row(&known).await;
+        forget_trade_row(&unknown).await;
+
+        assert_eq!(named, node);
+        assert_eq!(unnamed, "");
+        assert_eq!(no_row, "");
     }
 
     /// #811: the global feed decides who may speak about a trade before it

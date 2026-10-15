@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:mostro/core/app_routes.dart';
+import 'package:mostro/core/trade_node.dart';
 import 'package:mostro/features/order/providers/invoice_providers.dart';
 import 'package:mostro/features/order/providers/trade_state_provider.dart';
 import 'package:mostro/src/rust/api/orders.dart' as orders_api;
 import 'package:mostro/src/rust/api/types.dart';
 import 'package:mostro/features/cashu/seller_funding_route.dart';
 import 'package:mostro/features/settings/providers/escrow_mode_provider.dart';
+import 'package:mostro/features/settings/providers/mostro_nodes_provider.dart';
 import 'package:mostro/shared/utils/platform_int64.dart';
 
 /// Pushes [destination] unless it is already the screen on top.
@@ -44,11 +46,15 @@ void pushUnlessVisible(GoRouter router, String destination) {
 /// no emission (TakeOrderScreen navigates locally instead) — but a taker who
 /// paid a bond gets here on the step after it, at the same moment the
 /// pay-bond screen navigates by itself. See [pushUnlessVisible].
+///
+/// A trade on another node never navigates (#811): its step would open
+/// while the wrong node is active, where nothing on it can be done.
 class TradeActionListener extends ConsumerStatefulWidget {
   const TradeActionListener({
     super.key,
     required this.child,
     this.resolveRole,
+    this.resolveNode,
     this.navigate,
   });
 
@@ -56,6 +62,9 @@ class TradeActionListener extends ConsumerStatefulWidget {
 
   /// Test seam — production uses the bridge's trade-role lookup.
   final Future<TradeRole?> Function(String orderId)? resolveRole;
+
+  /// Test seam — production uses the bridge's lookup of the trade's node.
+  final Future<String> Function(String orderId)? resolveNode;
 
   /// Test seam — production pushes on the global [appRouter] unless the
   /// destination is already the current route.
@@ -80,6 +89,9 @@ class _TradeActionListenerState extends ConsumerState<TradeActionListener> {
 
   static Future<TradeRole?> _bridgeRole(String orderId) =>
       orders_api.getTradeRole(orderId: orderId);
+
+  static Future<String> _bridgeNode(String orderId) =>
+      orders_api.tradeNodeOf(orderId: orderId);
 
   static void _routerNavigate(String destination) =>
       pushUnlessVisible(appRouter, destination);
@@ -117,7 +129,11 @@ class _TradeActionListenerState extends ConsumerState<TradeActionListener> {
     final key = '${update.orderId}/${update.status}';
     if (!_inFlight.add(key)) return;
     try {
-      final role = await (widget.resolveRole ?? _bridgeRole)(update.orderId);
+      final (role, node) =
+          await (
+            (widget.resolveRole ?? _bridgeRole)(update.orderId),
+            (widget.resolveNode ?? _bridgeNode)(update.orderId),
+          ).wait;
       // A newer emission superseded this one during the lookup.
       if (_latest[update.orderId] != update.status) return;
       // The daemon addresses add-invoice to the buyer and pay-invoice to
@@ -133,6 +149,8 @@ class _TradeActionListenerState extends ConsumerState<TradeActionListener> {
         _ => false,
       };
       if (!actionable || !mounted) return;
+      final activeNode = ref.read(mostroPubkeyProvider);
+      if (isOnOtherNode(tradeNode: node, activeNode: activeNode)) return;
       // Screens expect their role in this map before being navigated to
       // (see tradeRoleProvider docs).
       ref.read(tradeRoleProvider.notifier).state = {

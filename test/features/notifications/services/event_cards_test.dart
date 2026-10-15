@@ -150,6 +150,22 @@ void main() {
       expect(stateOf(notifier).map((n) => n.id), ['trade-order-1-active']);
     });
 
+    test('a trade on another node raises no card yet', () async {
+      // #811: its history is heard whichever node is active; without the
+      // cutoff of the cards to come, the first run would turn it into cards.
+      final elsewhere = EventCards(
+        notifications: () => notifier,
+        isEnabled: (_) => true,
+        identityCreatedAt: () async => null,
+        currentLocation: () => null,
+        isOnOtherNode: (orderId) async => orderId == 'order-1',
+      );
+
+      await elsewhere.onTradeUpdate(update(OrderStatus.waitingPayment));
+
+      expect(stateOf(notifier), isEmpty);
+    });
+
     test('a later status on the same order adds its own card', () async {
       await cards.onTradeUpdate(update(OrderStatus.active));
       await cards.onTradeUpdate(update(OrderStatus.fiatSent, at: 2000));

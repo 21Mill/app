@@ -180,6 +180,12 @@ Future<List<TradeInfo>> listTrades() =>
 Future<TradeRole?> getTradeRole({required String orderId}) =>
     RustLib.instance.api.crateApiOrdersGetTradeRole(orderId: orderId);
 
+/// The node that issued the trade `order_id`, or empty when its row does not
+/// know it or there is no row. Dart tells a trade of another node apart with
+/// it (#811): no card and no automatic navigation for one.
+Future<String> tradeNodeOf({required String orderId}) =>
+    RustLib.instance.api.crateApiOrdersTradeNodeOf(orderId: orderId);
+
 /// Recover this identity's trades from the daemon and resync its trade-key
 /// counter — the step a seed import needs before the first new order.
 ///

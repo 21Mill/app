@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:mostro/core/app_routes.dart';
+import 'package:mostro/core/mostro_defaults.dart';
 import 'package:mostro/features/order/providers/invoice_providers.dart';
 import 'package:mostro/features/order/providers/trade_state_provider.dart';
 import 'package:mostro/shared/widgets/trade_action_listener.dart';
@@ -30,6 +31,7 @@ void main() {
   Future<ProviderContainer> pumpListener(
     WidgetTester tester, {
     required Future<TradeRole?> Function(String orderId) resolveRole,
+    Future<String> Function(String orderId)? resolveNode,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -41,6 +43,7 @@ void main() {
         ],
         child: TradeActionListener(
           resolveRole: resolveRole,
+          resolveNode: resolveNode ?? (_) async => '',
           navigate: navigated.add,
           child: const SizedBox.shrink(),
         ),
@@ -74,6 +77,43 @@ void main() {
     expect(container.read(tradeRoleProvider), {'o1': false});
   });
 
+  testWidgets('a step of a trade on another node does not navigate', (
+    tester,
+  ) async {
+    // #811: its node is heard whichever is active, but its screen would
+    // open on the wrong node. The trade's own node, and a row that does not
+    // know its node, still navigate.
+    const other =
+        'f00dfacef00dfacef00dfacef00dfacef00dfacef00dfacef00dfacef00dface';
+    await pumpListener(
+      tester,
+      resolveRole: (_) async => TradeRole.seller,
+      resolveNode:
+          (orderId) async => switch (orderId) {
+            'elsewhere' => other,
+            'here' => defaultMostroPubkey.toUpperCase(),
+            _ => '',
+          },
+    );
+
+    for (final orderId in ['elsewhere', 'here', 'unknown']) {
+      updates.add(
+        TradeUpdate(
+          orderId: orderId,
+          occurredAt: _now(),
+          status: OrderStatus.waitingPayment,
+        ),
+      );
+    }
+    await tester.pump();
+    await tester.pump();
+
+    expect(navigated, [
+      AppRoute.payInvoicePath('here'),
+      AppRoute.payInvoicePath('unknown'),
+    ]);
+  });
+
   testWidgets('a request whose step window ran out does not navigate', (
     tester,
   ) async {
@@ -83,8 +123,9 @@ void main() {
     // it, so only the expiry can keep it from navigating.
     await pumpListener(
       tester,
-      resolveRole: (orderId) async =>
-          orderId == 'old-buyer' ? TradeRole.buyer : TradeRole.seller,
+      resolveRole:
+          (orderId) async =>
+              orderId == 'old-buyer' ? TradeRole.buyer : TradeRole.seller,
     );
     final stale = _now() - const Duration(minutes: 16).inSeconds;
 
