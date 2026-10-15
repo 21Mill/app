@@ -142,6 +142,27 @@ impl From<DaemonReply> for Wake {
     }
 }
 
+/// The destination a buyer's add-invoice sent, keyed as the payout record
+/// keys it (`payout_route::record_acknowledgement`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SentPayout {
+    pub(crate) order_id: String,
+    pub(crate) destination: String,
+    pub(crate) submitted_at: i64,
+}
+
+#[cfg(test)]
+impl SentPayout {
+    /// A submission no payout record holds.
+    pub(crate) fn untracked() -> Self {
+        Self {
+            order_id: String::new(),
+            destination: String::new(),
+            submitted_at: 0,
+        }
+    }
+}
+
 /// What kind of outgoing request a pending record tracks.
 pub(crate) enum PendingRequestKind {
     Create {
@@ -171,7 +192,11 @@ pub(crate) enum PendingRequestKind {
         fiat_amount: Option<f64>,
     },
     /// A buyer's add-invoice awaiting the daemon's acknowledgement.
-    AddInvoice,
+    AddInvoice {
+        /// What it sent: the acknowledgement names it as the destination
+        /// the node took, also after its caller stopped waiting.
+        sent: SentPayout,
+    },
     /// An `add-bond-invoice` reply (the payout claim's bolt11) awaiting the
     /// daemon's `bond-invoice-accepted` or `CantDo`
     /// (docs/ANTI_ABUSE_BOND.md §6.4).
@@ -441,11 +466,12 @@ pub(crate) fn register_add_invoice_request(
     trade_pubkey_hex: &str,
     request_id: u64,
     trade_index: u32,
+    sent: SentPayout,
 ) -> Option<tokio::sync::oneshot::Receiver<Wake>> {
     let (tx, rx) = tokio::sync::oneshot::channel::<Wake>();
     let mut map = pending_requests().lock().ok()?;
     let in_flight = map.get(trade_pubkey_hex).is_some_and(|p| {
-        matches!(p.kind, PendingRequestKind::AddInvoice)
+        matches!(p.kind, PendingRequestKind::AddInvoice { .. })
             && p.tx.as_ref().is_some_and(|waiter| !waiter.is_closed())
     });
     if in_flight {
@@ -456,7 +482,7 @@ pub(crate) fn register_add_invoice_request(
         PendingRequest {
             request_id,
             trade_index,
-            kind: PendingRequestKind::AddInvoice,
+            kind: PendingRequestKind::AddInvoice { sent },
             tx: Some(tx),
         },
     );
@@ -568,7 +594,7 @@ pub(crate) fn take_matching_add_invoice(
     match map.get(trade_pubkey_hex) {
         Some(p)
             if request_id_matches(p.request_id, got)
-                && matches!(p.kind, PendingRequestKind::AddInvoice) =>
+                && matches!(p.kind, PendingRequestKind::AddInvoice { .. }) =>
         {
             map.remove(trade_pubkey_hex)
         }
@@ -1412,7 +1438,9 @@ mod tests {
             PendingRequest {
                 request_id: 52,
                 trade_index: 4,
-                kind: PendingRequestKind::AddInvoice,
+                kind: PendingRequestKind::AddInvoice {
+                    sent: SentPayout::untracked(),
+                },
                 tx: Some(tx),
             },
         );
@@ -1425,7 +1453,10 @@ mod tests {
         assert!(take_matching_add_invoice(ai_key, None).is_none());
         assert!(take_matching_add_invoice(ai_key, Some(99)).is_none());
         let pending = take_matching_add_invoice(ai_key, Some(52)).expect("must match");
-        assert!(matches!(pending.kind, PendingRequestKind::AddInvoice));
+        assert!(matches!(
+            pending.kind,
+            PendingRequestKind::AddInvoice { .. }
+        ));
         assert!(!pending_requests().lock().unwrap().contains_key(ai_key));
 
         pending_requests().lock().unwrap().remove(take_key);
@@ -1478,8 +1509,9 @@ mod tests {
     async fn add_invoice_is_refused_while_another_is_waiting() {
         let key = "test-add-invoice-in-flight-pubkey";
 
-        let mut rx_a = register_add_invoice_request(key, 81, 7).expect("first registers");
-        assert!(register_add_invoice_request(key, 82, 7).is_none());
+        let mut rx_a = register_add_invoice_request(key, 81, 7, SentPayout::untracked())
+            .expect("first registers");
+        assert!(register_add_invoice_request(key, 82, 7, SentPayout::untracked()).is_none());
 
         // The first attempt is untouched: same nonce, waiter still attached.
         assert!(matches!(
@@ -1498,12 +1530,14 @@ mod tests {
     async fn add_invoice_retry_replaces_an_attempt_nobody_waits_on() {
         let key = "test-add-invoice-retry-pubkey";
 
-        let _rx_a = register_add_invoice_request(key, 83, 7).expect("first registers");
+        let _rx_a = register_add_invoice_request(key, 83, 7, SentPayout::untracked())
+            .expect("first registers");
         detach_request_waiter(key, 83);
-        let rx_b = register_add_invoice_request(key, 84, 7).expect("retry after timeout");
+        let rx_b = register_add_invoice_request(key, 84, 7, SentPayout::untracked())
+            .expect("retry after timeout");
 
         drop(rx_b);
-        assert!(register_add_invoice_request(key, 85, 7).is_some());
+        assert!(register_add_invoice_request(key, 85, 7, SentPayout::untracked()).is_some());
         assert_eq!(pending_requests().lock().unwrap().get(key).unwrap().request_id, 85);
 
         pending_requests().lock().unwrap().remove(key);
@@ -1516,7 +1550,7 @@ mod tests {
         let key = "test-add-invoice-over-take-pubkey";
         let _rx_t = insert_pending_take(key, 86);
 
-        assert!(register_add_invoice_request(key, 87, 7).is_some());
+        assert!(register_add_invoice_request(key, 87, 7, SentPayout::untracked()).is_some());
 
         pending_requests().lock().unwrap().remove(key);
     }

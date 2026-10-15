@@ -67,7 +67,10 @@ Set the default fiat currency for new orders. Pass null to clear
 Set a default Lightning Address to auto-fill when selling (buyer
 submits invoice). Pass null to clear.
 
-**Validation**: If non-null, MUST match `user@domain` format.
+**Validation**: If non-null, MUST be a Lightning address by the rule a take
+applies (`invoice::classify`, LUD-16 `user@domain.tld`): one Settings saves
+but a take refuses would fail every buy from the take screen. Saved without
+surrounding whitespace or a `lightning:` prefix.
 
 **Errors**: `InvalidLightningAddress`, `StorageError`.
 

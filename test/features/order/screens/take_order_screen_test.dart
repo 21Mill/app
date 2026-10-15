@@ -18,6 +18,8 @@ import 'package:mostro/features/order/providers/exchange_rate_provider.dart';
 import 'package:mostro/features/order/providers/trade_state_provider.dart';
 import 'package:mostro/features/order/screens/take_order_screen.dart';
 import 'package:mostro/features/order/widgets/order_detail_cards.dart';
+import 'package:mostro/features/order/widgets/take_payout_sheet.dart';
+import 'package:mostro/features/settings/providers/settings_provider.dart';
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/l10n/app_localizations_en.dart';
 import 'package:mostro/src/rust/api/types.dart';
@@ -42,6 +44,7 @@ typedef _Take =
       required String orderId,
       required TradeRole role,
       double? fiatAmount,
+      TakePayout? payout,
     });
 
 Future<StreamController<List<OrderItem>>> _pump(
@@ -54,6 +57,10 @@ Future<StreamController<List<OrderItem>>> _pump(
   Future<List<TradeInfo>> Function()? readTrades,
   instance.MostroInstance? node,
   int? bondEstimate,
+  String? defaultAddress,
+  String? settingsAddress,
+  Future<String?>? coreAddress,
+  Future<bool> Function(String)? isLightningAddress,
 }) async {
   tester.view.physicalSize = const Size(360, 760);
   tester.view.devicePixelRatio = 1.0;
@@ -70,6 +77,19 @@ Future<StreamController<List<OrderItem>>> _pump(
         readTrades ?? () async => trades,
       ),
       if (take != null) takeOrderActionProvider.overrideWithValue(take),
+      // The core's copy, which the row shows; Settings' own may differ.
+      takeDefaultAddressProvider.overrideWith(
+        (ref) => coreAddress ?? Future.value(defaultAddress),
+      ),
+      settingsProvider.overrideWith(
+        (ref) => SettingsNotifier(
+          initial: AppSettingsState(
+            defaultLightningAddress: settingsAddress ?? defaultAddress,
+          ),
+        ),
+      ),
+      if (isLightningAddress != null)
+        lightningAddressCheckProvider.overrideWithValue(isLightningAddress),
       exchangeRateProvider.overrideWith((ref, code) async => rate),
       mostroNodeProvider.overrideWith((ref) async => node),
       bondEstimateProvider.overrideWith((ref, sats) async => bondEstimate),
@@ -461,7 +481,9 @@ void main() {
         await _pump(
           tester,
           order: _order(),
-          take: ({required orderId, required role, fiatAmount}) => reply.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  reply.future,
         );
 
         await tester.tap(find.text('Take order'));
@@ -486,7 +508,9 @@ void main() {
         final books = await _pump(
           tester,
           order: _order(),
-          take: ({required orderId, required role, fiatAmount}) => reply.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  reply.future,
         );
 
         await tester.tap(find.text('Take order'));
@@ -513,7 +537,9 @@ void main() {
         final books = await _pump(
           tester,
           order: _order(),
-          take: ({required orderId, required role, fiatAmount}) => reply.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  reply.future,
         );
 
         await tester.tap(find.text('Take order'));
@@ -530,7 +556,9 @@ void main() {
 
     for (final (side, isBuying, lands) in [
       ('seller', false, 'pay'),
-      ('buyer', true, 'trade'),
+      // No default address: the take sent none, so the invoice step is
+      // certainly next (PR #824 review).
+      ('buyer', true, 'add invoice'),
     ]) {
       testWidgets('a $side take that succeeds never reads unavailable on the '
           'way out', (tester) async {
@@ -538,11 +566,8 @@ void main() {
         // animates in, so the frames after a successful take are the screen's
         // too, and its own take is already in the book by then (#454).
         //
-        // The buyer path reads the default Lightning address before it
-        // navigates, and that bridge call throws in a widget test — which is
-        // the unreadable-settings path itself: the take stands, the error
-        // never reaches `_showTakeError`, and the trade screen is where the
-        // user lands, offering the invoice step it owns.
+        // The buyer's take names its destination (here none, so the node
+        // asks for an invoice): where it lands follows from what it sent.
         await withClock(Clock.fixed(kFakeNow), () async {
           final reply = Completer<TradeInfo>();
           final books = await _pump(
@@ -550,7 +575,8 @@ void main() {
             order: _order(kind: isBuying ? 'sell' : 'buy'),
             isBuying: isBuying,
             take:
-                ({required orderId, required role, fiatAmount}) => reply.future,
+                ({required orderId, required role, fiatAmount, payout}) =>
+                    reply.future,
           );
 
           await tester.tap(find.text('Take order'));
@@ -586,11 +612,8 @@ void main() {
             );
           }
           expect(find.text(lands), findsOneWidget);
-          // A take that stands is never reported as a failure, and an
-          // unreadable setting does not send the buyer to a step the daemon
-          // may not be waiting for.
+          // A take that stands is never reported as a failure.
           expect(find.byType(SnackBar), findsNothing);
-          if (isBuying) expect(find.text('add invoice'), findsNothing);
         });
       });
     }
@@ -602,7 +625,7 @@ void main() {
           tester,
           order: _order(expiresIn: const Duration(seconds: 2)),
           take:
-              ({required orderId, required role, fiatAmount}) =>
+              ({required orderId, required role, fiatAmount, payout}) =>
                   Completer<TradeInfo>().future,
         );
 
@@ -628,7 +651,9 @@ void main() {
         await _pump(
           tester,
           order: _order(expiresIn: const Duration(seconds: 2)),
-          take: ({required orderId, required role, fiatAmount}) => reply.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  reply.future,
         );
 
         await tester.tap(find.text('Take order'));
@@ -651,7 +676,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(OrderAlreadyTaken)'),
         );
 
@@ -674,7 +699,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(CantDo:InvalidOrderStatus)'),
         );
 
@@ -697,7 +722,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(CantDo:NotFound)'),
         );
 
@@ -717,7 +742,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(CantDo:SomeNewReason)'),
         );
 
@@ -821,7 +846,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(NoDaemonResponse)'),
         );
 
@@ -846,7 +871,7 @@ void main() {
           tester,
           order: _order(),
           readTrades: () => rows.future,
-          take: ({required orderId, required role, fiatAmount}) {
+          take: ({required orderId, required role, fiatAmount, payout}) {
             taken.add(orderId);
             // Left unanswered: only the dispatch is under test.
             return Completer<TradeInfo>().future;
@@ -872,7 +897,7 @@ void main() {
         await _pump(
           tester,
           order: _order(),
-          take: ({required orderId, required role, fiatAmount}) async {
+          take: ({required orderId, required role, fiatAmount, payout}) async {
             attempts++;
             throw Exception('AnyhowException(NoDaemonResponse)');
           },
@@ -957,7 +982,7 @@ void main() {
           trades: [
             fakeTrade(id: 'ended', orderId: _id, status: OrderStatus.canceled),
           ],
-          take: ({required orderId, required role, fiatAmount}) {
+          take: ({required orderId, required role, fiatAmount, payout}) {
             taken.add(orderId);
             // Left unanswered: only the dispatch is under test.
             return Completer<TradeInfo>().future;
@@ -987,7 +1012,7 @@ void main() {
           tester,
           order: _order(),
           readTrades: () async => throw Exception('storage is unreadable'),
-          take: ({required orderId, required role, fiatAmount}) {
+          take: ({required orderId, required role, fiatAmount, payout}) {
             taken.add(orderId);
             return Completer<TradeInfo>().future;
           },
@@ -1000,6 +1025,240 @@ void main() {
 
         expect(taken, [_id]);
         expect(find.text('Taking…'), findsOneWidget);
+      });
+    });
+  });
+
+  // #823: a buyer with a default Lightning address is told where the sats go
+  // before taking, and can change it for this trade only.
+  group('where the sats go', () {
+    testWidgets('the default address is named before the take', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        TakePayout? sent = const TakePayout.askForInvoice();
+        await _pump(
+          tester,
+          order: _order(),
+          defaultAddress: 'alice@example.com',
+          take: ({required orderId, required role, fiatAmount, payout}) {
+            sent = payout;
+            return Completer<TradeInfo>().future;
+          },
+        );
+
+        expect(find.text('Your sats go to'), findsOneWidget);
+        expect(find.text('alice@example.com'), findsOneWidget);
+        expect(
+          find.textContaining(
+            'Your sats will be sent to alice@example.com, your default '
+            'Lightning address.',
+          ),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        await tester.pump();
+        // No choice made: the default, named by the address the row showed
+        // (PR #824 review).
+        expect(sent, const TakePayout.address(address: 'alice@example.com'));
+      });
+    });
+
+    testWidgets('a buyer without a default address sees no row', (
+      tester,
+    ) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order());
+        expect(find.text('Your sats go to'), findsNothing);
+      });
+    });
+
+    testWidgets('an address the core refused is not named (PR #824 review)', (
+      tester,
+    ) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        TakePayout? sent = const TakePayout.askForInvoice();
+        // Saved in Settings, refused by the core: the take sends none.
+        await _pump(
+          tester,
+          order: _order(),
+          settingsAddress: 'a@b',
+          take: ({required orderId, required role, fiatAmount, payout}) {
+            sent = payout;
+            return Completer<TradeInfo>().future;
+          },
+        );
+
+        expect(find.text('Your sats go to'), findsNothing);
+        expect(find.textContaining('a@b'), findsNothing);
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        await tester.pump();
+        // Nothing named, nothing sent: the node asks for an invoice.
+        expect(sent, const TakePayout.askForInvoice());
+      });
+    });
+
+    testWidgets('Take waits while the default address is read '
+        '(PR #824 review)', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        final core = Completer<String?>();
+        final sent = <TakePayout?>[];
+        await _pump(
+          tester,
+          order: _order(),
+          coreAddress: core.future,
+          take: ({required orderId, required role, fiatAmount, payout}) {
+            sent.add(payout);
+            return Completer<TradeInfo>().future;
+          },
+        );
+
+        // Not known yet: no row, and Take does nothing.
+        expect(find.text('Your sats go to'), findsNothing);
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        expect(sent, isEmpty);
+
+        // Known: the row names it, and Take sends that very address.
+        core.complete('alice@example.com');
+        await tester.pumpAndSettle();
+        expect(find.text('alice@example.com'), findsOneWidget);
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        await tester.pump();
+        expect(sent, [const TakePayout.address(address: 'alice@example.com')]);
+      });
+    });
+
+    testWidgets('a seller sees no row, whatever the settings', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(
+          tester,
+          order: _order(kind: 'buy'),
+          isBuying: false,
+          defaultAddress: 'alice@example.com',
+        );
+        expect(find.text('Your sats go to'), findsNothing);
+      });
+    });
+
+    testWidgets('asking for an invoice instead sends no address and opens '
+        'the invoice step after the take', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        TakePayout? sent;
+        await _pump(
+          tester,
+          order: _order(),
+          defaultAddress: 'alice@example.com',
+          take: ({required orderId, required role, fiatAmount, payout}) async {
+            sent = payout;
+            return fakeTrade(
+              id: _id,
+              orderId: _id,
+              status: OrderStatus.waitingBuyerInvoice,
+            );
+          },
+        );
+
+        await tester.tap(find.text('Your sats go to'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('An invoice I add after taking'));
+        await tester.pump();
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('An invoice you add'), findsOneWidget);
+        expect(
+          find.textContaining('you will add the invoice your sats are paid to'),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Take order'));
+        await tester.pumpAndSettle();
+
+        expect(sent, const TakePayout.askForInvoice());
+        expect(find.text('add invoice'), findsOneWidget);
+      });
+    });
+
+    testWidgets('a check that ends after the buyer switched options is '
+        'dropped (PR #824 review)', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        final check = Completer<bool>();
+        await _pump(
+          tester,
+          order: _order(),
+          defaultAddress: 'alice@example.com',
+          isLightningAddress: (_) => check.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  Completer<TradeInfo>().future,
+        );
+        await tester.tap(find.text('Your sats go to'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Another Lightning address'));
+        await tester.pump();
+        await tester.enterText(find.byType(TextField), 'bob@example.org');
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pump();
+
+        // The buyer moves on while the check runs, then it answers "yes".
+        await tester.tap(find.text('An invoice I add after taking'));
+        await tester.pump();
+        check.complete(true);
+        await tester.pumpAndSettle();
+
+        // The address the buyer left is not used: the sheet stays, and takes
+        // the choice on screen.
+        expect(find.text('Use for this trade'), findsOneWidget);
+        expect(find.text('bob@example.org'), findsNothing);
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pumpAndSettle();
+        expect(find.text('An invoice you add'), findsOneWidget);
+      });
+    });
+
+    testWidgets('another address is checked, then used for this trade only', (
+      tester,
+    ) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        TakePayout? sent;
+        await _pump(
+          tester,
+          order: _order(),
+          defaultAddress: 'alice@example.com',
+          isLightningAddress: (input) async => input.contains('@'),
+          take: ({required orderId, required role, fiatAmount, payout}) {
+            sent = payout;
+            return Completer<TradeInfo>().future;
+          },
+        );
+
+        await tester.tap(find.text('Your sats go to'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Another Lightning address'));
+        await tester.pump();
+        await tester.enterText(find.byType(TextField), 'not-an-address');
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pumpAndSettle();
+        // Refused in the sheet, which stays open.
+        expect(find.text('Must be in user@domain format'), findsOneWidget);
+
+        await tester.enterText(find.byType(TextField), 'bob@example.org');
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('bob@example.org'), findsOneWidget);
+        expect(
+          find.textContaining('bob@example.org, for this trade only'),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        await tester.pump();
+        expect(sent, const TakePayout.address(address: 'bob@example.org'));
       });
     });
   });

@@ -66,6 +66,8 @@ fails the build when an identifier is declared and attached to nothing.
 | `bond.claim.order_id` | The exact order ID behind the short one in the claim screen's ID row (DS-CMP-22), in every state. |
 | `trade.bondSlashed` | The durable line on the trade detail once this user's own bond was slashed, labelled with the cause (`dispute` / `timeout`); absent otherwise. |
 | `trade.cancelRequest` | The pending cooperative-cancel request on the trade detail (protocol `cancel.md`), this side's or the counterparty's, while the trade is `active` or `fiat-sent`; absent otherwise. |
+| `trade.payout` | Where this device sent the buyer's sats (#823), on the trade detail, labelled with what became of the destination the card leads with (the paid one, else the latest): `submitted`, `retrying`, `failed`, `rejected`, `replaced` (a later destination the node acknowledged took its place), `paid`, or `maybe-paid` (the node paid while more than one destination was open, and did not say which); `scheduled` before the payout starts (the sats are not released yet), when the card only says where they will go. Absent for the seller and when this device sent no destination. |
+| `invoice.payoutFailed` | The node could not pay the destination given earlier and asks for a new invoice (#823), on the add-invoice screen, in both the wallet-generated and the manual branch. Translated prose: assert that it exists. |
 | `invoice.nwc.text` | The buyer invoice NWC generated, for payment correlation. |
 | `invoice.check` | The app's **own** verdict on what is in the invoice field, as a stable word: `expires-too-soon`, `wrong-amount`, `wrong-network`, `expired`, `malformed`, `unrecognized`, `valid`, `address`. Any word but the last two also means `invoice.submit` is disabled — the invoice is never sent. **Absent is never "fine."** It is absent with nothing typed, while the check is running, and while a word's own dependency is missing — a **pass** needs both the trade amount and the node's capabilities, so `valid` is the last word to become available, whereas `malformed`, `unrecognized`, `expired` and `address` need neither and appear straight away (the full table is under *Manual buyer invoice readouts*). It is absent too whenever `invoice.error` is present, which takes the same slot and hides this readout even after the local verdict resolves. So: wait for the word expected, never read once, never treat absence as acceptance — and do not wait for a word at all while `invoice.error` is on screen. |
 | `invoice.error` | The reason the daemon refused the last submitted buyer invoice. Present after a rejection until the next submission **or any edit of the invoice field**, whichever comes first — the verdict was about the text that was sent, so typing clears it; the manual form stays open behind it. In the wallet-generated (NWC) branch, which has no form, the readout comes with `invoice.manual` so the buyer can switch to manual entry. Unlike every other readout here its label is **translated prose**, not a machine word, so assert that it exists — never what it says. `invoice.check` and this are drawn in the same slot and never together. |
@@ -114,7 +116,10 @@ is taken by someone else or expires while the screen is open, the same node
 stays but reads as disabled (`No longer available`); the screen never
 navigates away on its own. Taking a range order asks its amount in a dialog
 (`order.take.amount`, `order.take.amount.confirm`) right after
-`order.take.confirm`; a fixed order never shows the dialog.
+`order.take.confirm`; a fixed order never shows the dialog. A buyer with a default Lightning
+address also sees `order.take.payout`, the row that says where the sats go;
+it opens a sheet to use another address, or an invoice after the take, for
+this trade only (#823).
 
 **My Trades says which state it is in.** Loaded with rows, each row is
 `trades.item.<orderId>`. Loaded with nothing to show under the current filter,

@@ -143,6 +143,28 @@ class SettingsNotifier extends StateNotifier<AppSettingsState> {
     syncLightningAddressToCore(address, sink: _syncLightningAddress);
   }
 
+  /// Saves [address] as the default only if the core takes it, and says
+  /// whether it did. The core's copy is what a take pays, and it refuses
+  /// addresses this side used to accept (`a@b`, without a dotted domain): a
+  /// default saved here but refused there was shown as where the sats go
+  /// while the take asked for an invoice (PR #824 review). Clearing always
+  /// saves.
+  Future<bool> saveDefaultLightningAddress(String? address) async {
+    if (address == null) {
+      setDefaultLightningAddress(null);
+      return true;
+    }
+    try {
+      await (_syncLightningAddress ?? _pushLightningAddress)(address);
+    } catch (e) {
+      debugPrint('[settings] Lightning address refused by the core: $e');
+      return false;
+    }
+    state = state.copyWith(defaultLightningAddress: address);
+    _prefs?.setString(_kLightningAddress, address);
+    return true;
+  }
+
   /// Turns verbose (`Debug`) logging on or off. The Rust core owns the global
   /// log filter, so the flag has to reach it or the toggle does nothing.
   void setLoggingEnabled(bool enabled) {

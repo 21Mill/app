@@ -82,6 +82,28 @@ void main() {
       expect(peer.resolvedTitle(en), isNot(mine.resolvedTitle(en)));
     });
 
+    // #823: a new request for an invoice after a failed payout rides on the
+    // first request's status; the reason gives it its own card and copy.
+    test('a request after a failed payout says the payment failed', () {
+      final first = NotificationModel.tradeStatus(
+        orderId: 'order-1',
+        status: 'waitingBuyerInvoice',
+        at: at,
+      );
+      final again = NotificationModel.tradeStatus(
+        orderId: 'order-1',
+        status: 'waitingBuyerInvoice',
+        reason: 'payoutFailed',
+        at: at,
+      );
+
+      expect(again.id, isNot(first.id));
+      expect(again.resolvedTitle(en), en.tradeCardPayoutFailedTitle);
+      expect(again.resolvedMessage(en), en.tradeCardPayoutFailedMessage);
+      expect(again.resolvedTitle(es), es.tradeCardPayoutFailedTitle);
+      expect(first.resolvedTitle(en), en.tradeCardWaitingBuyerInvoiceTitle);
+    });
+
     test('a status this build does not know still renders', () {
       final n = NotificationModel.tradeStatus(
         orderId: 'order-1',

@@ -4737,4 +4737,178 @@ class AppLocalizationsIt extends AppLocalizations {
   String reputationRebindConfirmBody(String npub) {
     return 'Chi possiede questa identità potrà esportare la tua reputazione da questo Mostro, e la tua identità attuale non potrà più farlo:\n\n$npub\n\nFirma solo per un\'identità che è tua.';
   }
+
+  @override
+  String get payoutPaidToLabel => 'Pagato a';
+
+  @override
+  String get payoutSendingToLabel => 'Invio a';
+
+  @override
+  String get payoutNotPaidLabel => 'Non pagato a';
+
+  @override
+  String get payoutChosenByLabel => 'Scelto da';
+
+  @override
+  String get payoutAmountLabel => 'Importo';
+
+  @override
+  String get payoutHashLabel => 'Hash del pagamento';
+
+  @override
+  String get payoutTriedBeforeLabel => 'Tentativo precedente';
+
+  @override
+  String payoutTriedBeforeValue(String destination, String outcome) {
+    return '$destination · $outcome';
+  }
+
+  @override
+  String get payoutNwcWallet => 'Il tuo portafoglio NWC';
+
+  @override
+  String payoutNwcWalletNamed(String name) {
+    return '$name (NWC)';
+  }
+
+  @override
+  String payoutInvoice(String invoice) {
+    return 'Fattura $invoice';
+  }
+
+  @override
+  String get payoutSourceDefaultAddress => 'Il tuo indirizzo predefinito';
+
+  @override
+  String get payoutSourceNwcWallet => 'Il tuo portafoglio NWC';
+
+  @override
+  String get payoutSourceEntered => 'Tu, per questa operazione';
+
+  @override
+  String get payoutOutcomeSubmitted => 'In attesa';
+
+  @override
+  String get payoutOutcomeRetrying => 'Fallito, nuovo tentativo';
+
+  @override
+  String get payoutOutcomeFailed => 'Fallito';
+
+  @override
+  String payoutOutcomeFailedAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Fallito dopo $count tentativi',
+      one: 'Fallito dopo 1 tentativo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payoutOutcomeRejected => 'Rifiutato dal nodo';
+
+  @override
+  String get payoutOutcomePaid => 'Pagato';
+
+  @override
+  String get payoutHashCopied => 'Hash del pagamento copiato';
+
+  @override
+  String get takeOrderPayoutLabel => 'I tuoi sats vanno a';
+
+  @override
+  String get takeOrderPayoutInvoice => 'Una fattura che aggiungi';
+
+  @override
+  String get takeOrderPayoutChangeHint => 'Cambia dove vanno i tuoi sats';
+
+  @override
+  String takeOrderPayoutNoteDefault(String address) {
+    return 'I tuoi sats saranno inviati a $address, il tuo indirizzo Lightning predefinito.';
+  }
+
+  @override
+  String takeOrderPayoutNoteAddress(String address) {
+    return 'I tuoi sats saranno inviati a $address, solo per questa operazione.';
+  }
+
+  @override
+  String get takeOrderPayoutNoteInvoice =>
+      'Dopo aver preso l\'ordine, aggiungerai la fattura a cui vengono pagati i tuoi sats.';
+
+  @override
+  String get takeOrderPayoutSheetTitle => 'Dove vanno i tuoi sats';
+
+  @override
+  String get takeOrderPayoutSheetDefault =>
+      'Il mio indirizzo Lightning predefinito';
+
+  @override
+  String get takeOrderPayoutSheetOther => 'Un altro indirizzo Lightning';
+
+  @override
+  String get takeOrderPayoutSheetInvoice =>
+      'Una fattura che aggiungo dopo averlo preso';
+
+  @override
+  String get takeOrderPayoutSheetApply => 'Usa per questa operazione';
+
+  @override
+  String invoicePayoutFailed(String destination) {
+    return 'Il pagamento a $destination non è riuscito.';
+  }
+
+  @override
+  String invoicePayoutFailedAttempts(String destination, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Il pagamento a $destination non è riuscito dopo $count tentativi.',
+      one: 'Il pagamento a $destination non è riuscito dopo 1 tentativo.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get invoicePayoutFailedNwc =>
+      'Il tuo portafoglio NWC sta creando una nuova fattura per questi sats.';
+
+  @override
+  String invoicePayoutFailedNwcNamed(String name) {
+    return '$name sta creando una nuova fattura per questi sats.';
+  }
+
+  @override
+  String get invoicePayoutFailedManual =>
+      'Aggiungi una nuova fattura per ricevere i tuoi sats.';
+
+  @override
+  String get tradeCardPayoutFailedTitle =>
+      'Mostro non è riuscito a inviarti i tuoi sats';
+
+  @override
+  String get tradeCardPayoutFailedMessage =>
+      'Mostro non è riuscito a inviare i tuoi sats all\'indirizzo o alla fattura che hai dato. Apri l\'operazione per vedere quale non è riuscito e aggiungi una nuova fattura se serve ancora.';
+
+  @override
+  String get payoutInvoiceLabel => 'Fattura';
+
+  @override
+  String get payoutInvoiceCopied => 'Fattura copiata';
+
+  @override
+  String get payoutWillGoToLabel => 'I sats andranno a';
+
+  @override
+  String get payoutMaybePaidToLabel => 'Forse pagato a';
+
+  @override
+  String get payoutOutcomeReplaced => 'Sostituito da uno successivo';
+
+  @override
+  String get payoutOutcomeMaybePaid =>
+      'Pagato a questo o a un altro elencato qui';
 }

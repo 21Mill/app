@@ -112,6 +112,8 @@ BondCancelCopy bondCancelCopy(TradeUpdateReason? reason) => switch (reason) {
   TradeUpdateReason.cooperativeCancelRequestedByPeer ||
   // A re-stated status (a restore, a re-read) says nothing new.
   TradeUpdateReason.replayed ||
+  // A failed payout comes long after the bond window.
+  TradeUpdateReason.payoutFailed ||
   null => BondCancelCopy.neutral,
 };
 

@@ -118,6 +118,33 @@ final tradeAmountProvider = StreamProvider.family.autoDispose<BigInt?, String>((
   );
 });
 
+/// Reads where this device sent the buyer's sats for an order through the
+/// bridge; injectable for tests.
+final payoutDestinationsReaderProvider =
+    Provider<Future<List<PayoutDestination>> Function(String)>(
+      (ref) => (orderId) => orders_api.payoutDestinations(orderId: orderId),
+    );
+
+/// Every destination this device sent the buyer's sats of [orderId] to,
+/// oldest first, with what became of each (#823). Empty when none was sent
+/// from here. Follows the trade: Rust rings the doorbell on every change.
+final payoutDestinationsProvider = StreamProvider.family
+    .autoDispose<List<PayoutDestination>, String>((ref, orderId) {
+      final read = ref.watch(payoutDestinationsReaderProvider);
+      return _followTrade<List<PayoutDestination>>(
+        ref,
+        orderId,
+        read: () => read(orderId),
+        // A payment is the last word on it, known or not which one.
+        isFinal:
+            (route) => route.any(
+              (d) =>
+                  d.outcome == PayoutOutcome.paid ||
+                  d.outcome == PayoutOutcome.maybePaid,
+            ),
+      );
+    });
+
 /// Reads current status through the bridge; injectable for polling tests.
 final tradeStatusLookupProvider =
     Provider<Future<OrderStatus?> Function(String)>(
@@ -196,14 +223,17 @@ final takeOrderActionProvider = Provider<
     required String orderId,
     required TradeRole role,
     double? fiatAmount,
+    TakePayout? payout,
   })
 >(
   (ref) =>
-      ({required orderId, required role, fiatAmount}) => orders_api.takeOrder(
-        orderId: orderId,
-        role: role,
-        fiatAmount: fiatAmount,
-      ),
+      ({required orderId, required role, fiatAmount, payout}) =>
+          orders_api.takeOrder(
+            orderId: orderId,
+            role: role,
+            fiatAmount: fiatAmount,
+            payout: payout,
+          ),
 );
 
 /// Publishes the seller release command; publication is not payout completion.

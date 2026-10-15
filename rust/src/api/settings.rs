@@ -99,28 +99,15 @@ fn validate_fiat_code(code: &str) -> Result<()> {
     }
 }
 
-/// Validates a Lightning Address in `user@domain` format.
-///
-/// Requires exactly one `@`, a non-empty local part, and a domain that
-/// contains at least one dot with no empty labels and only ASCII
-/// alphanumeric/hyphen characters.
+/// Validates a Lightning Address (LUD-16 `user@domain.tld`) by the rule a
+/// take applies to it, `invoice::classify`: a default saved here but refused
+/// there would fail every buy from the take screen (PR #824 review).
 fn validate_lightning_address(address: &str) -> Result<()> {
-    let trimmed = address.trim();
-    let parts: Vec<&str> = trimmed.split('@').collect();
-    if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty() {
-        let domain = parts[1];
-        let labels: Vec<&str> = domain.split('.').collect();
-        let valid_domain = labels.len() >= 2
-            && labels.iter().all(|label| {
-                !label.is_empty()
-                    && label.len() <= 63
-                    && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-                    && !label.starts_with('-')
-                    && !label.ends_with('-')
-            });
-        if valid_domain {
-            return Ok(());
-        }
+    if matches!(
+        crate::api::invoice::classify(address),
+        crate::api::types::PaymentDestination::LightningAddress(_)
+    ) {
+        return Ok(());
     }
     bail!(
         "InvalidLightningAddress: '{}' must be in user@domain.tld format",
@@ -180,9 +167,12 @@ pub async fn set_default_fiat_code(code: Option<String>) -> Result<()> {
 
 /// Set or clear the default Lightning Address.
 ///
+/// Saved without surrounding whitespace or a `lightning:` prefix: a take
+/// sends it as it is.
+///
 /// **Errors**: `InvalidLightningAddress` if `address` is Some but malformed.
 pub async fn set_default_lightning_address(address: Option<String>) -> Result<()> {
-    let normalized = address.map(|a| a.trim().to_string());
+    let normalized = address.map(|a| crate::api::invoice::normalize(&a).to_string());
     if let Some(ref a) = normalized {
         validate_lightning_address(a)?;
     }
@@ -426,6 +416,52 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("InvalidLightningAddress"));
+    }
+
+    #[test]
+    fn a_default_is_saved_only_if_a_take_would_send_it() {
+        // A take judges the default with `invoice::classify`: one Settings
+        // saves but the take refuses fails every buy from the take screen
+        // (PR #824 review).
+        for input in [
+            "alice@example.com",
+            "Alice@Example.COM",
+            "alice.bob+tips_1@pay-me.example.co",
+            "alice!@example.com",
+            "alice bob@example.com",
+            "alice@example.1",
+            "alice@example.c",
+            "alice@example",
+            "alice@exa_mple.com",
+            "@example.com",
+            "a@b@example.com",
+        ] {
+            let take_sends = matches!(
+                crate::api::invoice::classify(input),
+                crate::api::types::PaymentDestination::LightningAddress(_)
+            );
+            assert_eq!(
+                validate_lightning_address(input).is_ok(),
+                take_sends,
+                "{input}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_default_is_saved_without_its_lightning_scheme() {
+        // The take sends the saved default as it is: a `lightning:` prefix
+        // left on it would reach the node.
+        let _g = settings_lock().lock().unwrap();
+        set_default_lightning_address(Some(" lightning:alice@example.com ".to_string()))
+            .await
+            .unwrap();
+        let s = get_settings().await.unwrap();
+        assert_eq!(
+            s.default_lightning_address.as_deref(),
+            Some("alice@example.com")
+        );
+        set_default_lightning_address(None).await.unwrap();
     }
 
     #[test]

@@ -172,6 +172,37 @@ void main() {
       expect(prefs.getString('settings.lightningAddress'), 'alice@example.com');
     });
 
+    // PR #824 review: the dialog saves through the core, so Settings never
+    // holds an address a take would not send.
+    test('the dialog saves only an address the core takes', () async {
+      // Arrange
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final notifier = SettingsNotifier(
+        prefs: prefs,
+        syncLightningAddress: (address) async {
+          if (address == 'a@b') throw Exception('InvalidLightningAddress');
+        },
+      );
+
+      // Act + Assert: refused, nothing saved on either side.
+      expect(await notifier.saveDefaultLightningAddress('a@b'), isFalse);
+      expect(notifier.state.defaultLightningAddress, isNull);
+      expect(prefs.getString('settings.lightningAddress'), isNull);
+
+      // Taken: saved here too.
+      expect(
+        await notifier.saveDefaultLightningAddress('alice@example.com'),
+        isTrue,
+      );
+      expect(notifier.state.defaultLightningAddress, 'alice@example.com');
+      expect(prefs.getString('settings.lightningAddress'), 'alice@example.com');
+
+      // Clearing always saves.
+      expect(await notifier.saveDefaultLightningAddress(null), isTrue);
+      expect(notifier.state.defaultLightningAddress, isNull);
+    });
+
     test('the saved address is handed to the core at startup', () async {
       // Arrange
       final synced = <String?>[];

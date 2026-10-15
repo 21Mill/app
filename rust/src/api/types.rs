@@ -691,6 +691,11 @@ pub enum TradeUpdateReason {
     /// does (#770). Not the startup sweep's cancel: that is the daemon's
     /// `Canceled` learned late, news like the message it stands in for.
     Replayed,
+    /// The node could not pay the buyer and asks for a new invoice: an
+    /// `add-invoice` on a settled escrow (mostrod `check_failure_retries`).
+    /// Rides on `WaitingBuyerInvoice`, like the first request, so the card
+    /// and the screens can tell the two apart (#823).
+    PayoutFailed,
 }
 
 /// An image or file sent in a chat (#589), as read from v1's JSON message.
@@ -903,6 +908,83 @@ pub struct Bolt11Summary {
     /// `regtest`, `signet`, `simnet`) so it compares against the node's
     /// `lnd_networks`.
     pub network: String,
+}
+
+/// Where a buyer taking a sell order asks the node to send the sats (#823).
+///
+/// Chosen on the take screen. Without a choice `take_order` sends the default
+/// Lightning address from Settings, as it always did.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TakePayout {
+    /// The default Lightning address from Settings, when one is set.
+    DefaultAddress,
+    /// Another Lightning address, for this trade only.
+    Address { address: String },
+    /// No address: the node asks for an invoice once the trade starts.
+    AskForInvoice,
+}
+
+/// How a payout destination was chosen (#823).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum PayoutSource {
+    /// The default Lightning address from Settings, sent with the take.
+    DefaultLightningAddress,
+    /// An invoice the connected NWC wallet generated and the app submitted
+    /// on its own.
+    NwcWallet,
+    /// An invoice or Lightning address the buyer entered for this trade.
+    Entered,
+}
+
+/// What became of one payout destination (#823).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum PayoutOutcome {
+    /// Sent to the node; no news of the payout yet.
+    Submitted,
+    /// The node's first payment failed and it is retrying.
+    Retrying,
+    /// The node gave up on it and asked for a new invoice.
+    Failed,
+    /// The node refused it when it was submitted.
+    Rejected,
+    /// The node acknowledged a later destination in its place, before
+    /// paying anything.
+    Replaced,
+    /// The node paid it: the trade completed.
+    Paid,
+    /// The node paid, but more than one destination was still open and its
+    /// message does not say which one: this one or another marked the same.
+    MaybePaid,
+}
+
+/// One destination the buyer's payout was sent to, as this device submitted
+/// it (#823). Read with `orders::payout_destinations`, oldest first.
+///
+/// Recorded locally, so a trade restored on another device has none: the
+/// node does not say where it paid.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PayoutDestination {
+    /// The Lightning address or the BOLT11 invoice, as sent.
+    pub destination: String,
+    pub is_lightning_address: bool,
+    pub source: PayoutSource,
+    /// The NWC wallet's name, when the wallet gave one and made the invoice.
+    pub wallet_name: Option<String>,
+    /// Unix seconds, local clock, when the destination was sent.
+    pub submitted_at: i64,
+    /// The sats the destination receives: the invoice's amount, or the
+    /// payout amount once the node said it. `None` while unknown.
+    pub amount_sats: Option<u64>,
+    /// Hex payment hash of an invoice; `None` for a Lightning address,
+    /// whose invoice only the node sees.
+    pub payment_hash: Option<String>,
+    pub outcome: PayoutOutcome,
+    /// Unix seconds of the node message that set [`Self::outcome`] (node
+    /// clock), or of the rejection (local clock). `None` while submitted.
+    pub outcome_at: Option<i64>,
+    /// How many times the node tries to pay before it gives up, from its
+    /// `payment-failed` notice. `None` until one arrives.
+    pub attempts: Option<u32>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

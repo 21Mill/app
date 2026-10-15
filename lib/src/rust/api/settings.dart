@@ -32,6 +32,9 @@ Future<void> setDefaultFiatCode({String? code}) =>
 
 /// Set or clear the default Lightning Address.
 ///
+/// Saved without surrounding whitespace or a `lightning:` prefix: a take
+/// sends it as it is.
+///
 /// **Errors**: `InvalidLightningAddress` if `address` is Some but malformed.
 Future<void> setDefaultLightningAddress({String? address}) => RustLib
     .instance

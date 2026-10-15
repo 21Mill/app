@@ -4890,5 +4890,236 @@
         "type": "String"
       }
     }
+  },
+  "payoutPaidToLabel": "Paid to",
+  "@payoutPaidToLabel": {
+    "description": "Trade detail payout card (#823): row label before the destination the buyer's sats were paid to"
+  },
+  "payoutSendingToLabel": "Sending to",
+  "@payoutSendingToLabel": {
+    "description": "Trade detail payout card (#823): row label before the destination the sats are being sent to, not paid yet"
+  },
+  "payoutNotPaidLabel": "Not paid to",
+  "@payoutNotPaidLabel": {
+    "description": "Trade detail payout card (#823): row label before a destination the node could not pay or refused"
+  },
+  "payoutChosenByLabel": "Chosen by",
+  "@payoutChosenByLabel": {
+    "description": "Trade detail payout card (#823): row label before who chose the destination"
+  },
+  "payoutAmountLabel": "Amount",
+  "@payoutAmountLabel": {
+    "description": "Trade detail payout card (#823): row label before the sats the destination receives"
+  },
+  "payoutHashLabel": "Payment hash",
+  "@payoutHashLabel": {
+    "description": "Trade detail payout card (#823): row label before the invoice's payment hash; the whole row copies it"
+  },
+  "payoutTriedBeforeLabel": "Tried before",
+  "@payoutTriedBeforeLabel": {
+    "description": "Trade detail payout card (#823): row label before an earlier destination of the same trade"
+  },
+  "payoutTriedBeforeValue": "{destination} · {outcome}",
+  "@payoutTriedBeforeValue": {
+    "description": "Trade detail payout card (#823): value of an earlier destination row: where, then what became of it",
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      },
+      "outcome": {
+        "type": "String"
+      }
+    }
+  },
+  "payoutNwcWallet": "Your NWC wallet",
+  "@payoutNwcWallet": {
+    "description": "Payout destination (#823): an invoice the user's NWC wallet generated, when the wallet gives no name"
+  },
+  "payoutNwcWalletNamed": "{name} (NWC)",
+  "@payoutNwcWalletNamed": {
+    "description": "Payout destination (#823): an invoice the user's NWC wallet generated, with the wallet's own name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "payoutInvoice": "Invoice {invoice}",
+  "@payoutInvoice": {
+    "description": "Payout destination (#823): a Lightning invoice the user entered, shortened",
+    "placeholders": {
+      "invoice": {
+        "type": "String"
+      }
+    }
+  },
+  "payoutSourceDefaultAddress": "Your default address",
+  "@payoutSourceDefaultAddress": {
+    "description": "Trade detail payout card (#823): the destination is the default Lightning address saved in Settings"
+  },
+  "payoutSourceNwcWallet": "Your NWC wallet",
+  "@payoutSourceNwcWallet": {
+    "description": "Trade detail payout card (#823): the connected NWC wallet generated the invoice and the app sent it on its own"
+  },
+  "payoutSourceEntered": "You, for this trade",
+  "@payoutSourceEntered": {
+    "description": "Trade detail payout card (#823): the user entered this invoice or address for this trade"
+  },
+  "payoutOutcomeSubmitted": "Waiting",
+  "@payoutOutcomeSubmitted": {
+    "description": "Trade detail payout card (#823): status of a destination sent to the node, not paid yet"
+  },
+  "payoutOutcomeRetrying": "Failed, retrying",
+  "@payoutOutcomeRetrying": {
+    "description": "Trade detail payout card (#823): the node's first payment failed and it is trying again"
+  },
+  "payoutOutcomeFailed": "Failed",
+  "@payoutOutcomeFailed": {
+    "description": "Trade detail payout card (#823): the node gave up paying this destination and asked for another"
+  },
+  "payoutOutcomeFailedAttempts": "{count, plural, =1{Failed after 1 attempt} other{Failed after {count} attempts}}",
+  "@payoutOutcomeFailedAttempts": {
+    "description": "Trade detail payout card (#823): the node gave up after trying count times",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "payoutOutcomeRejected": "Refused by the node",
+  "@payoutOutcomeRejected": {
+    "description": "Trade detail payout card (#823): the node refused this invoice or address when it was sent"
+  },
+  "payoutOutcomePaid": "Paid",
+  "@payoutOutcomePaid": {
+    "description": "Trade detail payout card (#823): the node paid this destination"
+  },
+  "payoutHashCopied": "Payment hash copied",
+  "@payoutHashCopied": {
+    "description": "Snackbar after copying the payout's payment hash (#823)"
+  },
+  "takeOrderPayoutLabel": "Your sats go to",
+  "@takeOrderPayoutLabel": {
+    "description": "Take order screen (#823): row label before where the buyer's sats will be sent"
+  },
+  "takeOrderPayoutInvoice": "An invoice you add",
+  "@takeOrderPayoutInvoice": {
+    "description": "Take order screen (#823): the buyer will add an invoice after taking instead of using an address"
+  },
+  "takeOrderPayoutChangeHint": "Change where your sats go",
+  "@takeOrderPayoutChangeHint": {
+    "description": "Take order screen (#823): accessibility hint of the row that opens the payout choice"
+  },
+  "takeOrderPayoutNoteDefault": "Your sats will be sent to {address}, your default Lightning address.",
+  "@takeOrderPayoutNoteDefault": {
+    "description": "Take order screen (#823): explanatory note when the default Lightning address will receive the sats",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "takeOrderPayoutNoteAddress": "Your sats will be sent to {address}, for this trade only.",
+  "@takeOrderPayoutNoteAddress": {
+    "description": "Take order screen (#823): explanatory note when another Lightning address, for this trade only, will receive the sats",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "takeOrderPayoutNoteInvoice": "After you take the order, you will add the invoice your sats are paid to.",
+  "@takeOrderPayoutNoteInvoice": {
+    "description": "Take order screen (#823): explanatory note when the buyer chose to add an invoice after taking"
+  },
+  "takeOrderPayoutSheetTitle": "Where your sats go",
+  "@takeOrderPayoutSheetTitle": {
+    "description": "Take order screen (#823): title of the sheet that chooses where the sats go"
+  },
+  "takeOrderPayoutSheetDefault": "My default Lightning address",
+  "@takeOrderPayoutSheetDefault": {
+    "description": "Take order payout sheet (#823): option for the default Lightning address from Settings"
+  },
+  "takeOrderPayoutSheetOther": "Another Lightning address",
+  "@takeOrderPayoutSheetOther": {
+    "description": "Take order payout sheet (#823): option for another Lightning address, for this trade only"
+  },
+  "takeOrderPayoutSheetInvoice": "An invoice I add after taking",
+  "@takeOrderPayoutSheetInvoice": {
+    "description": "Take order payout sheet (#823): option to add an invoice after taking instead of an address"
+  },
+  "takeOrderPayoutSheetApply": "Use for this trade",
+  "@takeOrderPayoutSheetApply": {
+    "description": "Take order payout sheet (#823): the sheet's answer, applies the choice to this trade"
+  },
+  "invoicePayoutFailed": "The payment to {destination} failed.",
+  "@invoicePayoutFailed": {
+    "description": "Add-invoice screen (#823): the node could not pay the destination the buyer gave earlier",
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "invoicePayoutFailedAttempts": "{count, plural, =1{The payment to {destination} failed after 1 attempt.} other{The payment to {destination} failed after {count} attempts.}}",
+  "@invoicePayoutFailedAttempts": {
+    "description": "Add-invoice screen (#823): the node gave up paying the earlier destination after count attempts",
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invoicePayoutFailedNwc": "Your NWC wallet is making a new invoice for these sats.",
+  "@invoicePayoutFailedNwc": {
+    "description": "Add-invoice screen (#823): after a failed payout, the connected NWC wallet (no name) makes the new invoice on its own"
+  },
+  "invoicePayoutFailedNwcNamed": "{name} is making a new invoice for these sats.",
+  "@invoicePayoutFailedNwcNamed": {
+    "description": "Add-invoice screen (#823): after a failed payout, the connected NWC wallet, by its name, makes the new invoice on its own",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invoicePayoutFailedManual": "Add a new invoice to receive your sats.",
+  "@invoicePayoutFailedManual": {
+    "description": "Add-invoice screen (#823): after a failed payout, the buyer must add a new invoice"
+  },
+  "tradeCardPayoutFailedTitle": "Mostro could not send your sats",
+  "@tradeCardPayoutFailedTitle": {
+    "description": "Notifications card title (#823): the node could not send the buyer's sats to the address or invoice they gave, and asks for a new invoice. About the sats the buyer receives, never the fiat they pay"
+  },
+  "tradeCardPayoutFailedMessage": "Mostro could not send your sats to the address or invoice you gave. Open the trade to see which one failed, and add a new invoice if it is still needed.",
+  "@tradeCardPayoutFailedMessage": {
+    "description": "Notifications card body (#823): the node could not send the buyer's sats to the destination they gave; the trade shows which one failed, and a new invoice may be needed (an NWC wallet may already have sent it)"
+  },
+  "payoutInvoiceLabel": "Invoice",
+  "@payoutInvoiceLabel": {
+    "description": "Trade detail payout card (#823): row label before the invoice an NWC wallet generated, shortened; the whole row copies it"
+  },
+  "payoutInvoiceCopied": "Invoice copied",
+  "@payoutInvoiceCopied": {
+    "description": "Snackbar after copying a payout invoice (#823)"
+  },
+  "payoutWillGoToLabel": "Sats will go to",
+  "@payoutWillGoToLabel": {
+    "description": "Trade detail payout card (#823): row label before where the buyer's sats will be sent, before the seller releases them"
+  },
+  "payoutMaybePaidToLabel": "Maybe paid to",
+  "@payoutMaybePaidToLabel": {
+    "description": "Trade detail payout card (#823): row label when the node paid but more than one destination was open and its message does not say which"
+  },
+  "payoutOutcomeReplaced": "Replaced by a later one",
+  "@payoutOutcomeReplaced": {
+    "description": "Trade detail payout card (#823): the node took a later destination in place of this one before paying"
+  },
+  "payoutOutcomeMaybePaid": "Paid to this one or another listed here",
+  "@payoutOutcomeMaybePaid": {
+    "description": "Trade detail payout card (#823): the node paid this destination or another one listed on the card; its message does not say which"
   }
 }

@@ -4730,4 +4730,175 @@ class AppLocalizationsNl extends AppLocalizations {
   String reputationRebindConfirmBody(String npub) {
     return 'Wie deze identiteit bezit, kan je reputatie van deze Mostro exporteren, en je huidige identiteit kan dat niet meer:\n\n$npub\n\nOnderteken alleen voor een identiteit die van jou is.';
   }
+
+  @override
+  String get payoutPaidToLabel => 'Betaald aan';
+
+  @override
+  String get payoutSendingToLabel => 'Wordt verzonden naar';
+
+  @override
+  String get payoutNotPaidLabel => 'Niet betaald aan';
+
+  @override
+  String get payoutChosenByLabel => 'Gekozen door';
+
+  @override
+  String get payoutAmountLabel => 'Bedrag';
+
+  @override
+  String get payoutHashLabel => 'Betalingshash';
+
+  @override
+  String get payoutTriedBeforeLabel => 'Eerder geprobeerd';
+
+  @override
+  String payoutTriedBeforeValue(String destination, String outcome) {
+    return '$destination · $outcome';
+  }
+
+  @override
+  String get payoutNwcWallet => 'Je NWC-wallet';
+
+  @override
+  String payoutNwcWalletNamed(String name) {
+    return '$name (NWC)';
+  }
+
+  @override
+  String payoutInvoice(String invoice) {
+    return 'Invoice $invoice';
+  }
+
+  @override
+  String get payoutSourceDefaultAddress => 'Je standaardadres';
+
+  @override
+  String get payoutSourceNwcWallet => 'Je NWC-wallet';
+
+  @override
+  String get payoutSourceEntered => 'Jij, voor deze trade';
+
+  @override
+  String get payoutOutcomeSubmitted => 'In afwachting';
+
+  @override
+  String get payoutOutcomeRetrying => 'Mislukt, nieuwe poging';
+
+  @override
+  String get payoutOutcomeFailed => 'Mislukt';
+
+  @override
+  String payoutOutcomeFailedAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mislukt na $count pogingen',
+      one: 'Mislukt na 1 poging',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payoutOutcomeRejected => 'Geweigerd door de node';
+
+  @override
+  String get payoutOutcomePaid => 'Betaald';
+
+  @override
+  String get payoutHashCopied => 'Betalingshash gekopieerd';
+
+  @override
+  String get takeOrderPayoutLabel => 'Je sats gaan naar';
+
+  @override
+  String get takeOrderPayoutInvoice => 'Een invoice die je toevoegt';
+
+  @override
+  String get takeOrderPayoutChangeHint => 'Wijzig waar je sats naartoe gaan';
+
+  @override
+  String takeOrderPayoutNoteDefault(String address) {
+    return 'Je sats worden naar $address gestuurd, je standaard Lightning-adres.';
+  }
+
+  @override
+  String takeOrderPayoutNoteAddress(String address) {
+    return 'Je sats worden naar $address gestuurd, alleen voor deze trade.';
+  }
+
+  @override
+  String get takeOrderPayoutNoteInvoice =>
+      'Nadat je de order accepteert, voeg je de invoice toe waarop je sats worden betaald.';
+
+  @override
+  String get takeOrderPayoutSheetTitle => 'Waar je sats naartoe gaan';
+
+  @override
+  String get takeOrderPayoutSheetDefault => 'Mijn standaard Lightning-adres';
+
+  @override
+  String get takeOrderPayoutSheetOther => 'Een ander Lightning-adres';
+
+  @override
+  String get takeOrderPayoutSheetInvoice =>
+      'Een invoice die ik na het accepteren toevoeg';
+
+  @override
+  String get takeOrderPayoutSheetApply => 'Gebruiken voor deze trade';
+
+  @override
+  String invoicePayoutFailed(String destination) {
+    return 'De betaling aan $destination is mislukt.';
+  }
+
+  @override
+  String invoicePayoutFailedAttempts(String destination, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'De betaling aan $destination is mislukt na $count pogingen.',
+      one: 'De betaling aan $destination is mislukt na 1 poging.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get invoicePayoutFailedNwc =>
+      'Je NWC-wallet maakt een nieuwe invoice voor deze sats.';
+
+  @override
+  String invoicePayoutFailedNwcNamed(String name) {
+    return '$name maakt een nieuwe invoice voor deze sats.';
+  }
+
+  @override
+  String get invoicePayoutFailedManual =>
+      'Voeg een nieuwe invoice toe om je sats te ontvangen.';
+
+  @override
+  String get tradeCardPayoutFailedTitle => 'Mostro kon je sats niet versturen';
+
+  @override
+  String get tradeCardPayoutFailedMessage =>
+      'Mostro kon je sats niet versturen naar het adres of de invoice die je gaf. Open de trade om te zien welke mislukte, en voeg een nieuwe invoice toe als dat nog nodig is.';
+
+  @override
+  String get payoutInvoiceLabel => 'Invoice';
+
+  @override
+  String get payoutInvoiceCopied => 'Invoice gekopieerd';
+
+  @override
+  String get payoutWillGoToLabel => 'De sats gaan naar';
+
+  @override
+  String get payoutMaybePaidToLabel => 'Misschien betaald aan';
+
+  @override
+  String get payoutOutcomeReplaced => 'Vervangen door een latere';
+
+  @override
+  String get payoutOutcomeMaybePaid =>
+      'Betaald aan deze of een andere die hier staat';
 }
