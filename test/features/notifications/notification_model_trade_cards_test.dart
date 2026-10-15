@@ -138,6 +138,31 @@ void main() {
       expect(restored.timestamp, at);
       expect(restored.resolvedTitle(en), en.tradeCardFiatSentTitle);
     });
+
+    test('keeps the node of its trade through storage and a read (#811)', () {
+      final n = NotificationModel.tradeStatus(
+        orderId: 'order-1',
+        status: 'fiatSent',
+        at: at,
+        nodePubkey: 'aa11',
+      );
+
+      final restored = NotificationModel.fromJson(n.toJson());
+      expect(restored.nodePubkey, 'aa11');
+      expect(restored.copyWith(isRead: true).nodePubkey, 'aa11');
+    });
+
+    test('a card stored before nodes were recorded has none', () {
+      final json =
+          NotificationModel.tradeStatus(
+              orderId: 'order-1',
+              status: 'fiatSent',
+              at: at,
+            ).toJson()
+            ..remove('nodePubkey');
+
+      expect(NotificationModel.fromJson(json).nodePubkey, isNull);
+    });
   });
 
   group('NotificationModel.chatMessages', () {

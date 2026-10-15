@@ -17,14 +17,23 @@
 ///   maker bond of their own order) or not a trade state at all (the public
 ///   book's `pending` / `in-progress`).
 ///
-/// A trade on another node raises no status card yet (#811): its history
-/// is heard whichever node is active, and without a cutoff the first run
-/// would turn weeks of it into cards.
+/// A card records the node of its trade (#811), whichever node is active,
+/// so the card can say later that it is another node's. A trade on another
+/// node is heard whichever node is active, and two more rules keep its
+/// cards about news:
+/// - only what happened after [otherNodeCardsSince] raises one: the kind-14
+///   feed replays every history, and the first run with other nodes heard
+///   would turn weeks of it into cards;
+/// - `canceled` and `expired` raise none: a trade that started never ends
+///   that way (it ends cooperatively or by the admin), so it is one that
+///   never did — an order nobody took, a bond left unpaid, a take not
+///   completed in time — with nothing at stake.
 library;
 
 import 'package:flutter/foundation.dart';
 
 import 'package:mostro/core/app_routes.dart';
+import 'package:mostro/core/trade_node.dart';
 import 'package:mostro/features/notifications/models/notification_model.dart';
 import 'package:mostro/features/notifications/providers/notifications_provider.dart';
 import 'package:mostro/features/settings/providers/notification_prefs_provider.dart';
@@ -53,6 +62,9 @@ NotificationEvent? tradeCardEvent(OrderStatus status) => switch (status) {
   OrderStatus.cooperativelyCanceled => NotificationEvent.tradeUpdates,
 };
 
+/// Where the first run with other nodes heard stored its cutoff (#811).
+const kOtherNodeCardsSinceKey = 'otherNodeCardsSince';
+
 /// Turns bridge events into notification cards. Every dependency is a
 /// function, so the rules are tested without Rust, a router or storage.
 class EventCards {
@@ -62,7 +74,9 @@ class EventCards {
     required this.identityCreatedAt,
     required this.currentLocation,
     this.disputeIdForTrade = _noDispute,
-    this.isOnOtherNode = _onActiveNode,
+    this.tradeNodeOf = _unknownNode,
+    this.activeNode = _noActiveNode,
+    this.otherNodeCardsSince = _noCutoff,
   });
 
   final NotificationsNotifier Function() notifications;
@@ -83,10 +97,31 @@ class EventCards {
 
   static String? _noDispute(String tradeId) => null;
 
-  /// Whether a trade lives on a node other than the active one (#811).
-  final Future<bool> Function(String orderId) isOnOtherNode;
+  /// The node a trade lives on; empty when unknown (#811).
+  final Future<String> Function(String orderId) tradeNodeOf;
 
-  static Future<bool> _onActiveNode(String orderId) async => false;
+  static Future<String> _unknownNode(String orderId) async => '';
+
+  /// The active node, read when an event arrives.
+  final String Function() activeNode;
+
+  static String _noActiveNode() => '';
+
+  /// The first run with other nodes heard: what another node did before it
+  /// raises no card. Null filters nothing.
+  final DateTime? Function() otherNodeCardsSince;
+
+  static DateTime? _noCutoff() => null;
+
+  /// Whether [node] is another node than the active one.
+  bool _otherNode(String node) =>
+      isOnOtherNode(tradeNode: node, activeNode: activeNode());
+
+  /// Whether [at] is from before other nodes' cards began.
+  bool _predatesCutoff(DateTime at) {
+    final since = otherNodeCardsSince();
+    return since != null && at.isBefore(since);
+  }
 
   Future<void> onTradeUpdate(TradeUpdate update) async {
     final event = tradeCardEvent(update.status);
@@ -98,13 +133,21 @@ class EventCards {
     if (!isEnabled(event)) return;
     final at = _secondsToDate(update.occurredAt);
     if (await _predatesIdentity(at)) return;
-    if (await isOnOtherNode(update.orderId)) return;
+    final node = await tradeNodeOf(update.orderId);
+    if (_otherNode(node)) {
+      if (update.status == OrderStatus.canceled ||
+          update.status == OrderStatus.expired) {
+        return;
+      }
+      if (_predatesCutoff(at)) return;
+    }
     await notifications().addIfNew(
       NotificationModel.tradeStatus(
         orderId: update.orderId,
         status: update.status.name,
         reason: update.reason?.name,
         at: at,
+        nodePubkey: node.isEmpty ? null : node,
       ),
     );
   }
@@ -132,6 +175,8 @@ class EventCards {
     final readRevision = notifier.readRevision(cardId);
     final at = _secondsToDate(message.createdAt);
     final predatesIdentity = await _predatesIdentity(at);
+    final node = await tradeNodeOf(message.tradeId);
+    final beforeOtherNodeCards = _otherNode(node) && _predatesCutoff(at);
     await notifier.addChatMessage(
       messageId: message.id,
       cardId: cardId,
@@ -140,6 +185,7 @@ class EventCards {
         // Even if the room has since closed, a read during those awaits wins.
         if (message.isRead ||
             predatesIdentity ||
+            beforeOtherNodeCards ||
             !isEnabled(NotificationEvent.newMessages) ||
             notifier.readRevision(cardId) != readRevision ||
             _isOnScreen(message.tradeId, fromSolver)) {
@@ -156,6 +202,7 @@ class EventCards {
               existing != null && existing.timestamp.isAfter(at)
                   ? existing.timestamp
                   : at,
+          nodePubkey: node.isEmpty ? null : node,
         );
       },
     );
