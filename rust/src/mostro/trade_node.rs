@@ -153,16 +153,40 @@ pub(crate) fn heard(speaker: Speaker, claim_action: bool) -> bool {
 }
 
 /// Whether a message from `speaker`, `sender_hex`, addressed to the trade
-/// key at `trade_index` and naming the order `order_id`, is heard. The order
-/// is not consulted yet.
+/// key at `trade_index` and naming the order `order_id`, is heard.
+///
+/// The trade's own node speaks only about the trade it issued under that
+/// key: the order must have a row that uses the key and names the node.
+/// Otherwise its key would open any order it names, another node's included,
+/// since the generation gate refuses only an older key. Its claim traffic
+/// keeps the claim node's terms (§6.4): a claim outlives its row. The active
+/// node and a claim node are heard as [`heard`] says.
 pub(crate) async fn heard_about(
     speaker: Speaker,
     claim_action: bool,
-    _sender_hex: &str,
-    _trade_index: u32,
-    _order_id: Option<&str>,
+    sender_hex: &str,
+    trade_index: u32,
+    order_id: Option<&str>,
 ) -> bool {
-    heard(speaker, claim_action)
+    if speaker != Speaker::TradesNode {
+        return heard(speaker, claim_action);
+    }
+    issued_under(order_id, sender_hex, trade_index).await
+        || (claim_action && crate::mostro::bond_claims::is_claim_node(sender_hex))
+}
+
+/// Whether the order `order_id` has a row that uses the trade key at
+/// `trade_index` and names `node` as its node.
+async fn issued_under(order_id: Option<&str>, node: &str, trade_index: u32) -> bool {
+    use crate::db::Storage as _;
+    let (Some(order_id), Some(db)) = (order_id, crate::db::app_db::db()) else {
+        return false;
+    };
+    let Ok(Some(trade)) = db.get_trade_by_order_id(order_id).await else {
+        return false;
+    };
+    trade.trade_key_index == trade_index
+        && trade_node(&trade).is_some_and(|n| n.eq_ignore_ascii_case(node))
 }
 
 /// `node` when it is the `active` one, else `TradeOnOtherNode`.
