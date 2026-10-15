@@ -3603,7 +3603,16 @@ async fn dispatch_mostro_message(
     // authoritative origin.
     let sender_hex = sender.to_hex();
     let speaker = crate::mostro::trade_node::speaker(&sender_hex, trade_index).await;
-    if !crate::mostro::trade_node::heard(speaker, is_claim_action(&msg)) {
+    let named_order = msg.get_inner_message_kind().id.map(|id| id.to_string());
+    if !crate::mostro::trade_node::heard_about(
+        speaker,
+        is_claim_action(&msg),
+        &sender_hex,
+        trade_index,
+        named_order.as_deref(),
+    )
+    .await
+    {
         crate::api::logging::blog_warn(
             "daemon-msg",
             format!(

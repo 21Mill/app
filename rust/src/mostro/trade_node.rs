@@ -152,6 +152,19 @@ pub(crate) fn heard(speaker: Speaker, claim_action: bool) -> bool {
     }
 }
 
+/// Whether a message from `speaker`, `sender_hex`, addressed to the trade
+/// key at `trade_index` and naming the order `order_id`, is heard. The order
+/// is not consulted yet.
+pub(crate) async fn heard_about(
+    speaker: Speaker,
+    claim_action: bool,
+    _sender_hex: &str,
+    _trade_index: u32,
+    _order_id: Option<&str>,
+) -> bool {
+    heard(speaker, claim_action)
+}
+
 /// `node` when it is the `active` one, else `TradeOnOtherNode`.
 fn action_node(node: Option<&str>, active: &str) -> anyhow::Result<PublicKey> {
     match node {
