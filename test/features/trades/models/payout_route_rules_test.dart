@@ -99,6 +99,19 @@ void main() {
       );
     });
 
+    test('the default address when saved with its lightning: scheme', () {
+      // The core saves `alice@example.com` and the invoice field pre-fills
+      // it so, while Settings keeps what was typed (PR #824 review).
+      expect(
+        payoutSourceFor(
+          fromWallet: false,
+          submitted: 'alice@example.com',
+          defaultAddress: 'lightning:alice@example.com',
+        ),
+        PayoutSource.defaultLightningAddress,
+      );
+    });
+
     test('the buyer for anything else', () {
       expect(
         payoutSourceFor(
