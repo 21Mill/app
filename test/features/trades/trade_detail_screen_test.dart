@@ -18,6 +18,7 @@ import 'package:mostro/features/notifications/models/notification_model.dart';
 import 'package:mostro/features/notifications/providers/notifications_provider.dart';
 import 'package:mostro/features/order/providers/invoice_providers.dart';
 import 'package:mostro/features/order/providers/trade_state_provider.dart';
+import 'package:mostro/features/trades/widgets/payout_destination_card.dart';
 import 'package:mostro/features/rate/providers/rating_providers.dart';
 import 'package:mostro/features/rate/screens/rate_counterpart_screen.dart';
 import 'package:mostro/features/rate/widgets/star_rating.dart';
@@ -39,6 +40,7 @@ import 'package:mostro/shared/utils/platform_int64.dart';
 import 'package:mostro/src/rust/api/types.dart';
 
 import '../../support/fake_orders.dart';
+import '../../support/fake_payout.dart';
 import '../../support/fake_trades.dart';
 import '../../support/provider_harness.dart';
 
@@ -1591,6 +1593,54 @@ void main() {
         semantics.dispose();
       }
     });
+
+    // The Linux build opens a 1280 × 720 window
+    // (linux/runner/my_application.cc), and the accessibility bridge only
+    // exposes what is on screen. The buyer's payout card (#823) sits under
+    // the step block, so the id row must come before it, not at the end of
+    // the scroll where the card pushed it out of the window.
+    testWidgets(
+      'order.id is on screen above the buyer payout card in a 1280 × 720 window',
+      (tester) async {
+        tester.view.physicalSize = const Size(1280, 720);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final semantics = tester.ensureSemantics();
+        try {
+          // Arrange + Act
+          await _pumpTradeDetail(
+            tester,
+            orderId: 'a-very-long-order-identifier-0123',
+            isBuyer: true,
+            status: OrderStatus.active,
+            extraOverrides: [
+              payoutDestinationsReaderProvider.overrideWithValue(
+                // A paid destination is final, so the payout stream ends
+                // instead of arming its safety poll.
+                (orderId) async => [
+                  fakePayoutDestination(outcome: PayoutOutcome.paid),
+                ],
+              ),
+              tradeTouchProvider.overrideWith(
+                (ref) => const Stream<TradeTouch>.empty(),
+              ),
+            ],
+          );
+
+          // Assert: the card is shown, as in the run that failed...
+          final card = find.byType(PayoutDestinationCard);
+          expect(card, findsOneWidget);
+          // ...and the id is in the window, above it, found on screen.
+          final id = find.bySemanticsIdentifier(AutomationIds.orderId);
+          expect(id, findsOneWidget);
+          final idRect = tester.getRect(id);
+          expect(idRect.bottom, lessThanOrEqualTo(720));
+          expect(idRect.top, lessThan(tester.getRect(card).top));
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
 
     testWidgets('the completed card keeps the stars addressable', (
       tester,

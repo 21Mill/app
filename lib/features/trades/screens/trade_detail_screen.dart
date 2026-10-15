@@ -866,10 +866,6 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
                               ),
                     ),
                   ),
-                  // Where the buyer's sats go, or went, as this device sent
-                  // them (#823); nothing for the seller.
-                  if (role == true)
-                    PayoutDestinationCard(orderId: widget.orderId),
                   // The share of a slashed bond, when the daemon offered one
                   // (docs/ANTI_ABUSE_BOND.md §8.3); nothing otherwise.
                   BondClaimBanner(orderId: widget.orderId),
@@ -879,6 +875,17 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
                   // A pending cooperative-cancel request, this side's or the
                   // counterparty's (protocol `cancel.md`); nothing otherwise.
                   CancelRequestNotice(orderId: widget.orderId),
+                  // The order's reference under its step and its notices,
+                  // before the cards that only some trades have: at the end
+                  // of the scroll the buyer's payout card pushed it out of a
+                  // 1280 × 720 window, and the accessibility bridge only
+                  // exposes what is on screen, so `order.id` went missing.
+                  const SizedBox(height: 12),
+                  _idRow(l10n, book, order),
+                  // Where the buyer's sats go, or went, as this device sent
+                  // them (#823); nothing for the seller.
+                  if (role == true)
+                    PayoutDestinationCard(orderId: widget.orderId),
                   if (view.showsReputation && peerRating != null) ...[
                     const SizedBox(height: 12),
                     CounterpartReputationRow(
@@ -899,8 +906,6 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  _idRow(l10n, book, order),
                 ],
               ),
             ),
@@ -1328,8 +1333,9 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
 
   // ── ID and date ──────────────────────────────────────────────────────────
 
-  /// Last card of the scroll, the trade's ID row (DS-CMP-22); tapping
-  /// anywhere on it copies the id.
+  /// The trade's ID row (DS-CMP-22), under the step block and its notices
+  /// and before the payout card, the reputation row and the timeline;
+  /// tapping anywhere on it copies the id.
   Widget _idRow(
     AppLocalizations l10n,
     OrderBookPalette book,
