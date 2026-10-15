@@ -2788,7 +2788,7 @@ mod tests {
 
         // Each step of the teardown, and what undoes it — `None` where a cold
         // start leaves it empty too, so the reload matches a restart.
-        let steps: [(&str, Option<&str>); 19] = [
+        let steps: [(&str, Option<&str>); 18] = [
             // In-memory tasks: a cold start has no retry running either.
             ("forget_late_take_retries()", None),
             // Per-trade receivers are temporary; the bulk feed covers the keys.
@@ -2804,9 +2804,6 @@ mod tests {
                 "mostro_dm_subscription_id()",
                 Some("resubscribe_global_dm_filter()"),
             ),
-            // The authors that filter was issued with, set again by its
-            // re-issue.
-            ("dm_filter_heard()", Some("resubscribe_global_dm_filter()")),
             (
                 "forget_identity_chats()",
                 Some("resubscribe_active_chats()"),
@@ -2852,7 +2849,7 @@ mod tests {
         // whoever adds one updates `steps` and the restore with it.
         assert_eq!(
             teardown.matches(';').count(),
-            23,
+            22,
             "the identity teardown changed: give the new step its restore \
              (or say why a cold start does not rebuild it), then update this count"
         );

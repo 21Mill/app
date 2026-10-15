@@ -9327,63 +9327,6 @@ async fn replace_global_dm_filter(
         return Ok(());
     }
     let p_count = trade_pubkeys.len();
-    let authors = dm_filter_authors(mostro_pubkey).await;
-    let heard: std::collections::BTreeSet<String> = authors.iter().map(|a| a.to_hex()).collect();
-    let dm_filter = nostr_sdk::prelude::Filter::new()
-        .kind(nostr_sdk::prelude::Kind::PrivateDirectMessage)
-        .authors(authors)
-        .pubkeys(trade_pubkeys);
-    replace_subscription(client, mostro_dm_subscription_id(), dm_filter).await?;
-    *dm_filter_heard()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(heard);
-    crate::api::logging::blog_info(
-        "relay",
-        format!(
-            "sub replaced id={} kinds=[14] p_count={p_count}",
-            mostro_dm_subscription_id(),
-        ),
-    );
-    Ok(())
-}
-
-/// The authors the bulk kind-14 filter was last issued with.
-fn dm_filter_heard() -> &'static std::sync::Mutex<Option<std::collections::BTreeSet<String>>> {
-    static HEARD: std::sync::Mutex<Option<std::collections::BTreeSet<String>>> =
-        std::sync::Mutex::new(None);
-    &HEARD
-}
-
-static DM_AUTHORS_REFRESH: crate::nostr::coalesce::Coalesced =
-    crate::nostr::coalesce::Coalesced::new();
-
-/// Re-issue the bulk kind-14 filter when the nodes it should hear differ
-/// from those it was issued with: a trade that ended may leave its node
-/// with nothing to be heard about (#811). Re-issuing replays every
-/// history, so an unchanged set leaves the filter alone.
-async fn refresh_dm_authors_if_changed() {
-    let Ok(mostro_pubkey) = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey()) else {
-        return;
-    };
-    let wanted: std::collections::BTreeSet<String> = dm_filter_authors(mostro_pubkey)
-        .await
-        .iter()
-        .map(|a| a.to_hex())
-        .collect();
-    let issued = dm_filter_heard()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
-    if issued.is_some_and(|issued| issued != wanted) {
-        resubscribe_global_dm_filter().await;
-    }
-}
-
-/// Who the bulk kind-14 filter hears: the active node, every node holding
-/// an open payout claim, and the issuing node of every live trade.
-async fn dm_filter_authors(
-    mostro_pubkey: nostr_sdk::prelude::PublicKey,
-) -> Vec<nostr_sdk::prelude::PublicKey> {
     // The active node, plus every node holding an open payout claim: its
     // `add-bond-invoice` retries and acknowledgements must keep arriving
     // after a node switch (docs/ANTI_ABUSE_BOND.md §6.4).
@@ -9406,7 +9349,19 @@ async fn dm_filter_authors(
             }
         }
     }
-    authors
+    let dm_filter = nostr_sdk::prelude::Filter::new()
+        .kind(nostr_sdk::prelude::Kind::PrivateDirectMessage)
+        .authors(authors)
+        .pubkeys(trade_pubkeys);
+    replace_subscription(client, mostro_dm_subscription_id(), dm_filter).await?;
+    crate::api::logging::blog_info(
+        "relay",
+        format!(
+            "sub replaced id={} kinds=[14] p_count={p_count}",
+            mostro_dm_subscription_id(),
+        ),
+    );
+    Ok(())
 }
 
 /// Re-target the live order-book and Mostro-reply subscriptions to the
@@ -10421,9 +10376,6 @@ pub(crate) async fn release_identity_subscriptions() {
         // filter would stay; the next key derived re-opens the feed.
         subs.close(&client, &mostro_dm_subscription_id()).await;
     }
-    *dm_filter_heard()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     crate::api::messages::forget_identity_chats().await;
 
     if let Ok(mut map) = trade_key_map().write() {
@@ -10532,8 +10484,6 @@ fn release_finished_trade_subscriptions(order_id: &str, known_index: Option<u32>
                 chats.len()
             ),
         );
-        // Its node may have no live trade left to be heard about (#811).
-        DM_AUTHORS_REFRESH.request(DM_FILTER_REFRESH_WINDOW, refresh_dm_authors_if_changed);
     });
 }
 

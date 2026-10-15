@@ -47,8 +47,10 @@ actions only ([bond](bond.md)). The rule is `mostro::trade_node::speaker` and
   event twice either; one never heard is replayed when its node becomes
   audible, because the kind-14 feed has no `since`.
 - The bulk kind-14 filter hears the active node, the claim nodes and the
-  issuing node of every live trade. When a trade ends, it is re-issued only
-  if that set changed: a re-issue replays every history.
+  issuing node of every live trade, read when it is issued (startup, resume,
+  node switch, a new key) — not when a trade ends. A late message from a node
+  that dropped out is never recorded as seen, and replays once that node is
+  heard again.
 - Kind 38383 stays on the active node (`mostro-orders-watched`, the stale
   sweep, the payout check). What arrives only that way is corrected on return
   to the trade's node.
