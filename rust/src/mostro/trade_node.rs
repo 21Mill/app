@@ -467,6 +467,70 @@ mod tests {
         }
     }
 
+    /// #811: the trade's own node is heard only about the trade it issued
+    /// under that key. Its key opens nothing else: a message naming another
+    /// trade's order (another node's, under a lower key), no order, or an
+    /// order with no row is refused. The active node is unchanged.
+    #[tokio::test]
+    async fn a_trades_node_is_heard_only_about_its_own_order() {
+        use crate::mostro::test_fixtures::{forget_trade_row, store_trade_row};
+        // Arrange — node A's trade under a newer key, node B's under an
+        // older one: the generation gate alone lets A's key through to B's.
+        let node_a = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let node_b = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let index_b = unbound_trade_index() & !1;
+        let index_a = index_b + 1;
+        let order_a = uuid::Uuid::new_v4().to_string();
+        let order_b = uuid::Uuid::new_v4().to_string();
+        store_trade_row(&trade(&order_a, index_a, OrderStatus::Active, &node_a)).await;
+        store_trade_row(&trade(&order_b, index_b, OrderStatus::Active, &node_b)).await;
+        let unknown = uuid::Uuid::new_v4().to_string();
+        let active = crate::config::active_mostro_pubkey();
+
+        let cases = [
+            (
+                "its own order",
+                node_a.as_str(),
+                Some(order_a.as_str()),
+                true,
+            ),
+            (
+                "another node's order",
+                node_a.as_str(),
+                Some(order_b.as_str()),
+                false,
+            ),
+            ("no order", node_a.as_str(), None, false),
+            (
+                "an order with no row",
+                node_a.as_str(),
+                Some(unknown.as_str()),
+                false,
+            ),
+            (
+                "the active node",
+                active.as_str(),
+                Some(order_b.as_str()),
+                true,
+            ),
+        ];
+
+        // Act
+        let mut outcomes = Vec::new();
+        for (case, sender, order, expected) in cases {
+            let speaker = speaker(sender, index_a).await;
+            let heard = heard_about(speaker, false, sender, index_a, order).await;
+            outcomes.push((case, heard, expected));
+        }
+        forget_trade_row(&order_a).await;
+        forget_trade_row(&order_b).await;
+
+        // Assert
+        for (case, heard, expected) in outcomes {
+            assert_eq!(heard, expected, "{case}");
+        }
+    }
+
     /// The envelope builders of a trade's chat, peer and dispute alike
     /// (#811).
     const CHAT_ENVELOPES: [&str; 2] = ["mostro_wrap", "mostro_wrap_reaction"];
