@@ -647,6 +647,14 @@ subscription that drops A's events. T1.2 extends `authors` with the issuing node
 every non-terminal trade row (the same set `wanted` is built from), so registration
 and delivery coverage are computed from one source and cannot drift.
 
+Hearing A is not enough on its own: until #811 the handler still dropped A's
+messages. Now a daemon message is heard from the node that issued the trade it is
+addressed to, whichever node is active (`contracts/orders.md`, *Who is heard about a
+trade*), so a wake for A's trade finds it updated. The filter is re-issued when a
+trade ends only if that set of nodes changed. The push keeps its own 24 h grace
+after a trade ends; the filter does not, since what the grace covers arrives before
+the trade ends or, unheard, replays once its node is heard again.
+
 ### 7.2 Flow 2 — A wake, per app state
 
 | App state | What arrives | What the client does |

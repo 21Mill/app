@@ -29,6 +29,36 @@ fails when a new caller of a trade action builder reads the active node
 instead. Bond payout claims are not trade actions: they go to the node that
 issued the claim ([bond](bond.md)).
 
+### Who is heard about a trade (#811)
+
+A daemon message (kind 14) is heard from the active node, and from **the node
+that issued the trade it is addressed to**, whichever node is active, so a
+trade on another node moves to its real status. The trade is the row bound to
+the p-tagged trade key (`get_order_id_by_trade_index`), and its node is
+`order.node_pubkey`. A trade key's p-tag is public, so no other node is heard:
+a row that does not know its node, or a key bound to no row, hears the active
+node only. A node with an open payout claim keeps its exception, for claim
+actions only ([bond](bond.md)). The rule is `mostro::trade_node::speaker` and
+`heard`; both the global feed and `dispatch_mostro_message` apply it.
+
+- The global feed decides who is heard **before** it records the event as
+  seen (`is_duplicate_daemon_message`). A message recorded and then refused
+  is never handled again in that process, since nostr-sdk does not deliver an
+  event twice either; one never heard is replayed when its node becomes
+  audible, because the kind-14 feed has no `since`.
+- The bulk kind-14 filter hears the active node, the claim nodes and the
+  issuing node of every live trade. When a trade ends, it is re-issued only
+  if that set changed: a re-issue replays every history.
+- Kind 38383 stays on the active node (`mostro-orders-watched`, the stale
+  sweep, the payout check). What arrives only that way is corrected on return
+  to the trade's node.
+- Dart learns a trade's node from `trade_node_of(order_id)` (empty when
+  unknown). A trade on another node raises no status card and never opens a
+  step by itself (`TradeActionListener`); a row without a node counts as the
+  active node's.
+- A trade's chat stays on its node: see [messages](messages.md) and
+  [disputes](disputes.md).
+
 ### Daemon confirmation & request correlation
 
 Every request that expects a daemon reply (`create_order`, `take_order`,
@@ -1076,8 +1106,9 @@ ever learned from daemon messages, so:
   reads the client's shared notification stream and checks the author itself.
   A node switch re-targets the long-lived subscriptions but leaves that task
   running on the previous node, so it also stops as soon as an event of its
-  order arrives while its node is no longer the active one, as
-  `dispatch_mostro_message` rejects any sender but the active node.
+  order arrives while its node is no longer the active one. Kind 38383 is
+  only ever applied from the active node; daemon messages also from a
+  trade's own node (*Who is heard about a trade*).
 - One `subscribe_single_order` task per order. A retake calls it again while
   the first take's task may still be running; the newest call replaces the
   older task, which stops at its next wake without touching the

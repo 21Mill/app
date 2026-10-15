@@ -107,7 +107,8 @@ against it. This is the dispute chat's text send path (#143).
 resolved, and have a solver (`admin-took-dispute`).
 
 **Errors**: `EvidenceEmpty`, `NoOpenDispute`, `AdminNotAssigned`,
-`TradeNotFound`.
+`TradeNotFound`, `TradeOnOtherNode` (the trade is on another node: its chat
+stays there, see [messages](messages.md); #811).
 
 ---
 
@@ -144,7 +145,7 @@ one as our own message in the dispute chat; when it is the key and the
 solver is the one on record, it is recorded the same way.
 
 **Errors**: `NoOpenDispute`, `AdminNotAssigned`, `TradeNotFound`, `NoSharedKey` (the counterparty is not known, or is the
-node), `SendFailed`.
+node), `SendFailed`, `TradeOnOtherNode`.
 
 ---
 
@@ -161,7 +162,7 @@ open these files; the solver cannot open the P2P chat's (FR-036).
 
 **Errors**: `FileTooLarge`, `UnsupportedFileType`, `InvalidImage`,
 `NoOpenDispute`, `AdminNotAssigned`, `TradeNotFound`, `UploadFailed`,
-`SendFailed`.
+`SendFailed`, `TradeOnOtherNode` (checked first, before the file).
 
 ---
 

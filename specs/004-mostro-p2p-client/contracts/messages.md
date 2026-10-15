@@ -113,6 +113,14 @@ normative list):
 
 ## Functions
 
+A trade's chat stays on its node (#811): every send below, and the dispute
+chat's ([disputes](disputes.md)), refuses a trade whose row names a node
+other than the active one with `TradeOnOtherNode`, before anything is looked
+up or sent (`mostro::trade_node::refuse_other_node`). A row that does not
+know its node counts as the active node's, as for a trade action
+([orders](orders.md)). A static test in `trade_node.rs` fails when a new path
+reaches the chat envelope without such a sender.
+
 ### send_message(trade_id: String, content: String) → ChatMessage
 Send an encrypted message to the trade counterparty.
 
@@ -136,7 +144,8 @@ trade ended, and not with a `success` still inside its grace window
 late UI timer still shows. No row yet, or a read error, keeps the cached
 session.
 
-**Errors**: `NoActiveTrade`, `TradeNotFound`, `MessageEmpty`.
+**Errors**: `NoActiveTrade`, `TradeNotFound`, `MessageEmpty`,
+`TradeOnOtherNode`.
 
 ---
 
@@ -161,7 +170,7 @@ tolerance (60 s ahead: the previous one came from a device whose clock runs
 ahead) fails with `SendFailed` instead of being published and dropped.
 
 **Errors**: `ReactionTooLarge`, `MessageNotFound`, `ReactionNotAllowed`,
-`SendFailed`.
+`SendFailed`, `TradeOnOtherNode`.
 
 **Receiving**: an incoming kind 7 passes the same validation as a message
 (step 11 checks its one `e` tag and its size) and is folded into its target:
@@ -286,7 +295,7 @@ Encrypt and upload an image or PDF, then send it in the P2P chat (#589).
 **Errors**: `FileTooLarge`, `UnsupportedFileType`, `InvalidImage`,
 `PeerUnknown`, `UploadFailed`, `SendFailed`, `SessionNotFound` (only when
 the session is absent AND the trade row cannot rebuild it, or the row says
-the chat is over — see `send_message`; #381, #642).
+the chat is over — see `send_message`; #381, #642), `TradeOnOtherNode`.
 
 ---
 
