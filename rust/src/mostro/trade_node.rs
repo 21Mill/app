@@ -104,16 +104,17 @@ pub(crate) enum Speaker {
 /// Who `sender_hex`, the verified author of a daemon message addressed to
 /// the trade key at `trade_index`, is to that trade.
 ///
-/// The trade is the row bound to that key. A row that does not know its
-/// node, or a key bound to no row, has no node to hear: only the active one
-/// is, as before #811. Anyone may p-tag a trade key, which is public, so the
-/// author must be the node the row names.
+/// The trade is a row that uses that key. A row that does not know its
+/// node, or a key no row uses, has no node to hear: only the active one is,
+/// as before #811. Anyone may p-tag a trade key, which is public, so the
+/// author must be the node such a row names.
 pub(crate) async fn speaker(sender_hex: &str, trade_index: u32) -> Speaker {
     if sender_hex.eq_ignore_ascii_case(&crate::config::active_mostro_pubkey()) {
         Speaker::ActiveNode
-    } else if node_of_trade_key(trade_index)
+    } else if nodes_of_trade_key(trade_index)
         .await
-        .is_some_and(|node| node.eq_ignore_ascii_case(sender_hex))
+        .iter()
+        .any(|node| node.eq_ignore_ascii_case(sender_hex))
     {
         Speaker::TradesNode
     } else if crate::mostro::bond_claims::is_claim_node(sender_hex) {
@@ -123,13 +124,22 @@ pub(crate) async fn speaker(sender_hex: &str, trade_index: u32) -> Speaker {
     }
 }
 
-/// The recorded node of the trade bound to the trade key at `trade_index`.
-async fn node_of_trade_key(trade_index: u32) -> Option<String> {
+/// The recorded nodes of the trade rows that use the trade key at
+/// `trade_index`. Read off the rows, not the key bindings: a maker's key
+/// stays bound to the provisional id its create was sent with, next to the
+/// daemon's id, and that leftover has no row.
+async fn nodes_of_trade_key(trade_index: u32) -> Vec<String> {
     use crate::db::Storage as _;
-    let db = crate::db::app_db::db()?;
-    let order_id = db.get_order_id_by_trade_index(trade_index).await.ok()??;
-    let trade = db.get_trade_by_order_id(&order_id).await.ok()??;
-    trade_node(&trade).map(str::to_owned)
+    let Some(db) = crate::db::app_db::db() else {
+        return Vec::new();
+    };
+    db.list_trades()
+        .await
+        .unwrap_or_default()
+        .iter()
+        .filter(|t| t.trade_key_index == trade_index)
+        .filter_map(|t| trade_node(t).map(str::to_owned))
+        .collect()
 }
 
 /// Whether a message from `speaker` is heard: the active node's and the
@@ -372,6 +382,34 @@ mod tests {
 
         // Act
         let speaker = speaker(&node, index).await;
+        forget_trade_row(&order_id).await;
+
+        // Assert
+        assert!(heard(speaker, false), "the trade's node: got {speaker:?}");
+    }
+
+    /// #811: a maker's trade key stays bound to the provisional id its
+    /// create was sent with, next to the id the daemon gave the order. That
+    /// leftover has no row, and must not hide the trade's node.
+    #[tokio::test]
+    async fn a_leftover_binding_of_the_trade_key_does_not_hide_its_node() {
+        use crate::db::Storage as _;
+        use crate::mostro::test_fixtures::{forget_trade_row, store_trade_row};
+        // Arrange — the provisional binding first, as a create writes it.
+        let node = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let index = unbound_trade_index();
+        let provisional = uuid::Uuid::new_v4().to_string();
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let row = trade(&order_id, index, OrderStatus::Active, &node);
+        store_trade_row(&row).await;
+        let db = crate::db::app_db::db().unwrap();
+        db.delete_trade_key(&order_id).await.unwrap();
+        db.save_trade_key(&provisional, index).await.unwrap();
+        db.save_trade_key(&order_id, index).await.unwrap();
+
+        // Act
+        let speaker = speaker(&node, index).await;
+        db.delete_trade_key(&provisional).await.unwrap();
         forget_trade_row(&order_id).await;
 
         // Assert
