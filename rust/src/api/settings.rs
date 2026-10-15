@@ -429,6 +429,52 @@ mod tests {
     }
 
     #[test]
+    fn a_default_is_saved_only_if_a_take_would_send_it() {
+        // A take judges the default with `invoice::classify`: one Settings
+        // saves but the take refuses fails every buy from the take screen
+        // (PR #824 review).
+        for input in [
+            "alice@example.com",
+            "Alice@Example.COM",
+            "alice.bob+tips_1@pay-me.example.co",
+            "alice!@example.com",
+            "alice bob@example.com",
+            "alice@example.1",
+            "alice@example.c",
+            "alice@example",
+            "alice@exa_mple.com",
+            "@example.com",
+            "a@b@example.com",
+        ] {
+            let take_sends = matches!(
+                crate::api::invoice::classify(input),
+                crate::api::types::PaymentDestination::LightningAddress(_)
+            );
+            assert_eq!(
+                validate_lightning_address(input).is_ok(),
+                take_sends,
+                "{input}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_default_is_saved_without_its_lightning_scheme() {
+        // The take sends the saved default as it is: a `lightning:` prefix
+        // left on it would reach the node.
+        let _g = settings_lock().lock().unwrap();
+        set_default_lightning_address(Some(" lightning:alice@example.com ".to_string()))
+            .await
+            .unwrap();
+        let s = get_settings().await.unwrap();
+        assert_eq!(
+            s.default_lightning_address.as_deref(),
+            Some("alice@example.com")
+        );
+        set_default_lightning_address(None).await.unwrap();
+    }
+
+    #[test]
     fn a_node_key_is_normalized_to_lowercase() {
         // The node registry compares pubkeys as lowercase hex; an uppercase
         // active key would read as unknown there.
