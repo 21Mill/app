@@ -8,6 +8,7 @@ pub mod fsm;
 pub(crate) mod funds_at_risk;
 pub mod node_fee;
 pub(crate) mod node_info;
+pub(crate) mod payout_route;
 pub(crate) mod pending;
 pub mod pow;
 pub mod protocol_version;

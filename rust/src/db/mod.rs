@@ -244,6 +244,19 @@ pub mod settings_keys {
         format!("{PAYOUT_AMOUNT_PREFIX}{order_id}")
     }
 
+    /// Prefix of [`payout_route`] keys.
+    pub const PAYOUT_ROUTE_PREFIX: &str = "payout_route:";
+
+    /// Per-order record of every destination the buyer's payout was sent to
+    /// from this device, and what became of each (#823): JSON written by
+    /// `mostro::payout_route`. `trade_index` inside it is the generation, as
+    /// in [`invoice_step_start`]: a later take starts a new record, and the
+    /// key is deleted with the row and when a maker's order goes back to the
+    /// book.
+    pub fn payout_route(order_id: &str) -> String {
+        format!("{PAYOUT_ROUTE_PREFIX}{order_id}")
+    }
+
     /// Per-order tombstone marking the trade row as deleted **on purpose** —
     /// by the pre-active cancel wipe (`cancellation_wipes_history`) or by the
     /// stale sweeper — so a daemon message for an order with no row can tell
@@ -272,7 +285,7 @@ pub mod settings_keys {
     /// [`super::Storage::clear_identity_data`] drops it with the rows. What
     /// is left in the store is device preference: the active node, custom
     /// nodes, node caches, push token and toggle, developer overrides.
-    pub const IDENTITY_SCOPED_PREFIXES: [&str; 10] = [
+    pub const IDENTITY_SCOPED_PREFIXES: [&str; 11] = [
         CHAT_CURSOR_PREFIX,
         DISPUTE_ADMIN_PREFIX,
         DISPUTE_ADMIN_AT_PREFIX,
@@ -282,6 +295,7 @@ pub mod settings_keys {
         STATUS_CURSOR_PREFIX,
         INVOICE_STEP_PREFIX,
         PAYOUT_AMOUNT_PREFIX,
+        PAYOUT_ROUTE_PREFIX,
         TRADE_WIPED_PREFIX,
     ];
 

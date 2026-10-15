@@ -222,6 +222,20 @@ pub(crate) fn dates_escrow_lock(
     }
 }
 
+/// Whether an `add-invoice` payload is the node giving up on the buyer's
+/// payout: it reads `settled-hold-invoice` only when mostrod exhausted its
+/// payment retries and wants a new invoice (`check_failure_retries`). A first
+/// request reads `waiting-buyer-invoice` (#823).
+pub(crate) fn add_invoice_after_failed_payout(
+    payload: &Option<mostro_core::message::Payload>,
+) -> bool {
+    matches!(
+        payload,
+        Some(mostro_core::message::Payload::Order(so))
+            if so.status == Some(mostro_core::order::Status::SettledHoldInvoice)
+    )
+}
+
 /// Extracts the status and calculated sats to persist from an inbound
 /// `add-invoice` payload.
 ///
@@ -559,6 +573,30 @@ mod tests {
 
         // No payload → nothing to sync.
         assert!(add_invoice_sync(&None).is_none());
+    }
+
+    /// Only the request that follows a failed payout reads settled (#823):
+    /// a first request, a Peer follow-up and no payload are not one.
+    #[test]
+    fn only_a_settled_add_invoice_follows_a_failed_payout() {
+        use mostro_core::message::Payload;
+        use mostro_core::order::Status;
+
+        let retry = small_order_with(Status::SettledHoldInvoice, 1_677);
+        assert!(add_invoice_after_failed_payout(&Some(Payload::Order(
+            retry
+        ))));
+
+        let first = small_order_with(Status::WaitingBuyerInvoice, 1_677);
+        assert!(!add_invoice_after_failed_payout(&Some(Payload::Order(
+            first
+        ))));
+        let peer = Payload::Peer(mostro_core::message::Peer {
+            pubkey: String::new(),
+            reputation: None,
+        });
+        assert!(!add_invoice_after_failed_payout(&Some(peer)));
+        assert!(!add_invoice_after_failed_payout(&None));
     }
 
     /// The follow-up Peer payload that `add_invoice_sync` ignores is exactly

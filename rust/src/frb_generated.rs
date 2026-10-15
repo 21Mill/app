@@ -53,7 +53,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -934598026;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 173022083;
 
 // Section: executor
 
@@ -6266,6 +6266,43 @@ fn wire__crate__api__orders__payout_amount_impl(
         },
     )
 }
+fn wire__crate__api__orders__payout_destinations_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "payout_destinations",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_order_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::orders::payout_destinations(api_order_id).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__types__push_platform_as_wire_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -7091,6 +7128,8 @@ fn wire__crate__api__orders__send_invoice_impl(
             let api_order_id = <String>::sse_decode(&mut deserializer);
             let api_invoice_or_address = <String>::sse_decode(&mut deserializer);
             let api_amount_sats = <u64>::sse_decode(&mut deserializer);
+            let api_source = <crate::api::types::PayoutSource>::sse_decode(&mut deserializer);
+            let api_wallet_name = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
@@ -7099,6 +7138,8 @@ fn wire__crate__api__orders__send_invoice_impl(
                             api_order_id,
                             api_invoice_or_address,
                             api_amount_sats,
+                            api_source,
+                            api_wallet_name,
                         )
                         .await?;
                         Ok(output_ok)
@@ -7922,13 +7963,18 @@ fn wire__crate__api__orders__take_order_impl(
             let api_order_id = <String>::sse_decode(&mut deserializer);
             let api_role = <crate::api::types::TradeRole>::sse_decode(&mut deserializer);
             let api_fiat_amount = <Option<f64>>::sse_decode(&mut deserializer);
+            let api_payout = <Option<crate::api::types::TakePayout>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok =
-                            crate::api::orders::take_order(api_order_id, api_role, api_fiat_amount)
-                                .await?;
+                        let output_ok = crate::api::orders::take_order(
+                            api_order_id,
+                            api_role,
+                            api_fiat_amount,
+                            api_payout,
+                        )
+                        .await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -9469,6 +9515,20 @@ impl SseDecode for Vec<crate::api::types::OrderInfo> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::PayoutDestination> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::PayoutDestination>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10044,6 +10104,17 @@ impl SseDecode for Option<crate::api::types::RestoreProgress> {
     }
 }
 
+impl SseDecode for Option<crate::api::types::TakePayout> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::TakePayout>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::types::TradeOutcome> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10362,6 +10433,62 @@ impl SseDecode for crate::api::types::PaymentResult {
     }
 }
 
+impl SseDecode for crate::api::types::PayoutDestination {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_destination = <String>::sse_decode(deserializer);
+        let mut var_isLightningAddress = <bool>::sse_decode(deserializer);
+        let mut var_source = <crate::api::types::PayoutSource>::sse_decode(deserializer);
+        let mut var_walletName = <Option<String>>::sse_decode(deserializer);
+        let mut var_submittedAt = <i64>::sse_decode(deserializer);
+        let mut var_amountSats = <Option<u64>>::sse_decode(deserializer);
+        let mut var_paymentHash = <Option<String>>::sse_decode(deserializer);
+        let mut var_outcome = <crate::api::types::PayoutOutcome>::sse_decode(deserializer);
+        let mut var_outcomeAt = <Option<i64>>::sse_decode(deserializer);
+        let mut var_attempts = <Option<u32>>::sse_decode(deserializer);
+        return crate::api::types::PayoutDestination {
+            destination: var_destination,
+            is_lightning_address: var_isLightningAddress,
+            source: var_source,
+            wallet_name: var_walletName,
+            submitted_at: var_submittedAt,
+            amount_sats: var_amountSats,
+            payment_hash: var_paymentHash,
+            outcome: var_outcome,
+            outcome_at: var_outcomeAt,
+            attempts: var_attempts,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::PayoutOutcome {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::PayoutOutcome::Submitted,
+            1 => crate::api::types::PayoutOutcome::Retrying,
+            2 => crate::api::types::PayoutOutcome::Failed,
+            3 => crate::api::types::PayoutOutcome::Rejected,
+            4 => crate::api::types::PayoutOutcome::Paid,
+            _ => unreachable!("Invalid variant for PayoutOutcome: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::PayoutSource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::PayoutSource::DefaultLightningAddress,
+            1 => crate::api::types::PayoutSource::NwcWallet,
+            2 => crate::api::types::PayoutSource::Entered,
+            _ => unreachable!("Invalid variant for PayoutSource: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::PushPlatform {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10603,6 +10730,30 @@ impl SseDecode for crate::api::types::SolverRole {
     }
 }
 
+impl SseDecode for crate::api::types::TakePayout {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                return crate::api::types::TakePayout::DefaultAddress;
+            }
+            1 => {
+                let mut var_address = <String>::sse_decode(deserializer);
+                return crate::api::types::TakePayout::Address {
+                    address: var_address,
+                };
+            }
+            2 => {
+                return crate::api::types::TakePayout::AskForInvoice;
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseDecode for crate::api::types::ThemeMode {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10780,6 +10931,7 @@ impl SseDecode for crate::api::types::TradeUpdateReason {
             4 => crate::api::types::TradeUpdateReason::CooperativeCancelRequestedByMe,
             5 => crate::api::types::TradeUpdateReason::CooperativeCancelRequestedByPeer,
             6 => crate::api::types::TradeUpdateReason::Replayed,
+            7 => crate::api::types::TradeUpdateReason::PayoutFailed,
             _ => unreachable!("Invalid variant for TradeUpdateReason: {}", inner),
         };
     }
@@ -11273,161 +11425,164 @@ fn pde_ffi_dispatcher_primary_impl(
         153 => wire__crate__api__nwc__pay_invoice_impl(port, ptr, rust_vec_len, data_len),
         154 => wire__crate__api__orders__payout_amount_impl(port, ptr, rust_vec_len, data_len),
         155 => {
-            wire__crate__api__types__push_platform_as_wire_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__orders__payout_destinations_impl(port, ptr, rust_vec_len, data_len)
         }
         156 => {
+            wire__crate__api__types__push_platform_as_wire_impl(port, ptr, rust_vec_len, data_len)
+        }
+        157 => {
             wire__crate__api__types__push_platform_from_wire_impl(port, ptr, rust_vec_len, data_len)
         }
-        157 => wire__crate__api__logging__recent_logs_impl(port, ptr, rust_vec_len, data_len),
-        158 => wire__crate__api__push__reconcile_push_impl(port, ptr, rust_vec_len, data_len),
-        159 => wire__crate__api__orders__recover_trades_impl(port, ptr, rust_vec_len, data_len),
-        160 => wire__crate__api__node_stats__refresh_mostro_node_info_cache_impl(
+        158 => wire__crate__api__logging__recent_logs_impl(port, ptr, rust_vec_len, data_len),
+        159 => wire__crate__api__push__reconcile_push_impl(port, ptr, rust_vec_len, data_len),
+        160 => wire__crate__api__orders__recover_trades_impl(port, ptr, rust_vec_len, data_len),
+        161 => wire__crate__api__node_stats__refresh_mostro_node_info_cache_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        161 => wire__crate__api__nodes__refresh_mostro_node_metadata_impl(
+        162 => wire__crate__api__nodes__refresh_mostro_node_metadata_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        162 => wire__crate__api__my_reputation__refresh_my_reputation_impl(
+        163 => wire__crate__api__my_reputation__refresh_my_reputation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        163 => wire__crate__api__settings__rehydrate_active_mostro_node_impl(
+        164 => wire__crate__api__settings__rehydrate_active_mostro_node_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        164 => wire__crate__api__escrow__rehydrate_escrow_overrides_impl(
+        165 => wire__crate__api__escrow__rehydrate_escrow_overrides_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        165 => wire__crate__api__orders__release_order_impl(port, ptr, rust_vec_len, data_len),
-        166 => wire__crate__api__nodes__remove_custom_mostro_node_impl(
+        166 => wire__crate__api__orders__release_order_impl(port, ptr, rust_vec_len, data_len),
+        167 => wire__crate__api__nodes__remove_custom_mostro_node_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        167 => wire__crate__api__nostr__remove_relay_impl(port, ptr, rust_vec_len, data_len),
-        169 => wire__crate__api__orders__request_bond_invoice_again_impl(
+        168 => wire__crate__api__nostr__remove_relay_impl(port, ptr, rust_vec_len, data_len),
+        170 => wire__crate__api__orders__request_bond_invoice_again_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        170 => {
+        171 => {
             wire__crate__api__order_link__resolve_order_link_impl(port, ptr, rust_vec_len, data_len)
         }
-        171 => wire__crate__api__orders__restart_orders_subscription_impl(
+        172 => wire__crate__api__orders__restart_orders_subscription_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        172 => wire__crate__api__identity__restore_identity_session_impl(
+        173 => wire__crate__api__identity__restore_identity_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        173 => wire__crate__api__nostr__resync_impl(port, ptr, rust_vec_len, data_len),
-        174 => {
+        174 => wire__crate__api__nostr__resync_impl(port, ptr, rust_vec_len, data_len),
+        175 => {
             wire__crate__api__disputes__send_dispute_file_impl(port, ptr, rust_vec_len, data_len)
         }
-        175 => wire__crate__api__orders__send_fiat_sent_impl(port, ptr, rust_vec_len, data_len),
-        176 => wire__crate__api__messages__send_file_impl(port, ptr, rust_vec_len, data_len),
-        177 => wire__crate__api__orders__send_invoice_impl(port, ptr, rust_vec_len, data_len),
-        178 => wire__crate__api__messages__send_message_impl(port, ptr, rust_vec_len, data_len),
-        179 => wire__crate__api__messages__send_reaction_impl(port, ptr, rust_vec_len, data_len),
-        180 => wire__crate__api__settings__set_active_mostro_node_impl(
+        176 => wire__crate__api__orders__send_fiat_sent_impl(port, ptr, rust_vec_len, data_len),
+        177 => wire__crate__api__messages__send_file_impl(port, ptr, rust_vec_len, data_len),
+        178 => wire__crate__api__orders__send_invoice_impl(port, ptr, rust_vec_len, data_len),
+        179 => wire__crate__api__messages__send_message_impl(port, ptr, rust_vec_len, data_len),
+        180 => wire__crate__api__messages__send_reaction_impl(port, ptr, rust_vec_len, data_len),
+        181 => wire__crate__api__settings__set_active_mostro_node_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        181 => wire__crate__api__escrow__set_cashu_mint_url_override_impl(
+        182 => wire__crate__api__escrow__set_cashu_mint_url_override_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        182 => wire__crate__api__settings__set_default_fiat_code_impl(
+        183 => wire__crate__api__settings__set_default_fiat_code_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        183 => wire__crate__api__settings__set_default_lightning_address_impl(
+        184 => wire__crate__api__settings__set_default_lightning_address_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        184 => wire__crate__api__escrow__set_escrow_mode_override_impl(
+        185 => wire__crate__api__escrow__set_escrow_mode_override_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        185 => wire__crate__api__settings__set_language_impl(port, ptr, rust_vec_len, data_len),
-        186 => {
+        186 => wire__crate__api__settings__set_language_impl(port, ptr, rust_vec_len, data_len),
+        187 => {
             wire__crate__api__settings__set_logging_enabled_impl(port, ptr, rust_vec_len, data_len)
         }
-        187 => {
+        188 => {
             wire__crate__api__reputation__set_privacy_mode_impl(port, ptr, rust_vec_len, data_len)
         }
-        188 => wire__crate__api__push__set_push_enabled_impl(port, ptr, rust_vec_len, data_len),
-        189 => wire__crate__api__push__set_push_token_impl(port, ptr, rust_vec_len, data_len),
-        190 => wire__crate__api__settings__set_test_order_expiry_impl(
+        189 => wire__crate__api__push__set_push_enabled_impl(port, ptr, rust_vec_len, data_len),
+        190 => wire__crate__api__push__set_push_token_impl(port, ptr, rust_vec_len, data_len),
+        191 => wire__crate__api__settings__set_test_order_expiry_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        191 => wire__crate__api__settings__set_theme_impl(port, ptr, rust_vec_len, data_len),
-        192 => wire__crate__api__disputes__share_chat_key_with_solver_impl(
+        192 => wire__crate__api__settings__set_theme_impl(port, ptr, rust_vec_len, data_len),
+        193 => wire__crate__api__disputes__share_chat_key_with_solver_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        193 => wire__crate__api__reputation_transfer__sign_reputation_rebind_impl(
+        194 => wire__crate__api__reputation_transfer__sign_reputation_rebind_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        194 => wire__crate__api__disputes__solver_role_impl(port, ptr, rust_vec_len, data_len),
-        195 => wire__crate__api__bond__submit_bond_payout_invoice_impl(
+        195 => wire__crate__api__disputes__solver_role_impl(port, ptr, rust_vec_len, data_len),
+        196 => wire__crate__api__bond__submit_bond_payout_invoice_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        196 => wire__crate__api__disputes__submit_evidence_impl(port, ptr, rust_vec_len, data_len),
-        197 => wire__crate__api__reputation__submit_rating_impl(port, ptr, rust_vec_len, data_len),
-        198 => wire__crate__api__orders__subscribe_orders_impl(port, ptr, rust_vec_len, data_len),
-        199 => wire__crate__api__orders__take_order_impl(port, ptr, rust_vec_len, data_len),
-        200 => wire__crate__api__escrow_deadline__trade_escrow_deadline_impl(
+        197 => wire__crate__api__disputes__submit_evidence_impl(port, ptr, rust_vec_len, data_len),
+        198 => wire__crate__api__reputation__submit_rating_impl(port, ptr, rust_vec_len, data_len),
+        199 => wire__crate__api__orders__subscribe_orders_impl(port, ptr, rust_vec_len, data_len),
+        200 => wire__crate__api__orders__take_order_impl(port, ptr, rust_vec_len, data_len),
+        201 => wire__crate__api__escrow_deadline__trade_escrow_deadline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        201 => {
+        202 => {
             wire__crate__api__invoice__trade_step_started_at_impl(port, ptr, rust_vec_len, data_len)
         }
-        202 => {
+        203 => {
             wire__crate__api__identity__validate_mnemonic_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -11452,7 +11607,7 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        168 => wire__crate__api__reputation_transfer__reputation_identity_npub_impl(
+        169 => wire__crate__api__reputation_transfer__reputation_identity_npub_impl(
             ptr,
             rust_vec_len,
             data_len,
@@ -13191,6 +13346,81 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::PaymentResult>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::PayoutDestination {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.destination.into_into_dart().into_dart(),
+            self.is_lightning_address.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.wallet_name.into_into_dart().into_dart(),
+            self.submitted_at.into_into_dart().into_dart(),
+            self.amount_sats.into_into_dart().into_dart(),
+            self.payment_hash.into_into_dart().into_dart(),
+            self.outcome.into_into_dart().into_dart(),
+            self.outcome_at.into_into_dart().into_dart(),
+            self.attempts.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::PayoutDestination
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::PayoutDestination>
+    for crate::api::types::PayoutDestination
+{
+    fn into_into_dart(self) -> crate::api::types::PayoutDestination {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::PayoutOutcome {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Submitted => 0.into_dart(),
+            Self::Retrying => 1.into_dart(),
+            Self::Failed => 2.into_dart(),
+            Self::Rejected => 3.into_dart(),
+            Self::Paid => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::PayoutOutcome
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::PayoutOutcome>
+    for crate::api::types::PayoutOutcome
+{
+    fn into_into_dart(self) -> crate::api::types::PayoutOutcome {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::PayoutSource {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::DefaultLightningAddress => 0.into_dart(),
+            Self::NwcWallet => 1.into_dart(),
+            Self::Entered => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::PayoutSource
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::PayoutSource>
+    for crate::api::types::PayoutSource
+{
+    fn into_into_dart(self) -> crate::api::types::PayoutSource {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::PushPlatform {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -13511,6 +13741,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::SolverRole>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::TakePayout {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::api::types::TakePayout::DefaultAddress => [0.into_dart()].into_dart(),
+            crate::api::types::TakePayout::Address { address } => {
+                [1.into_dart(), address.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::types::TakePayout::AskForInvoice => [2.into_dart()].into_dart(),
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::types::TakePayout {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TakePayout>
+    for crate::api::types::TakePayout
+{
+    fn into_into_dart(self) -> crate::api::types::TakePayout {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::ThemeMode {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -13710,6 +13963,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::TradeUpdateReason {
             Self::CooperativeCancelRequestedByMe => 4.into_dart(),
             Self::CooperativeCancelRequestedByPeer => 5.into_dart(),
             Self::Replayed => 6.into_dart(),
+            Self::PayoutFailed => 7.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -14913,6 +15167,16 @@ impl SseEncode for Vec<crate::api::types::OrderInfo> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::PayoutDestination> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::PayoutDestination>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -15372,6 +15636,16 @@ impl SseEncode for Option<crate::api::types::RestoreProgress> {
     }
 }
 
+impl SseEncode for Option<crate::api::types::TakePayout> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::TakePayout>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::types::TradeOutcome> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -15635,6 +15909,58 @@ impl SseEncode for crate::api::types::PaymentResult {
     }
 }
 
+impl SseEncode for crate::api::types::PayoutDestination {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.destination, serializer);
+        <bool>::sse_encode(self.is_lightning_address, serializer);
+        <crate::api::types::PayoutSource>::sse_encode(self.source, serializer);
+        <Option<String>>::sse_encode(self.wallet_name, serializer);
+        <i64>::sse_encode(self.submitted_at, serializer);
+        <Option<u64>>::sse_encode(self.amount_sats, serializer);
+        <Option<String>>::sse_encode(self.payment_hash, serializer);
+        <crate::api::types::PayoutOutcome>::sse_encode(self.outcome, serializer);
+        <Option<i64>>::sse_encode(self.outcome_at, serializer);
+        <Option<u32>>::sse_encode(self.attempts, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::PayoutOutcome {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::PayoutOutcome::Submitted => 0,
+                crate::api::types::PayoutOutcome::Retrying => 1,
+                crate::api::types::PayoutOutcome::Failed => 2,
+                crate::api::types::PayoutOutcome::Rejected => 3,
+                crate::api::types::PayoutOutcome::Paid => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::types::PayoutSource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::PayoutSource::DefaultLightningAddress => 0,
+                crate::api::types::PayoutSource::NwcWallet => 1,
+                crate::api::types::PayoutSource::Entered => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::types::PushPlatform {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -15842,6 +16168,27 @@ impl SseEncode for crate::api::types::SolverRole {
     }
 }
 
+impl SseEncode for crate::api::types::TakePayout {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::types::TakePayout::DefaultAddress => {
+                <i32>::sse_encode(0, serializer);
+            }
+            crate::api::types::TakePayout::Address { address } => {
+                <i32>::sse_encode(1, serializer);
+                <String>::sse_encode(address, serializer);
+            }
+            crate::api::types::TakePayout::AskForInvoice => {
+                <i32>::sse_encode(2, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseEncode for crate::api::types::ThemeMode {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -15989,6 +16336,7 @@ impl SseEncode for crate::api::types::TradeUpdateReason {
                 crate::api::types::TradeUpdateReason::CooperativeCancelRequestedByMe => 4,
                 crate::api::types::TradeUpdateReason::CooperativeCancelRequestedByPeer => 5,
                 crate::api::types::TradeUpdateReason::Replayed => 6,
+                crate::api::types::TradeUpdateReason::PayoutFailed => 7,
                 _ => {
                     unimplemented!("");
                 }
