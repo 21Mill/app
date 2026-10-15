@@ -204,6 +204,31 @@ fn write_lock() -> &'static tokio::sync::Mutex<()> {
     LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
+/// How many times each order's record was cleared in this process. A writer
+/// that waited on the node reads it before sending and writes only if no
+/// clear came in between: a maker keeps one trade key for every take of the
+/// order, so a destination written after its step was cleared would read as
+/// the next take's (PR #824 review). Changed only under [`write_lock`].
+fn clear_epochs() -> &'static std::sync::Mutex<std::collections::HashMap<String, u64>> {
+    static EPOCHS: OnceLock<std::sync::Mutex<std::collections::HashMap<String, u64>>> =
+        OnceLock::new();
+    EPOCHS.get_or_init(Default::default)
+}
+
+/// The clear epoch of `order_id`'s record now; see [`clear_epochs`].
+pub(crate) fn clear_epoch(order_id: &str) -> u64 {
+    clear_epochs()
+        .lock()
+        .map(|epochs| epochs.get(order_id).copied().unwrap_or(0))
+        .unwrap_or(0)
+}
+
+fn bump_clear_epoch(order_id: &str) {
+    if let Ok(mut epochs) = clear_epochs().lock() {
+        *epochs.entry(order_id.to_string()).or_insert(0) += 1;
+    }
+}
+
 /// The record behind a store read: `Err` when the store could not be read,
 /// `Ok(None)` when there is no record or it does not decode. An undecodable
 /// record is replaced by the next write; a failed read must not be, or the
@@ -241,7 +266,28 @@ async fn update(
     order_id: &str,
     change: impl FnOnce(Option<PayoutRoute>) -> Option<PayoutRoute>,
 ) -> bool {
+    update_unless_cleared(db, order_id, None, change).await
+}
+
+/// [`update`], refused when `since` is the clear epoch the caller read and
+/// the record was cleared after it.
+async fn update_unless_cleared(
+    db: &impl Storage,
+    order_id: &str,
+    since: Option<u64>,
+    change: impl FnOnce(Option<PayoutRoute>) -> Option<PayoutRoute>,
+) -> bool {
     let _guard = write_lock().lock().await;
+    if since.is_some_and(|epoch| epoch != clear_epoch(order_id)) {
+        crate::api::logging::blog_info(
+            "payout",
+            format!(
+                "record of order={} cleared while the node was asked: not written",
+                crate::api::logging::short_id(order_id),
+            ),
+        );
+        return false;
+    }
     let stored = match try_load(db, order_id).await {
         Ok(stored) => stored,
         Err(e) => {
@@ -295,7 +341,23 @@ pub(crate) async fn record_take_in(
     .await
 }
 
-/// Record a destination sent on `trade_index`.
+/// Record a destination sent on `trade_index` when the clear epoch was
+/// `since`: not written if the record was cleared meanwhile.
+pub(crate) async fn record_destination_since_in(
+    db: &impl Storage,
+    order_id: &str,
+    trade_index: u32,
+    sent: PayoutDestination,
+    since: u64,
+) -> bool {
+    update_unless_cleared(db, order_id, Some(since), |stored| {
+        with_destination(stored, trade_index, sent)
+    })
+    .await
+}
+
+/// Record a destination sent on `trade_index`, whatever cleared it before.
+#[cfg(test)]
 pub(crate) async fn record_destination_in(
     db: &impl Storage,
     order_id: &str,
@@ -341,6 +403,7 @@ pub(crate) async fn forget_in(db: &impl Storage, order_id: &str) {
 }
 
 async fn forget_unlocked(db: &impl Storage, order_id: &str) {
+    bump_clear_epoch(order_id);
     let key = crate::db::settings_keys::payout_route(order_id);
     if let Err(e) = db.delete_setting(&key).await {
         crate::api::logging::blog_warn(
@@ -369,12 +432,17 @@ pub(crate) async fn record_take(
     }
 }
 
-/// [`record_destination_in`] on the app's store; rings the doorbell.
-pub(crate) async fn record_destination(order_id: &str, trade_index: u32, sent: PayoutDestination) {
+/// [`record_destination_since_in`] on the app's store; rings the doorbell.
+pub(crate) async fn record_destination_since(
+    order_id: &str,
+    trade_index: u32,
+    sent: PayoutDestination,
+    since: u64,
+) {
     let Some(db) = crate::db::app_db::db() else {
         return;
     };
-    if record_destination_in(db, order_id, trade_index, sent).await {
+    if record_destination_since_in(db, order_id, trade_index, sent, since).await {
         crate::api::trade_touch::touch_trade(order_id);
     }
 }
@@ -713,6 +781,27 @@ mod tests {
             [PayoutOutcome::Failed, PayoutOutcome::Submitted]
         );
         assert_eq!(stored.destinations[1].source, PayoutSource::NwcWallet);
+    }
+
+    /// A maker submits an invoice; while the node is asked, the order goes
+    /// back to the book and the record is cleared. The late write must not
+    /// bring it back for the next take on the same key (PR #824 review).
+    #[tokio::test]
+    async fn a_destination_sent_before_a_clear_is_not_written_after_it() {
+        let db = temp_db().await;
+        let order = "order-maker";
+        record_destination_in(&db, order, 4, sent(ADDRESS, PayoutSource::Entered, 1)).await;
+
+        let since = clear_epoch(order);
+        forget_in(&db, order).await;
+        let late = sent(COFFEE, PayoutSource::Entered, 2);
+        assert!(!record_destination_since_in(&db, order, 4, late.clone(), since).await);
+        assert!(load(&db, order).await.is_none());
+
+        // Without a clear in between, it is written as usual.
+        let since = clear_epoch(order);
+        assert!(record_destination_since_in(&db, order, 4, late, since).await);
+        assert_eq!(load(&db, order).await.unwrap().destinations.len(), 1);
     }
 
     #[tokio::test]

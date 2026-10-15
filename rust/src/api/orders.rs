@@ -2183,6 +2183,9 @@ pub async fn send_invoice(
     // An earlier submission still waiting for its reply owns the key: this
     // one is refused before it reaches the wire (see
     // `register_add_invoice_request`).
+    // Read before the node is asked: a clear of the payout record while it
+    // answers means this submission belongs to a step that is over.
+    let payout_epoch = crate::mostro::payout_route::clear_epoch(&order_id);
     let trade_pk_hex = sender_keys.public_key().to_hex();
     let Some(conf_rx) = register_add_invoice_request(&trade_pk_hex, request_id, trade_index)
     else {
@@ -2241,7 +2244,18 @@ pub async fn send_invoice(
         sent.outcome = crate::api::types::PayoutOutcome::Rejected;
         sent.outcome_at = Some(sent.submitted_at);
     }
-    crate::mostro::payout_route::record_destination(&order_id, trade_index, sent).await;
+    // Only for the trade it was sent for: a maker's order back on the book
+    // keeps its trade key for the next take, so a destination written now
+    // would read as that take's (PR #824 review).
+    if payout_row_is_current(&order_id, trade_index).await {
+        crate::mostro::payout_route::record_destination_since(
+            &order_id,
+            trade_index,
+            sent,
+            payout_epoch,
+        )
+        .await;
+    }
 
     match reply {
         Ok(Ok(Wake {
@@ -2277,6 +2291,20 @@ pub async fn send_invoice(
             ))
         }
     }
+}
+
+/// Whether `order_id`'s row is still the trade on `trade_index` that waits
+/// on a payout: there, on that key, and not back on the book. An unreadable
+/// row is no proof of it.
+async fn payout_row_is_current(order_id: &str, trade_index: u32) -> bool {
+    let Some(db) = crate::db::app_db::db() else {
+        return false;
+    };
+    matches!(
+        db.get_trade_by_order_id(order_id).await,
+        Ok(Some(trade))
+            if trade.trade_key_index == trade_index && trade.order.status != OrderStatus::Pending
+    )
 }
 
 /// Mark fiat payment as sent by the buyer.
@@ -6687,8 +6715,10 @@ async fn clear_maker_step_start(db: &impl Storage, order_id: &str) -> bool {
     let keys = [
         ("step start", crate::db::settings_keys::invoice_step_start(order_id)),
         ("payout amount", crate::db::settings_keys::payout_amount(order_id)),
-        ("payout route", crate::db::settings_keys::payout_route(order_id)),
     ];
+    // Through the payout module, which also stops a submission still waiting
+    // on the node from writing it back for the next take (PR #824 review).
+    crate::mostro::payout_route::forget_in(db, order_id).await;
     let mut cleared = true;
     for (what, key) in keys {
         if let Err(e) = db.delete_setting(&key).await {
@@ -17390,7 +17420,8 @@ mod tests {
             3_001,
             None,
         );
-        payout_route::record_destination(&order_id, 1, invoice).await;
+        let since = payout_route::clear_epoch(&order_id);
+        payout_route::record_destination_since(&order_id, 1, invoice, since).await;
         dispatch_daemon_message_at(order_uuid, Action::PurchaseCompleted, None, 5_000).await;
 
         let route = payout_route::destinations(&order_id).await;
@@ -17451,6 +17482,52 @@ mod tests {
         // A replay, even a later-dated one, moves nothing.
         dispatch_daemon_message_at(order_uuid, Action::PurchaseCompleted, None, 6_000).await;
         assert_eq!(payout_route::destinations(&order_id).await, route);
+    }
+
+    /// A maker's order goes back to the book while their invoice is with the
+    /// node: the step's cleanup must also stop that submission from writing
+    /// the payout record back, and an order back on the book takes none
+    /// (PR #824 review).
+    #[tokio::test]
+    async fn a_maker_step_cleanup_stops_a_late_payout_write() {
+        use crate::api::types::PayoutSource;
+        use crate::mostro::payout_route;
+
+        let path = std::env::temp_dir()
+            .join(format!("mostro_payout_route_maker_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let mut row = cancel_test_row(wire_order(&order_id, OrderStatus::WaitingBuyerInvoice));
+        row.order.is_mine = true;
+        db.save_trade(&row).await.expect("save the trade row");
+        let sent = || {
+            payout_route::destination(
+                "alice@example.com",
+                PayoutSource::Entered,
+                None,
+                1_000,
+                Some(1_677),
+            )
+        };
+
+        // Sent while the step was open...
+        let since = payout_route::clear_epoch(&order_id);
+        assert!(payout_row_is_current(&order_id, 1).await);
+        // ...the taker walks away and the step is cleared...
+        assert!(clear_maker_step_start(db, &order_id).await);
+        // ...and the node's late answer writes nothing.
+        payout_route::record_destination_since(&order_id, 1, sent(), since).await;
+        assert!(payout_route::destinations(&order_id).await.is_empty());
+
+        // Back on the book, the row takes no destination at all.
+        let mut pending = row.clone();
+        pending.order.status = OrderStatus::Pending;
+        db.save_trade(&pending).await.expect("save the trade row");
+        assert!(!payout_row_is_current(&order_id, 1).await);
+        // Nor does another take's key.
+        db.save_trade(&row).await.expect("save the trade row");
+        assert!(!payout_row_is_current(&order_id, 2).await);
     }
 
     /// An active take, its public `in-progress` noted by the d-tag path.
