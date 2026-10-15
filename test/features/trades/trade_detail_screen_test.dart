@@ -1831,6 +1831,63 @@ void main() {
       expect(find.text(AppLocalizationsEn().tradeNoLongerYours), findsNothing);
     });
 
+    // A maker's order canceled before anyone took it loses its trade row
+    // (Rust's `wipe_never_active_trade`), while the book keeps it as theirs
+    // with its `canceled`. Nothing else holds a maker's role, so the screen,
+    // opened from the "Trade canceled" notice, stayed on "Loading trade…".
+    testWidgets('a maker\'s canceled order without a trade row shows the '
+        'cancellation', (tester) async {
+      await _pumpTradeDetail(
+        tester,
+        orderId: orderId,
+        isBuyer: false,
+        roleKnown: false,
+        status: OrderStatus.canceled,
+        trades: const [],
+        book: [
+          fakeOrder(id: orderId, status: OrderStatus.canceled, isMine: true),
+        ],
+      );
+
+      expect(find.text(_en.tradeHeadlineLoading), findsNothing);
+      expect(find.text(_en.tradeHeadlineCancelled), findsOneWidget);
+    });
+
+    // "Cancelled" reads the same on both sides, so the role the order gives
+    // is checked where it shows: a step whose headline is one side's.
+    for (final (kind, status, mine, theirs) in [
+      (
+        'buy',
+        OrderStatus.waitingBuyerInvoice,
+        _en.tradeHeadlineWaitingInvoiceBuyer,
+        _en.tradeHeadlineWaitingInvoiceSeller,
+      ),
+      (
+        'sell',
+        OrderStatus.waitingPayment,
+        _en.tradeHeadlineWaitingPaymentSeller,
+        _en.tradeHeadlineWaitingPaymentBuyer,
+      ),
+    ]) {
+      testWidgets('without a trade row, the maker of a $kind order takes '
+          'its side', (tester) async {
+        await _pumpTradeDetail(
+          tester,
+          orderId: orderId,
+          isBuyer: kind == 'sell',
+          roleKnown: false,
+          status: status,
+          trades: const [],
+          book: [
+            fakeOrder(id: orderId, kind: kind, status: status, isMine: true),
+          ],
+        );
+
+        expect(find.text(mine), findsOneWidget);
+        expect(find.text(theirs), findsNothing);
+      });
+    }
+
     testWidgets('a take is not judged before its trade row has loaded', (
       tester,
     ) async {

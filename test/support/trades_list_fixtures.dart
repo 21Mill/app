@@ -38,7 +38,7 @@ TradeInfo listTrade({
     fiatCode: fiatCode,
     paymentMethod: paymentMethod,
     premium: 0,
-    creatorPubkey: 'creator-$id',
+    nodePubkey: 'creator-$id',
     createdAt: _ago(ago),
     isMine: isMine,
     rating: 0,

@@ -150,7 +150,7 @@ fiat_amount_max: f64?
 fiat_code: String
 payment_method: String
 premium: f64
-creator_pubkey: String
+node_pubkey: String
 created_at: i64 (unix timestamp)
 expires_at: i64?
 is_mine: bool
@@ -210,7 +210,7 @@ until recorded. See `data-model.md` and `trade_escrow_deadline`
 `None` otherwise (and on rows written before the field existed).
 
 `counterparty_pubkey` is the **peer's trade pubkey**, never the Mostro
-node's (`order.creator_pubkey` on a book order is the node — the 38383
+node's (`order.node_pubkey` on a book order is the node — the 38383
 event author). It starts **empty** for both roles and is populated when a
 daemon message names both trade pubkeys (the peer-reveal capture, #334 —
 see `orders.md`). On backends with a trades store the trade row is the

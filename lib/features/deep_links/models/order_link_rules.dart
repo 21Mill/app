@@ -1,4 +1,5 @@
 import 'package:mostro/core/app_routes.dart';
+import 'package:mostro/shared/utils/platform_int64.dart';
 import 'package:mostro/src/rust/api/types.dart';
 
 /// Pure rules of opening a `mostro:` order link — no widgets, no providers.
@@ -46,10 +47,22 @@ OrderLinkFailure orderLinkFailureOf(Object error) =>
 ///
 /// A participant goes to their trade, where the take screen would send them
 /// anyway (#268), and a pending order to the take screen of its side: taking a
-/// sell order is buying.
-String? orderLinkDestination(OrderInfo order, {required bool participates}) {
+/// sell order is buying. A pending order whose take window closed by [now]
+/// leads nowhere: the node refuses to take it, and one that no longer holds
+/// the order never publishes its expiry, so the pending revision outlives it
+/// on the relays.
+String? orderLinkDestination(
+  OrderInfo order, {
+  required bool participates,
+  required DateTime now,
+}) {
   if (participates) return AppRoute.tradeDetailPath(order.id);
   if (order.status != OrderStatus.pending) return null;
+  final expiresAt = order.expiresAt;
+  if (expiresAt != null &&
+      platformInt64ToInt(expiresAt) * 1000 <= now.millisecondsSinceEpoch) {
+    return null;
+  }
   return switch (order.kind) {
     OrderKind.sell => AppRoute.takeSellPath(order.id),
     OrderKind.buy => AppRoute.takeBuyPath(order.id),

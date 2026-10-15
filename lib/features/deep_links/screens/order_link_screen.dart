@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -80,6 +81,7 @@ class _OrderLinkScreenState extends ConsumerState<OrderLinkScreen> {
     final destination = orderLinkDestination(
       target.order,
       participates: role != null,
+      now: clock.now(),
     );
     if (destination == null) {
       _fail(OrderLinkFailure.unavailable);

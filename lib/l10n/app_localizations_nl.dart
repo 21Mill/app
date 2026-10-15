@@ -4263,6 +4263,24 @@ class AppLocalizationsNl extends AppLocalizations {
       'Deze token kon niet worden geverifieerd: hij bevat geen bewijs van de handtekening van de mint, dus hij is niet geaccepteerd.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'Deze portemonnee bevat alleen sats en deze token is in een andere eenheid (bijvoorbeeld millisats of dollars). Hij is niet aangeraakt: je kunt hem inwisselen in een portemonnee die die eenheid ondersteunt.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'Deze portemonnee bevat alleen sats en deze token is in $unit. Hij is niet aangeraakt: je kunt hem inwisselen in een portemonnee die deze eenheid ondersteunt.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'millisats';
+
+  @override
+  String get cashuUnitUsd => 'dollars (USD)';
+
+  @override
+  String get cashuUnitEur => 'euro\'s (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'Het versturen is mislukt en de portemonnee kon niet bevestigen dat het geld terug is. Synchroniseer met de mint voordat je het opnieuw probeert.';
 
@@ -4541,4 +4559,115 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get orderLinkUnknownNodeWarning =>
       'Deze node staat niet in je lijst. Schakel er alleen naar over als je vertrouwt wie je de link stuurde: de node waarop je handelt rondt je trades af en beslist over hun disputen.';
+
+  @override
+  String get reputationNodeDoesNotExport =>
+      'Deze Mostro exporteert geen reputatie.';
+
+  @override
+  String get reputationNodeDoesNotImport =>
+      'Deze Mostro importeert geen reputatie.';
+
+  @override
+  String get reputationIdentityRequired =>
+      'Reputatie kan alleen worden verplaatst vanaf een account dat zijn reputatie bewaart. Zet de volledige privacymodus uit en probeer het opnieuw.';
+
+  @override
+  String get reputationNotEligible =>
+      'Je account kan zijn reputatie nog niet exporteren: er zijn minstens 10 voltooide transacties en 5 ontvangen beoordelingen nodig.';
+
+  @override
+  String get reputationBoundToOtherIdentity =>
+      'Je reputatie daar is al gekoppeld aan een andere identiteit. Geef toestemming voor de verplaatsing vanuit de identiteit waaraan ze gekoppeld is.';
+
+  @override
+  String get reputationInvalidRebind =>
+      'De toestemming om je reputatie te verplaatsen is ongeldig of verlopen. Maak een nieuwe aan.';
+
+  @override
+  String get reputationExpiredAttestation =>
+      'Deze reputatie is verlopen. Vraag ze opnieuw aan bij de bron.';
+
+  @override
+  String get reputationUntrustedIssuer =>
+      'Deze Mostro accepteert geen reputatie van die bron.';
+
+  @override
+  String get reputationIdentityMismatch =>
+      'Deze reputatie is uitgegeven voor een andere identiteit dan die je gebruikt.';
+
+  @override
+  String get reputationAlreadyImported =>
+      'Deze reputatie is al geïmporteerd op deze Mostro.';
+
+  @override
+  String get reputationInvalidAttestation =>
+      'Dit is geen geldige reputatie. Vraag ze opnieuw aan bij de bron.';
+
+  @override
+  String get reputationImportTitle => 'Reputatie importeren';
+
+  @override
+  String get reputationImportIntro =>
+      'Breng de reputatie die je op lnp2pBot of op een andere Mostro hebt verdiend naar deze. Importeren koppelt de twee accounts: de bron en deze Mostro weten dat ze van dezelfde persoon zijn.';
+
+  @override
+  String get reputationOpenLnp2pbot => 'Ophalen bij lnp2pBot';
+
+  @override
+  String get reputationPasteHint => 'Plak de ontvangen reputatie';
+
+  @override
+  String get reputationCheck => 'Controleren';
+
+  @override
+  String get reputationImported => 'Je reputatie is geïmporteerd.';
+
+  @override
+  String get reputationImportConfirm => 'Importeren in deze Mostro';
+
+  @override
+  String reputationFigures(int reviews, String rating, int days) {
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
+    final String reviewsString = reviewsNumberFormat.format(reviews);
+    final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String daysString = daysNumberFormat.format(days);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      reviews,
+      locale: localeName,
+      other: '$reviewsString ontvangen beoordelingen',
+      one: '1 ontvangen beoordeling',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'handelt al $daysString dagen',
+      one: 'handelt al 1 dag',
+    );
+    return '$_temp0, gemiddeld $rating, $_temp1';
+  }
+
+  @override
+  String get reputationFiguresNote =>
+      'Geïmporteerde reputatie wordt opgeteld bij die van hier; je tegenpartijen zien ze samen.';
+
+  @override
+  String get reputationOpenLnp2pbotFailed =>
+      'Telegram kon niet worden geopend. Open lnp2pBot zelf in Telegram en plak hier wat hij je stuurt.';
+
+  @override
+  String get reputationIdentityHint =>
+      'Controleer voordat je in lnp2pBot bevestigt of dezelfde openbare sleutel wordt getoond:';
+
+  @override
+  String get reputationUnavailable =>
+      'Kan niet controleren of de reputatie kan worden geïmporteerd. Probeer het opnieuw.';
+
+  @override
+  String get reputationIdentityChanged =>
+      'Je identiteit is gewijzigd. Controleer de openbare sleutel die hier wordt getoond voordat je het opnieuw probeert.';
 }

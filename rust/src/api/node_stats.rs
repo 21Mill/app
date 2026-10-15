@@ -27,7 +27,9 @@ use serde::{Deserialize, Serialize};
 use crate::api::types::{BondPolicy, BondPolicyInfo, OrderInfo, OrderStatus};
 use crate::db::{settings_keys, Storage};
 use crate::mostro::{bond_policy, escrow_mode};
-use crate::nostr::order_events::{parse_order_event, KIND_ORDER, RECENT_ORDERS_WINDOW_SECS};
+use crate::nostr::order_events::{
+    is_past_take_window, parse_order_event, KIND_ORDER, RECENT_ORDERS_WINDOW_SECS,
+};
 
 /// Kind 38385 — Mostro instance status (NIP-33 addressable, `d` = pubkey).
 const KIND_INSTANCE: u16 = 38385;
@@ -208,7 +210,7 @@ fn dedup_latest(orders: Vec<Revision>) -> Vec<OrderInfo> {
     let mut latest: HashMap<(String, String), Revision> = HashMap::new();
     for revision in orders {
         let key = (
-            revision.order.creator_pubkey.clone(),
+            revision.order.node_pubkey.clone(),
             revision.order.id.clone(),
         );
         if latest
@@ -224,9 +226,9 @@ fn dedup_latest(orders: Vec<Revision>) -> Vec<OrderInfo> {
         .collect()
 }
 
-/// Is this order open right now? `pending` and not past its `expiration`.
+/// Is this order open right now? `pending` and not past its take window.
 fn is_open(order: &OrderInfo, now: i64) -> bool {
-    order.status == OrderStatus::Pending && order.expires_at.is_none_or(|exp| exp > now)
+    order.status == OrderStatus::Pending && !is_past_take_window(order, now)
 }
 
 /// Per-node fold of [`count_open_orders`]: orders per fiat code plus the
@@ -241,7 +243,7 @@ fn count_open_orders(orders: Vec<Revision>, now: i64) -> HashMap<String, NodeLiq
         if !is_open(&order, now) {
             continue;
         }
-        let (by_fiat, latest) = per_node.entry(order.creator_pubkey.clone()).or_default();
+        let (by_fiat, latest) = per_node.entry(order.node_pubkey.clone()).or_default();
         *by_fiat
             .entry(order.fiat_code.to_ascii_uppercase())
             .or_default() += 1;
@@ -681,7 +683,7 @@ mod tests {
             fiat_code: fiat.into(),
             payment_method: String::new(),
             premium: 0.0,
-            creator_pubkey: node.into(),
+            node_pubkey: node.into(),
             created_at,
             expires_at: None,
             is_mine: false,

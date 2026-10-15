@@ -46,6 +46,15 @@ pub mod settings_keys {
     /// asked. Identity-scoped: it is that identity's reputation.
     pub const MY_REPUTATION: &str = "my_reputation";
 
+    /// The reputation attestation the identity exported last and has not
+    /// imported yet, as the event JSON it came in
+    /// (`api::reputation_transfer`). One slot for all nodes. It names the
+    /// requested destination — the identity itself, or another one the user
+    /// carries it to. Identity-scoped: the export bound the source account to
+    /// that destination on this identity's request, so it is of no use to
+    /// the next identity.
+    pub const PENDING_REPUTATION_ATTESTATION: &str = "pending_reputation_attestation";
+
     // ── Push notifications (docs/PUSH_NOTIFICATIONS.md §7.1, §8.1) ──────────
 
     /// The master toggle, `"true"` / `"false"`; absent reads as enabled.
@@ -279,8 +288,12 @@ pub mod settings_keys {
     /// The single keys that describe the identity, not the device, dropped
     /// with [`IDENTITY_SCOPED_PREFIXES`] by
     /// [`super::Storage::clear_identity_data`].
-    pub const IDENTITY_SCOPED_KEYS: [&str; 3] =
-        [BOND_CLAIM_RETAINED_NODES, RESTORE_SNAPSHOT, MY_REPUTATION];
+    pub const IDENTITY_SCOPED_KEYS: [&str; 4] = [
+        BOND_CLAIM_RETAINED_NODES,
+        RESTORE_SNAPSHOT,
+        MY_REPUTATION,
+        PENDING_REPUTATION_ATTESTATION,
+    ];
 
     /// Build the settings key marking `order_id`'s trade row as wiped.
     pub fn trade_wiped(order_id: &str) -> String {
@@ -430,6 +443,21 @@ pub trait Storage: Send + Sync {
     /// no matching trade exists.
     async fn delete_trade_by_order_id(&self, order_id: &str) -> Result<()>;
 
+    /// Replace every persisted trade of `order_id` with `trade`, in ONE
+    /// transaction: either the order ends up with exactly `trade`, or it
+    /// keeps the rows it had — never neither, whatever fails and even if the
+    /// process dies halfway. For a new take that supersedes a row an earlier
+    /// take of the same order left behind (#566).
+    ///
+    /// May refuse with an `Err` and change nothing when it cannot isolate the
+    /// replacement from other writers — on the web, when the browser grants
+    /// no origin-wide lock. Callers retry.
+    async fn replace_trades_for_order(
+        &self,
+        order_id: &str,
+        trade: &crate::api::types::TradeInfo,
+    ) -> Result<()>;
+
     /// Update the order ID inside a persisted trade (e.g. local UUID → daemon UUID).
     ///
     /// Loads the trade whose `order.id == old_order_id`, replaces `order.id`
@@ -520,6 +548,14 @@ pub trait Storage: Send + Sync {
         order_id: &str,
         state: crate::api::types::CooperativeCancelState,
     ) -> Result<()>;
+
+    /// Reset to unknown (`""`) the node of the trade row `row_id` when its
+    /// node is still `node` (ignoring case) — read from `order.node_pubkey`,
+    /// else from the legacy `order.creator_pubkey`, which the same write
+    /// drops. Every other field stays as stored, so a write that landed
+    /// since the caller's read survives. A missing row stays missing, and an
+    /// empty `node` matches nothing. Returns whether it changed the row.
+    async fn forget_trade_node(&self, row_id: &str, node: &str) -> Result<bool>;
 
     /// Persist the counterparty's trade pubkey on the trade identified by
     /// `order.id` (issue #334). Written when a daemon message reveals it, for

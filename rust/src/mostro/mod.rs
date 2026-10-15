@@ -14,10 +14,12 @@ pub mod protocol_version;
 pub mod push;
 pub mod rates;
 pub(crate) mod reputation;
+pub mod reputation_support;
 pub mod restore_history;
 pub mod serbero;
 pub mod session;
 pub mod trade_index;
+pub(crate) mod trade_node;
 pub(crate) mod status;
 
 #[cfg(test)]

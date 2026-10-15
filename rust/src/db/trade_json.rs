@@ -143,6 +143,27 @@ pub(crate) fn set_counterparty(trade: &mut Value, pubkey: &str) -> Result<()> {
     Ok(())
 }
 
+/// When the trade's node is `node` (ignoring case) — `$.order.node_pubkey`,
+/// else the legacy `$.order.creator_pubkey` — set `$.order.node_pubkey` to
+/// `""` and drop the legacy name, which serde would read as a duplicate of
+/// the new one. Returns whether it changed the document; an empty `node`
+/// matches nothing.
+pub(crate) fn forget_node(trade: &mut Value, node: &str) -> Result<bool> {
+    let order = trade.get("order");
+    let current = order
+        .and_then(|o| o.get("node_pubkey"))
+        .or_else(|| order.and_then(|o| o.get("creator_pubkey")))
+        .and_then(Value::as_str);
+    if node.is_empty() || !current.is_some_and(|c| c.eq_ignore_ascii_case(node)) {
+        return Ok(false);
+    }
+    *field(trade, &["order", "node_pubkey"])? = Value::String(String::new());
+    if let Some(order) = trade.get_mut("order").and_then(Value::as_object_mut) {
+        order.remove("creator_pubkey");
+    }
+    Ok(true)
+}
+
 /// The mutable slot at `path`, creating missing intermediate objects the way
 /// `json_set` does. Fails when a segment exists but is not an object.
 fn field<'a>(trade: &'a mut Value, path: &[&str]) -> Result<&'a mut Value> {
@@ -323,5 +344,43 @@ mod tests {
         );
         let mut bad = json!({"order": "not an object"});
         assert!(rename_order_id(&mut bad, "x").is_err());
+    }
+
+    #[test]
+    fn forget_node_clears_a_matching_node_and_nothing_else() {
+        let mut t = trade();
+        t["order"]["node_pubkey"] = json!("ABCD");
+        t["rated_at"] = json!(1234);
+        assert!(forget_node(&mut t, "abcd").unwrap());
+        assert_eq!(t["order"]["node_pubkey"], json!(""));
+        assert_eq!(t["rated_at"], json!(1234));
+        assert_eq!(t["order"]["status"], json!("Pending"));
+    }
+
+    #[test]
+    fn forget_node_moves_a_legacy_node_to_the_new_name() {
+        let mut t = trade();
+        t["order"]["creator_pubkey"] = json!("abcd");
+        assert!(forget_node(&mut t, "abcd").unwrap());
+        assert_eq!(t["order"]["node_pubkey"], json!(""));
+        assert!(t["order"].get("creator_pubkey").is_none(), "one name only");
+    }
+
+    #[test]
+    fn forget_node_leaves_a_real_or_an_unknown_node_alone() {
+        let mut real = trade();
+        real["order"]["node_pubkey"] = json!("node");
+        let before = real.clone();
+        assert!(!forget_node(&mut real, "abcd").unwrap());
+        assert_eq!(real, before);
+
+        let mut unknown = trade();
+        unknown["order"]["node_pubkey"] = json!("");
+        let before = unknown.clone();
+        assert!(
+            !forget_node(&mut unknown, "").unwrap(),
+            "an empty node matches nothing"
+        );
+        assert_eq!(unknown, before);
     }
 }

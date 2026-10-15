@@ -26,7 +26,7 @@ trade key of every trade row that is not hard-terminal, and the key each
 open payout claim was addressed to (`BondClaim.trade_index`, falling back to
 the order's key for a claim stored before the index was recorded). Never every
 key ever derived. Each key is filed under its **issuing node**
-(`order.creator_pubkey`, `claim.node_pubkey`; an empty legacy value reads as
+(`order.node_pubkey`, `claim.node_pubkey`; an empty legacy value reads as
 the active node), and the kind-14 filter's `authors` include the issuing node
 of every live trade row, so a registered key is always one the filter hears.
 

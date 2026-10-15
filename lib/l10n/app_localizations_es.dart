@@ -834,7 +834,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByMeMessage =>
-      'Pediste cancelar este intercambio. Sigue abierto hasta que la otra parte también cancele. Si no responde, puedes abrir una disputa.';
+      'Pediste cancelar esta operación. Sigue abierta hasta que la otra parte también cancele. Si no responde, puedes abrir una disputa.';
 
   @override
   String get tradeCardCancelRequestedByPeerTitle =>
@@ -842,7 +842,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByPeerMessage =>
-      'Pidió cancelar este intercambio. Acepta para terminarlo sin mover fondos, o sigue con el intercambio.';
+      'Pidió cancelar esta operación. Acepta para terminarla sin mover fondos, o sigue con la operación.';
 
   @override
   String get tradeCancelRequestedByMeNotice =>
@@ -1135,7 +1135,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get orderNoLongerActive => 'Esta orden ya no está activa';
 
   @override
-  String get tradeNoLongerYours => 'Ya no participas en este intercambio';
+  String get tradeNoLongerYours => 'Ya no participas en esta operación';
 
   @override
   String get sessionTimeoutMessage =>
@@ -3659,24 +3659,24 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tradeCardWaitingBuyerInvoiceMessage =>
-      'El intercambio continúa cuando el comprador agregue una factura Lightning.';
+      'La operación continúa cuando el comprador agregue una factura Lightning.';
 
   @override
   String get tradeCardWaitingPaymentTitle => 'Esperando el pago del vendedor';
 
   @override
   String get tradeCardWaitingPaymentMessage =>
-      'El intercambio continúa cuando el vendedor pague la factura hold.';
+      'La operación continúa cuando el vendedor pague la factura hold.';
 
   @override
   String get tradeCardWaitingTakerBondTitle => 'Pago de depósito pendiente';
 
   @override
   String get tradeCardWaitingTakerBondMessage =>
-      'El depósito antiabuso del tomador debe pagarse antes de que empiece el intercambio.';
+      'El depósito antiabuso del tomador debe pagarse antes de que empiece la operación.';
 
   @override
-  String get tradeCardActiveTitle => 'Intercambio activo';
+  String get tradeCardActiveTitle => 'Operación activa';
 
   @override
   String get tradeCardActiveMessage =>
@@ -3697,45 +3697,45 @@ class AppLocalizationsEs extends AppLocalizations {
       'El vendedor liberó los sats. El pago al comprador está en camino.';
 
   @override
-  String get tradeCardSuccessTitle => 'Intercambio completado';
+  String get tradeCardSuccessTitle => 'Operación completada';
 
   @override
-  String get tradeCardSuccessMessage => 'El intercambio terminó con éxito.';
+  String get tradeCardSuccessMessage => 'La operación terminó con éxito.';
 
   @override
-  String get tradeCardCanceledTitle => 'Intercambio cancelado';
+  String get tradeCardCanceledTitle => 'Operación cancelada';
 
   @override
-  String get tradeCardCanceledMessage => 'El intercambio fue cancelado.';
+  String get tradeCardCanceledMessage => 'La operación fue cancelada.';
 
   @override
   String get tradeCardExpiredTitle => 'Orden expirada';
 
   @override
   String get tradeCardExpiredMessage =>
-      'La orden expiró antes de que el intercambio pudiera continuar.';
+      'La orden expiró antes de que la operación pudiera continuar.';
 
   @override
   String get tradeCardCooperativelyCanceledTitle =>
-      'Intercambio cancelado de mutuo acuerdo';
+      'Operación cancelada de mutuo acuerdo';
 
   @override
   String get tradeCardCooperativelyCanceledMessage =>
-      'Ambas partes acordaron cancelar el intercambio.';
+      'Ambas partes acordaron cancelar la operación.';
 
   @override
   String get tradeCardDisputeTitle => 'Disputa abierta';
 
   @override
   String get tradeCardDisputeMessage =>
-      'Se abrió una disputa en este intercambio.';
+      'Se abrió una disputa en esta operación.';
 
   @override
   String get tradeCardCanceledByAdminTitle => 'Cancelado por el resolutor';
 
   @override
   String get tradeCardCanceledByAdminMessage =>
-      'El resolutor de disputas canceló el intercambio.';
+      'El resolutor de disputas canceló la operación.';
 
   @override
   String get tradeCardSettledByAdminTitle => 'Resuelto por el resolutor';
@@ -3749,13 +3749,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tradeCardCompletedByAdminMessage =>
-      'El resolutor de disputas completó el intercambio.';
+      'El resolutor de disputas completó la operación.';
 
   @override
-  String get tradeCardUpdatedTitle => 'Intercambio actualizado';
+  String get tradeCardUpdatedTitle => 'Operación actualizada';
 
   @override
-  String get tradeCardUpdatedMessage => 'El estado de este intercambio cambió.';
+  String get tradeCardUpdatedMessage => 'El estado de esta operación cambió.';
 
   @override
   String get tradeCardCanceledByMakerMessage => 'El creador canceló la orden.';
@@ -4257,6 +4257,24 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo verificar este token: no trae prueba de la firma del mint, así que no se aceptó.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'Esta billetera solo guarda sats y este token está en otra unidad (por ejemplo, milisats o dólares). No se tocó: puedes canjearlo en una billetera que acepte esa unidad.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'Esta billetera solo guarda sats y este token está en $unit. No se tocó: puedes canjearlo en una billetera que acepte esa unidad.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'milisats';
+
+  @override
+  String get cashuUnitUsd => 'dólares (USD)';
+
+  @override
+  String get cashuUnitEur => 'euros (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'El envío falló y la billetera no pudo confirmar que los fondos volvieron. Sincronizá con el mint antes de intentar de nuevo.';
 
@@ -4537,4 +4555,115 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get orderLinkUnknownNodeWarning =>
       'Este nodo no está en tu lista. Cambia a él solo si confías en quien te envió el enlace: el nodo en el que operas liquida tus operaciones y resuelve sus disputas.';
+
+  @override
+  String get reputationNodeDoesNotExport =>
+      'Este Mostro no exporta reputación.';
+
+  @override
+  String get reputationNodeDoesNotImport =>
+      'Este Mostro no importa reputación.';
+
+  @override
+  String get reputationIdentityRequired =>
+      'La reputación solo se puede mover desde una cuenta que la conserva. Desactiva el modo de privacidad total e inténtalo de nuevo.';
+
+  @override
+  String get reputationNotEligible =>
+      'Tu cuenta todavía no puede exportar su reputación: necesita al menos 10 operaciones completadas y 5 calificaciones recibidas.';
+
+  @override
+  String get reputationBoundToOtherIdentity =>
+      'Tu reputación allí ya está ligada a otra identidad. Autoriza el cambio desde la identidad a la que está ligada.';
+
+  @override
+  String get reputationInvalidRebind =>
+      'La autorización para mover tu reputación no es válida o expiró. Crea una nueva.';
+
+  @override
+  String get reputationExpiredAttestation =>
+      'Esta reputación expiró. Pídela de nuevo a su origen.';
+
+  @override
+  String get reputationUntrustedIssuer =>
+      'Este Mostro no acepta reputación de ese origen.';
+
+  @override
+  String get reputationIdentityMismatch =>
+      'Esta reputación se emitió para otra identidad distinta de la que estás usando.';
+
+  @override
+  String get reputationAlreadyImported =>
+      'Esta reputación ya se importó en este Mostro.';
+
+  @override
+  String get reputationInvalidAttestation =>
+      'Esta no es una reputación válida. Pídela de nuevo a su origen.';
+
+  @override
+  String get reputationImportTitle => 'Importar reputación';
+
+  @override
+  String get reputationImportIntro =>
+      'Trae a este Mostro la reputación que ganaste en lnp2pBot o en otro Mostro. Importar vincula las dos cuentas: el origen y este Mostro saben que son de la misma persona.';
+
+  @override
+  String get reputationOpenLnp2pbot => 'Obtenerla de lnp2pBot';
+
+  @override
+  String get reputationPasteHint => 'Pega la reputación que recibiste';
+
+  @override
+  String get reputationCheck => 'Comprobar';
+
+  @override
+  String get reputationImported => 'Tu reputación se importó.';
+
+  @override
+  String get reputationImportConfirm => 'Importar en este Mostro';
+
+  @override
+  String reputationFigures(int reviews, String rating, int days) {
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
+    final String reviewsString = reviewsNumberFormat.format(reviews);
+    final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String daysString = daysNumberFormat.format(days);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      reviews,
+      locale: localeName,
+      other: '$reviewsString calificaciones recibidas',
+      one: '1 calificación recibida',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'operando desde hace $daysString días',
+      one: 'operando desde hace 1 día',
+    );
+    return '$_temp0, $rating de promedio, $_temp1';
+  }
+
+  @override
+  String get reputationFiguresNote =>
+      'La reputación importada se suma a la que tienes aquí; tus contrapartes las ven juntas.';
+
+  @override
+  String get reputationOpenLnp2pbotFailed =>
+      'No se pudo abrir Telegram. Abre lnp2pBot en Telegram por tu cuenta y pega aquí lo que te envíe.';
+
+  @override
+  String get reputationIdentityHint =>
+      'Antes de confirmar en lnp2pBot, comprueba que muestre esta misma clave pública:';
+
+  @override
+  String get reputationUnavailable =>
+      'No se pudo comprobar si se puede importar la reputación. Inténtalo de nuevo.';
+
+  @override
+  String get reputationIdentityChanged =>
+      'Tu identidad cambió. Comprueba la clave pública que se muestra aquí antes de volver a intentarlo.';
 }

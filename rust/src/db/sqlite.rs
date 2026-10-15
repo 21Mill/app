@@ -618,6 +618,31 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
+    async fn replace_trades_for_order(&self, order_id: &str, trade: &TradeInfo) -> Result<()> {
+        let data = serde_json::to_string(trade)?;
+        let status = format!("{:?}", trade.order.status);
+        // One transaction: a failure (or a crash) between the delete and the
+        // insert rolls the delete back, so the order keeps its rows.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM trades WHERE json_extract(data, '$.order.id') = ?")
+            .bind(order_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "INSERT OR REPLACE INTO trades (id, data, status, started_at, completed_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&trade.id)
+        .bind(&data)
+        .bind(&status)
+        .bind(trade.started_at)
+        .bind(trade.completed_at)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn update_trade_order_id(
         &self,
         old_order_id: &str,
@@ -971,6 +996,26 @@ impl Storage for SqliteStorage {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    async fn forget_trade_node(&self, row_id: &str, node: &str) -> Result<bool> {
+        if node.is_empty() {
+            return Ok(false);
+        }
+        // One statement: the check and the write cannot be split by another
+        // writer, and only the node changes. The legacy name goes in the same
+        // write — serde would read both names as a duplicate field.
+        let sql = "UPDATE trades SET data = json_set(\
+             json_remove(data, '$.order.creator_pubkey'), '$.order.node_pubkey', '') \
+             WHERE id = ? AND lower(coalesce(\
+             json_extract(data, '$.order.node_pubkey'), \
+             json_extract(data, '$.order.creator_pubkey'))) = lower(?)";
+        let done = sqlx::query(sql)
+            .bind(row_id)
+            .bind(node)
+            .execute(&self.pool)
+            .await?;
+        Ok(done.rows_affected() > 0)
     }
 
     async fn update_trade_counterparty(
@@ -1335,7 +1380,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1393,6 +1438,128 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    /// A taker-shaped row (fresh row id, distinct from the order id) for the
+    /// replace tests.
+    fn replace_test_trade(row_id: &str, order_id: &str) -> crate::api::types::TradeInfo {
+        use crate::api::types::*;
+        TradeInfo {
+            id: row_id.into(),
+            order: OrderInfo {
+                id: order_id.into(),
+                kind: OrderKind::Sell,
+                status: OrderStatus::WaitingBuyerInvoice,
+                amount_sats: None,
+                fiat_amount: Some(100.0),
+                fiat_amount_min: None,
+                fiat_amount_max: None,
+                fiat_code: "CUP".into(),
+                payment_method: "bank".into(),
+                premium: 0.0,
+                node_pubkey: "node".into(),
+                created_at: 1,
+                expires_at: None,
+                is_mine: false,
+                rating: 0.0,
+                total_reviews: 0,
+                days_active: 0,
+                maker_since: None,
+                cashu_mint_url: None,
+            },
+            role: TradeRole::Buyer,
+            counterparty_pubkey: String::new(),
+            current_step: TradeStep::Buyer(BuyerStep::OrderTaken),
+            hold_invoice: None,
+            buyer_invoice: None,
+            trade_key_index: 1,
+            cooperative_cancel_state: None,
+            timeout_at: None,
+            started_at: 1,
+            completed_at: None,
+            escrow_locked_at: None,
+            escrow_node: None,
+            outcome: None,
+            peer_rating: None,
+            peer_reviews: None,
+            peer_days: None,
+            peer_since: None,
+            rated_at: None,
+            bond: None,
+            buyer_trade_pubkey: None,
+            seller_trade_pubkey: None,
+            cashu_mint_url: None,
+            cashu_escrow_token: None,
+            cashu_locked_at: None,
+            cashu_rejected_escrow_tokens: Vec::new(),
+        }
+    }
+
+    /// #566: a new take's row replaces every row of its order — and only of
+    /// its order.
+    #[tokio::test]
+    async fn replace_trades_for_order_leaves_exactly_the_new_row() {
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+        storage.save_trade(&replace_test_trade("old-1", "order-a")).await.unwrap();
+        storage.save_trade(&replace_test_trade("old-2", "order-a")).await.unwrap();
+        storage.save_trade(&replace_test_trade("other", "order-b")).await.unwrap();
+
+        storage
+            .replace_trades_for_order("order-a", &replace_test_trade("new", "order-a"))
+            .await
+            .unwrap();
+
+        let mut ids: Vec<String> = storage
+            .list_trades()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+        ids.sort();
+        assert_eq!(ids, vec!["new".to_string(), "other".to_string()]);
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// #566 review round 5: the replacement is one transaction. When the
+    /// insert fails, the delete is rolled back with it — the order keeps the
+    /// row it had, also once the store is reopened, i.e. what a process that
+    /// died halfway finds.
+    #[tokio::test]
+    async fn a_failed_replacement_keeps_the_orders_rows_across_a_reopen() {
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+        storage.save_trade(&replace_test_trade("old", "order-a")).await.unwrap();
+        // A schema trigger (not TEMP: the pool has several connections) that
+        // aborts exactly the replacement's insert.
+        sqlx::query(
+            "CREATE TRIGGER fail_replacement BEFORE INSERT ON trades
+             WHEN NEW.id = 'new'
+             BEGIN SELECT RAISE(ABORT, 'injected insert failure'); END",
+        )
+        .execute(&storage.pool)
+        .await
+        .unwrap();
+
+        let err = storage
+            .replace_trades_for_order("order-a", &replace_test_trade("new", "order-a"))
+            .await;
+        assert!(err.is_err(), "the injected insert failure surfaces");
+
+        drop(storage);
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+        let row = storage
+            .get_trade_by_order_id("order-a")
+            .await
+            .unwrap()
+            .expect("the delete was rolled back with the failed insert");
+        assert_eq!(row.id, "old");
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
     /// The taker reputation snapshot (issue #305) round-trips through the
     /// nested-JSON update: written by order id, read back as numbers on
     /// `TradeInfo`, and stored on a row whose `trades.id` differs from the
@@ -1417,7 +1584,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1543,7 +1710,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1795,7 +1962,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "maker".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1859,6 +2026,93 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    /// Forgetting a node (the own-key cleanup, PR #817) is a node-only,
+    /// conditional write: it keeps every other field — a rating committed
+    /// after the caller's read included — moves a legacy `creator_pubkey`
+    /// row to the new name so it still loads, leaves real and unknown nodes
+    /// alone, and never brings a deleted row back.
+    #[tokio::test]
+    async fn forget_trade_node_changes_the_node_and_nothing_else() {
+        use crate::api::types::OrderStatus;
+        use crate::mostro::test_fixtures::trade;
+
+        let path = temp_db_path();
+        let storage = SqliteStorage::open(path.to_str().unwrap()).await.unwrap();
+
+        // A matching node goes; a rating written after the caller read stays.
+        storage
+            .save_trade(&trade("own", 1, OrderStatus::Success, "abcd"))
+            .await
+            .unwrap();
+        storage.mark_trade_rated("own", 1234).await.unwrap();
+        assert!(storage.forget_trade_node("own", "ABCD").await.unwrap());
+        let own = storage.get_trade_by_order_id("own").await.unwrap().unwrap();
+        assert_eq!(own.order.node_pubkey, "");
+        assert_eq!(own.rated_at, Some(1234));
+        assert_eq!(own.order.status, OrderStatus::Success);
+        assert!(
+            !storage.forget_trade_node("own", "abcd").await.unwrap(),
+            "done once"
+        );
+
+        // A row stored under the legacy name: one name left, and it loads.
+        storage
+            .save_trade(&trade("legacy", 2, OrderStatus::Active, "abcd"))
+            .await
+            .unwrap();
+        sqlx::query(
+            "UPDATE trades SET data = json_set(json_remove(data, '$.order.node_pubkey'), \
+             '$.order.creator_pubkey', 'abcd') WHERE id = 'legacy'",
+        )
+        .execute(&storage.pool)
+        .await
+        .unwrap();
+        assert!(storage.forget_trade_node("legacy", "abcd").await.unwrap());
+        let legacy = storage.get_trade_by_order_id("legacy").await.unwrap();
+        assert_eq!(legacy.expect("the row still loads").order.node_pubkey, "");
+        let old_name: Option<String> = sqlx::query_scalar(
+            "SELECT json_type(data, '$.order.creator_pubkey') FROM trades WHERE id = 'legacy'",
+        )
+        .fetch_one(&storage.pool)
+        .await
+        .unwrap();
+        assert_eq!(old_name, None, "the legacy name is gone");
+
+        // Real and unknown nodes are not touched.
+        for (id, node) in [("real", "node"), ("unknown", "")] {
+            storage
+                .save_trade(&trade(id, 3, OrderStatus::Active, node))
+                .await
+                .unwrap();
+        }
+        assert!(!storage.forget_trade_node("real", "abcd").await.unwrap());
+        assert!(!storage.forget_trade_node("unknown", "").await.unwrap());
+        let real = storage
+            .get_trade_by_order_id("real")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(real.order.node_pubkey, "node");
+
+        // A deleted row stays deleted.
+        storage.delete_trade_by_order_id("own").await.unwrap();
+        assert!(!storage.forget_trade_node("own", "").await.unwrap());
+        storage
+            .save_trade(&trade("gone", 4, OrderStatus::Active, "abcd"))
+            .await
+            .unwrap();
+        storage.delete_trade_by_order_id("gone").await.unwrap();
+        assert!(!storage.forget_trade_node("gone", "abcd").await.unwrap());
+        assert!(storage
+            .get_trade_by_order_id("gone")
+            .await
+            .unwrap()
+            .is_none());
+
+        drop(storage);
+        let _ = std::fs::remove_file(&path);
+    }
+
     /// The durable peer record (issue #334): the counterparty pubkey lands on
     /// the row matched by `order.id` for both roles (the taker's row id is a
     /// random UUID), overwrites a poisoned pre-fix value, survives reopen, and
@@ -1883,7 +2137,7 @@ mod tests {
                 fiat_code: "CUP".into(),
                 payment_method: "bank".into(),
                 premium: 0.0,
-                creator_pubkey: "daemon".into(),
+                node_pubkey: "node".into(),
                 created_at: 1,
                 expires_at: None,
                 is_mine: false,
@@ -1926,7 +2180,7 @@ mod tests {
             .await
             .unwrap();
         storage
-            .save_trade(&trade("row-uuid-b", "order-b", "daemon"))
+            .save_trade(&trade("row-uuid-b", "order-b", "node"))
             .await
             .unwrap();
 
@@ -2462,7 +2716,7 @@ mod tests {
             fiat_code: "CUP".into(),
             payment_method: "bank".into(),
             premium: 0.0,
-            creator_pubkey: "maker".into(),
+            node_pubkey: "node".into(),
             created_at: 1,
             expires_at: None,
             is_mine: true,
@@ -2544,6 +2798,7 @@ mod tests {
             settings_keys::BOND_CLAIM_RETAINED_NODES.to_string(),
             settings_keys::RESTORE_SNAPSHOT.to_string(),
             settings_keys::MY_REPUTATION.to_string(),
+            settings_keys::PENDING_REPUTATION_ATTESTATION.to_string(),
         ] {
             storage.set_setting(&key, "1").await.unwrap();
         }
@@ -2591,6 +2846,7 @@ mod tests {
             settings_keys::BOND_CLAIM_RETAINED_NODES.to_string(),
             settings_keys::RESTORE_SNAPSHOT.to_string(),
             settings_keys::MY_REPUTATION.to_string(),
+            settings_keys::PENDING_REPUTATION_ATTESTATION.to_string(),
         ] {
             assert_eq!(
                 storage.get_setting(&key).await.unwrap(),

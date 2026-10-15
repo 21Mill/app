@@ -21,6 +21,7 @@ use sha2::{Digest, Sha256};
 
 use crate::api::types::{BondClaim, TradeInfo};
 use crate::mostro::status::is_hard_terminal;
+use crate::mostro::trade_node::trade_node;
 
 /// A registration older than this is re-sent: a quarter of the server's
 /// 48 h TTL, so two consecutive misses still leave a margin.
@@ -136,7 +137,7 @@ pub type Wanted = HashMap<String, String>;
 /// `key_for(index)` derives the pubkey for a trade-key index; `None` when it
 /// cannot (the identity is not loaded) drops that key from the set rather
 /// than registering a placeholder. `active_node` stands in for a row whose
-/// `creator_pubkey` is empty — a maker row written before the node was
+/// `node_pubkey` is empty — a maker row written before the node was
 /// recorded on it — and for nothing else.
 pub fn wanted_pubkeys(
     trades: &[TradeInfo],
@@ -154,11 +155,7 @@ pub fn wanted_pubkeys(
         let Some(pubkey) = key_for(trade.trade_key_index) else {
             continue;
         };
-        let node = if trade.order.creator_pubkey.is_empty() {
-            active_node
-        } else {
-            trade.order.creator_pubkey.as_str()
-        };
+        let node = trade_node(trade).unwrap_or(active_node);
         wanted.insert(pubkey.to_lowercase(), node.to_lowercase());
     }
     for claim in claims {
@@ -330,7 +327,8 @@ pub fn token_hash(token: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::types::{BondClaimPhase, OrderKind, OrderStatus, TradeRole, TradeStep};
+    use crate::api::types::{BondClaimPhase, OrderStatus};
+    use crate::mostro::test_fixtures::trade;
 
     const NOW: i64 = 1_800_000_000;
     const NODE_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -338,58 +336,6 @@ mod tests {
 
     fn key(index: u32) -> Option<String> {
         Some(format!("{index:02x}").repeat(32))
-    }
-
-    fn trade(id: &str, index: u32, status: OrderStatus, node: &str) -> TradeInfo {
-        TradeInfo {
-            id: id.to_string(),
-            order: crate::api::types::OrderInfo {
-                id: id.to_string(),
-                kind: OrderKind::Sell,
-                status,
-                amount_sats: None,
-                fiat_amount: None,
-                fiat_amount_min: None,
-                fiat_amount_max: None,
-                fiat_code: "USD".into(),
-                payment_method: "x".into(),
-                premium: 0.0,
-                creator_pubkey: node.to_string(),
-                created_at: 0,
-                expires_at: None,
-                is_mine: false,
-                rating: 0.0,
-                total_reviews: 0,
-                days_active: 0,
-                maker_since: None,
-                cashu_mint_url: None,
-            },
-            role: TradeRole::Buyer,
-            counterparty_pubkey: String::new(),
-            current_step: TradeStep::Disputed,
-            hold_invoice: None,
-            buyer_invoice: None,
-            trade_key_index: index,
-            cooperative_cancel_state: None,
-            timeout_at: None,
-            started_at: 0,
-            completed_at: None,
-            escrow_locked_at: None,
-            escrow_node: None,
-            outcome: None,
-            peer_rating: None,
-            peer_reviews: None,
-            peer_days: None,
-            peer_since: None,
-            rated_at: None,
-            bond: None,
-            buyer_trade_pubkey: None,
-            seller_trade_pubkey: None,
-            cashu_mint_url: None,
-            cashu_escrow_token: None,
-            cashu_locked_at: None,
-            cashu_rejected_escrow_tokens: Vec::new(),
-        }
     }
 
     fn claim(order: &str, index: Option<u32>, phase: BondClaimPhase, node: &str) -> BondClaim {

@@ -45,9 +45,9 @@ A buy or sell offer on the Mostro network.
 | fiat_code | String | ISO 4217 currency code (e.g., "USD", "EUR") |
 | payment_method | String | Fiat payment method description |
 | premium | f64 | Price premium/discount percentage |
-| creator_pubkey | String | Public key of order creator |
+| node_pubkey | String | The Mostro node that issued the order: the Kind 38383 author on a book order, the node that sent the daemon message a trade row was built from. Empty when unknown. Rows persisted before the rename name it `creator_pubkey` |
 | created_at | Timestamp | When order was created: the Kind 38383 `published_at` tag, else the legacy `created_at` tag, else the event's `created_at`; a tag value is capped at the event's `created_at` |
-| expires_at | Timestamp? | Expiration time (null if no expiry) |
+| expires_at | Timestamp? | End of the take window: the Kind 38383 `expires_at` tag, else NIP-40 `expiration` (null if neither). `expiration` is the relays' retention: the same value on a pending order from a current node, 180 days on an older one. A `pending` order past it cannot be taken: a stranger's leaves the book, and a link to it leads nowhere |
 | nostr_event_id | String? | Kind 38383 event ID on relay |
 | is_mine | bool | Whether current user created this order |
 | cached_at | Timestamp | When this order was last fetched/updated locally |

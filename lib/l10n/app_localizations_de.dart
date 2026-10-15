@@ -836,7 +836,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByMeMessage =>
-      'Du hast die Stornierung dieses Handels angefragt. Er bleibt offen, bis die Gegenpartei ebenfalls storniert. Antwortet sie nicht, kannst du einen Streitfall eröffnen.';
+      'Du hast die Stornierung dieses Trades angefragt. Er bleibt offen, bis die Gegenpartei ebenfalls storniert. Antwortet sie nicht, kannst du einen Streitfall eröffnen.';
 
   @override
   String get tradeCardCancelRequestedByPeerTitle =>
@@ -844,7 +844,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardCancelRequestedByPeerMessage =>
-      'Sie hat die Stornierung dieses Handels angefragt. Nimm an, um ihn ohne Geldbewegung zu beenden, oder handle weiter.';
+      'Sie hat die Stornierung dieses Trades angefragt. Nimm an, um ihn ohne Geldbewegung zu beenden, oder setze den Trade fort.';
 
   @override
   String get tradeCancelRequestedByMeNotice =>
@@ -1139,7 +1139,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeNoLongerYours =>
-      'Du bist nicht mehr an diesem Handel beteiligt';
+      'Du bist nicht mehr an diesem Trade beteiligt';
 
   @override
   String get sessionTimeoutMessage =>
@@ -3677,7 +3677,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardWaitingBuyerInvoiceMessage =>
-      'Der Handel geht weiter, sobald der Käufer eine Lightning-Rechnung hinzufügt.';
+      'Der Trade geht weiter, sobald der Käufer eine Lightning-Rechnung hinzufügt.';
 
   @override
   String get tradeCardWaitingPaymentTitle =>
@@ -3685,17 +3685,17 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardWaitingPaymentMessage =>
-      'Der Handel geht weiter, sobald der Verkäufer die Hold-Rechnung bezahlt.';
+      'Der Trade geht weiter, sobald der Verkäufer die Hold-Rechnung bezahlt.';
 
   @override
   String get tradeCardWaitingTakerBondTitle => 'Kautionszahlung ausstehend';
 
   @override
   String get tradeCardWaitingTakerBondMessage =>
-      'Die Anti-Missbrauchs-Kaution des Nehmers muss vor Handelsbeginn bezahlt werden.';
+      'Die Anti-Missbrauchs-Kaution des Nehmers muss vor Beginn des Trades bezahlt werden.';
 
   @override
-  String get tradeCardActiveTitle => 'Handel aktiv';
+  String get tradeCardActiveTitle => 'Trade aktiv';
 
   @override
   String get tradeCardActiveMessage =>
@@ -3716,46 +3716,46 @@ class AppLocalizationsDe extends AppLocalizations {
       'Der Verkäufer hat die Sats freigegeben. Die Auszahlung an den Käufer ist unterwegs.';
 
   @override
-  String get tradeCardSuccessTitle => 'Handel abgeschlossen';
+  String get tradeCardSuccessTitle => 'Trade abgeschlossen';
 
   @override
   String get tradeCardSuccessMessage =>
-      'Der Handel wurde erfolgreich abgeschlossen.';
+      'Der Trade wurde erfolgreich abgeschlossen.';
 
   @override
-  String get tradeCardCanceledTitle => 'Handel storniert';
+  String get tradeCardCanceledTitle => 'Trade storniert';
 
   @override
-  String get tradeCardCanceledMessage => 'Der Handel wurde storniert.';
+  String get tradeCardCanceledMessage => 'Der Trade wurde storniert.';
 
   @override
   String get tradeCardExpiredTitle => 'Order abgelaufen';
 
   @override
   String get tradeCardExpiredMessage =>
-      'Die Order ist abgelaufen, bevor der Handel weitergehen konnte.';
+      'Die Order ist abgelaufen, bevor der Trade weitergehen konnte.';
 
   @override
   String get tradeCardCooperativelyCanceledTitle =>
-      'Handel einvernehmlich storniert';
+      'Trade einvernehmlich storniert';
 
   @override
   String get tradeCardCooperativelyCanceledMessage =>
-      'Beide Parteien haben der Stornierung des Handels zugestimmt.';
+      'Beide Parteien haben der Stornierung des Trades zugestimmt.';
 
   @override
   String get tradeCardDisputeTitle => 'Streitfall eröffnet';
 
   @override
   String get tradeCardDisputeMessage =>
-      'Zu diesem Handel wurde ein Streitfall eröffnet.';
+      'Zu diesem Trade wurde ein Streitfall eröffnet.';
 
   @override
   String get tradeCardCanceledByAdminTitle => 'Vom Schlichter storniert';
 
   @override
   String get tradeCardCanceledByAdminMessage =>
-      'Der Streitschlichter hat den Handel storniert.';
+      'Der Streitschlichter hat den Trade storniert.';
 
   @override
   String get tradeCardSettledByAdminTitle => 'Vom Schlichter beigelegt';
@@ -3769,14 +3769,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get tradeCardCompletedByAdminMessage =>
-      'Der Streitschlichter hat den Handel abgeschlossen.';
+      'Der Streitschlichter hat den Trade abgeschlossen.';
 
   @override
-  String get tradeCardUpdatedTitle => 'Handel aktualisiert';
+  String get tradeCardUpdatedTitle => 'Trade aktualisiert';
 
   @override
   String get tradeCardUpdatedMessage =>
-      'Der Status dieses Handels hat sich geändert.';
+      'Der Status dieses Trades hat sich geändert.';
 
   @override
   String get tradeCardCanceledByMakerMessage =>
@@ -4285,6 +4285,24 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dieses Token konnte nicht überprüft werden: Es enthält keinen Nachweis der Mint-Signatur und wurde daher nicht angenommen.';
 
   @override
+  String get cashuErrorUnsupportedUnit =>
+      'Diese Wallet enthält nur Sats, und dieses Token lautet auf eine andere Einheit (etwa Millisats oder Dollar). Es wurde nicht angetastet: Du kannst es in einer Wallet einlösen, die seine Einheit unterstützt.';
+
+  @override
+  String cashuErrorUnsupportedUnitNamed(String unit) {
+    return 'Diese Wallet enthält nur Sats, und dieses Token lautet auf $unit. Es wurde nicht angetastet: Du kannst es in einer Wallet einlösen, die diese Einheit unterstützt.';
+  }
+
+  @override
+  String get cashuUnitMsat => 'Millisats';
+
+  @override
+  String get cashuUnitUsd => 'US-Dollar (USD)';
+
+  @override
+  String get cashuUnitEur => 'Euro (EUR)';
+
+  @override
   String get cashuErrorSendUnresolved =>
       'Das Senden ist fehlgeschlagen und die Wallet konnte nicht bestätigen, dass das Guthaben zurück ist. Synchronisiere mit der Mint, bevor du es erneut versuchst.';
 
@@ -4565,4 +4583,115 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get orderLinkUnknownNodeWarning =>
       'Dieser Knoten ist nicht in deiner Liste. Wechsle nur zu ihm, wenn du der Person vertraust, die dir den Link geschickt hat: Der Knoten, auf dem du handelst, wickelt deine Trades ab und entscheidet ihre Streitfälle.';
+
+  @override
+  String get reputationNodeDoesNotExport =>
+      'Dieser Mostro exportiert keine Reputation.';
+
+  @override
+  String get reputationNodeDoesNotImport =>
+      'Dieser Mostro importiert keine Reputation.';
+
+  @override
+  String get reputationIdentityRequired =>
+      'Reputation kann nur von einem Konto übertragen werden, das seine Reputation behält. Schalte den vollständigen Privatsphäre-Modus aus und versuche es erneut.';
+
+  @override
+  String get reputationNotEligible =>
+      'Dein Konto kann seine Reputation noch nicht exportieren: Es braucht mindestens 10 abgeschlossene Trades und 5 erhaltene Bewertungen.';
+
+  @override
+  String get reputationBoundToOtherIdentity =>
+      'Deine Reputation dort ist bereits an eine andere Identität gebunden. Autorisiere den Wechsel mit der Identität, an die sie gebunden ist.';
+
+  @override
+  String get reputationInvalidRebind =>
+      'Die Autorisierung zum Übertragen deiner Reputation ist ungültig oder abgelaufen. Erstelle eine neue.';
+
+  @override
+  String get reputationExpiredAttestation =>
+      'Diese Reputation ist abgelaufen. Fordere sie erneut bei ihrer Quelle an.';
+
+  @override
+  String get reputationUntrustedIssuer =>
+      'Dieser Mostro akzeptiert keine Reputation aus dieser Quelle.';
+
+  @override
+  String get reputationIdentityMismatch =>
+      'Diese Reputation wurde für eine andere Identität ausgestellt als die, die du verwendest.';
+
+  @override
+  String get reputationAlreadyImported =>
+      'Diese Reputation wurde auf diesem Mostro bereits importiert.';
+
+  @override
+  String get reputationInvalidAttestation =>
+      'Das ist keine gültige Reputation. Fordere sie erneut bei ihrer Quelle an.';
+
+  @override
+  String get reputationImportTitle => 'Reputation importieren';
+
+  @override
+  String get reputationImportIntro =>
+      'Bring die Reputation, die du auf lnp2pBot oder einem anderen Mostro verdient hast, auf diesen. Der Import verknüpft die beiden Konten: Die Quelle und dieser Mostro wissen, dass sie derselben Person gehören.';
+
+  @override
+  String get reputationOpenLnp2pbot => 'Von lnp2pBot holen';
+
+  @override
+  String get reputationPasteHint => 'Füge die erhaltene Reputation ein';
+
+  @override
+  String get reputationCheck => 'Prüfen';
+
+  @override
+  String get reputationImported => 'Deine Reputation wurde importiert.';
+
+  @override
+  String get reputationImportConfirm => 'In diesen Mostro importieren';
+
+  @override
+  String reputationFigures(int reviews, String rating, int days) {
+    final intl.NumberFormat reviewsNumberFormat = intl
+        .NumberFormat.decimalPattern(localeName);
+    final String reviewsString = reviewsNumberFormat.format(reviews);
+    final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String daysString = daysNumberFormat.format(days);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      reviews,
+      locale: localeName,
+      other: '$reviewsString erhaltene Bewertungen',
+      one: '1 erhaltene Bewertung',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'seit $daysString Tagen am Handeln',
+      one: 'seit 1 Tag am Handeln',
+    );
+    return '$_temp0, im Schnitt $rating, $_temp1';
+  }
+
+  @override
+  String get reputationFiguresNote =>
+      'Importierte Reputation wird zu deiner hiesigen addiert; deine Handelspartner sehen beide zusammen.';
+
+  @override
+  String get reputationOpenLnp2pbotFailed =>
+      'Telegram konnte nicht geöffnet werden. Öffne lnp2pBot selbst in Telegram und füge hier ein, was er dir schickt.';
+
+  @override
+  String get reputationIdentityHint =>
+      'Prüfe vor der Bestätigung in lnp2pBot, dass dort derselbe öffentliche Schlüssel angezeigt wird:';
+
+  @override
+  String get reputationUnavailable =>
+      'Es konnte nicht geprüft werden, ob die Reputation importiert werden kann. Versuch es erneut.';
+
+  @override
+  String get reputationIdentityChanged =>
+      'Deine Identität hat sich geändert. Prüfe den hier angezeigten öffentlichen Schlüssel, bevor du es erneut versuchst.';
 }

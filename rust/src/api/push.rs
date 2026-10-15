@@ -473,8 +473,7 @@ pub(crate) async fn issuing_nodes_of_live_trades() -> HashSet<String> {
         .unwrap_or_default()
         .into_iter()
         .filter(|t| !crate::mostro::status::is_hard_terminal(&t.order.status))
-        .filter(|t| !t.order.creator_pubkey.is_empty())
-        .map(|t| t.order.creator_pubkey.to_lowercase())
+        .filter_map(|t| crate::mostro::trade_node::trade_node(&t).map(str::to_lowercase))
         .collect()
 }
 
