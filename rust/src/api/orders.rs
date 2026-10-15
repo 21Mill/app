@@ -7230,6 +7230,11 @@ impl RowState {
 /// DM rebuild can recover it (review round 2, probe P5). A tombstone whose
 /// index does not parse covers every generation, degrading to the
 /// pre-generation behavior: replays dropped, recovery muted.
+/// The node a wipe tombstone keeps, if the wiped row knew it.
+fn tombstone_node(value: &str) -> Option<&str> {
+    value.split(':').nth(2).filter(|node| !node.is_empty())
+}
+
 fn tombstone_covers(value: &str, trade_index: u32) -> bool {
     let wiped_index = value
         .split(':')
@@ -7337,20 +7342,30 @@ fn status_arm_gate(
 /// The tombstone records the generation it wiped (`<wiped_at>:<trade_index>`,
 /// the dead row's trade key index): a later take of the same order is a
 /// different trade, and its messages must not read as noise — see
-/// [`tombstone_covers`] (review round 2).
+/// [`tombstone_covers`] (review round 2). It also keeps the dead row's node
+/// (`<wiped_at>:<trade_index>:<node>`) when the row knew it: the update a
+/// wipe emits is read after the row is gone, and a card of another node
+/// must still learn that node ([`trade_node_of`], #811).
 async fn wipe_trade_row(
     db: &impl Storage,
     order_id: &str,
     wiped_at: i64,
     wiped_index: u32,
 ) -> Result<()> {
+    let node = db
+        .get_trade_by_order_id(order_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|t| crate::mostro::trade_node::trade_node(&t).map(str::to_owned));
     db.delete_trade_by_order_id(order_id).await?;
     crate::api::trade_touch::touch_trade(order_id);
+    let tombstone = match node {
+        Some(node) => format!("{wiped_at}:{wiped_index}:{node}"),
+        None => format!("{wiped_at}:{wiped_index}"),
+    };
     if let Err(e) = db
-        .set_setting(
-            &crate::db::settings_keys::trade_wiped(order_id),
-            &format!("{wiped_at}:{wiped_index}"),
-        )
+        .set_setting(&crate::db::settings_keys::trade_wiped(order_id), &tombstone)
         .await
     {
         // Classification degrades to pre-#394 behavior for this order:
@@ -10916,7 +10931,9 @@ pub async fn get_trade_role(order_id: String) -> Result<Option<crate::api::types
 
 /// The node that issued the trade `order_id`, or empty when its row does not
 /// know it or there is no row. Dart tells a trade of another node apart with
-/// it (#811): no card and no automatic navigation for one.
+/// it (#811). A row wiped on purpose — a trade canceled before it went
+/// active — is read from its tombstone, since its update is emitted after the
+/// row is gone.
 pub async fn trade_node_of(order_id: String) -> String {
     let Some(db) = crate::db::app_db::db() else {
         return String::new();
@@ -10925,7 +10942,13 @@ pub async fn trade_node_of(order_id: String) -> String {
         Ok(Some(trade)) => crate::mostro::trade_node::trade_node(&trade)
             .unwrap_or_default()
             .to_string(),
-        Ok(None) => String::new(),
+        Ok(None) => db
+            .get_setting(&crate::db::settings_keys::trade_wiped(&order_id))
+            .await
+            .ok()
+            .flatten()
+            .and_then(|value| tombstone_node(&value).map(str::to_owned))
+            .unwrap_or_default(),
         Err(e) => {
             log::warn!("[orders] trade_node_of DB error for order={order_id}: {e}");
             String::new()
