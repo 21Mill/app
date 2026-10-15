@@ -18,6 +18,8 @@ import 'package:mostro/features/order/providers/exchange_rate_provider.dart';
 import 'package:mostro/features/order/providers/trade_state_provider.dart';
 import 'package:mostro/features/order/screens/take_order_screen.dart';
 import 'package:mostro/features/order/widgets/order_detail_cards.dart';
+import 'package:mostro/features/order/widgets/take_payout_sheet.dart';
+import 'package:mostro/features/settings/providers/settings_provider.dart';
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/l10n/app_localizations_en.dart';
 import 'package:mostro/src/rust/api/types.dart';
@@ -55,6 +57,8 @@ Future<StreamController<List<OrderItem>>> _pump(
   Future<List<TradeInfo>> Function()? readTrades,
   instance.MostroInstance? node,
   int? bondEstimate,
+  String? defaultAddress,
+  Future<bool> Function(String)? isLightningAddress,
 }) async {
   tester.view.physicalSize = const Size(360, 760);
   tester.view.devicePixelRatio = 1.0;
@@ -71,6 +75,14 @@ Future<StreamController<List<OrderItem>>> _pump(
         readTrades ?? () async => trades,
       ),
       if (take != null) takeOrderActionProvider.overrideWithValue(take),
+      if (defaultAddress != null)
+        settingsProvider.overrideWith(
+          (ref) => SettingsNotifier(
+            initial: AppSettingsState(defaultLightningAddress: defaultAddress),
+          ),
+        ),
+      if (isLightningAddress != null)
+        lightningAddressCheckProvider.overrideWithValue(isLightningAddress),
       exchangeRateProvider.overrideWith((ref, code) async => rate),
       mostroNodeProvider.overrideWith((ref) async => node),
       bondEstimateProvider.overrideWith((ref, sats) async => bondEstimate),
@@ -1010,6 +1022,144 @@ void main() {
 
         expect(taken, [_id]);
         expect(find.text('Taking…'), findsOneWidget);
+      });
+    });
+  });
+
+  // #823: a buyer with a default Lightning address is told where the sats go
+  // before taking, and can change it for this trade only.
+  group('where the sats go', () {
+    testWidgets('the default address is named before the take', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        TakePayout? sent = const TakePayout.askForInvoice();
+        await _pump(
+          tester,
+          order: _order(),
+          defaultAddress: 'alice@example.com',
+          take: ({required orderId, required role, fiatAmount, payout}) {
+            sent = payout;
+            return Completer<TradeInfo>().future;
+          },
+        );
+
+        expect(find.text('Your sats go to'), findsOneWidget);
+        expect(find.text('alice@example.com'), findsOneWidget);
+        expect(
+          find.textContaining(
+            'Your sats will be sent to alice@example.com, your default '
+            'Lightning address.',
+          ),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        await tester.pump();
+        // No choice made: the default, as before.
+        expect(sent, isNull);
+      });
+    });
+
+    testWidgets('a buyer without a default address sees no row', (
+      tester,
+    ) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order());
+        expect(find.text('Your sats go to'), findsNothing);
+      });
+    });
+
+    testWidgets('a seller sees no row, whatever the settings', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(
+          tester,
+          order: _order(kind: 'buy'),
+          isBuying: false,
+          defaultAddress: 'alice@example.com',
+        );
+        expect(find.text('Your sats go to'), findsNothing);
+      });
+    });
+
+    testWidgets('asking for an invoice instead sends no address and opens '
+        'the invoice step after the take', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        TakePayout? sent;
+        await _pump(
+          tester,
+          order: _order(),
+          defaultAddress: 'alice@example.com',
+          take: ({required orderId, required role, fiatAmount, payout}) async {
+            sent = payout;
+            return fakeTrade(
+              id: _id,
+              orderId: _id,
+              status: OrderStatus.waitingBuyerInvoice,
+            );
+          },
+        );
+
+        await tester.tap(find.text('Your sats go to'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('An invoice I add after taking'));
+        await tester.pump();
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('An invoice you add'), findsOneWidget);
+        expect(
+          find.textContaining('you will add the invoice your sats are paid to'),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Take order'));
+        await tester.pumpAndSettle();
+
+        expect(sent, const TakePayout.askForInvoice());
+        expect(find.text('add invoice'), findsOneWidget);
+      });
+    });
+
+    testWidgets('another address is checked, then used for this trade only', (
+      tester,
+    ) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        TakePayout? sent;
+        await _pump(
+          tester,
+          order: _order(),
+          defaultAddress: 'alice@example.com',
+          isLightningAddress: (input) async => input.contains('@'),
+          take: ({required orderId, required role, fiatAmount, payout}) {
+            sent = payout;
+            return Completer<TradeInfo>().future;
+          },
+        );
+
+        await tester.tap(find.text('Your sats go to'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Another Lightning address'));
+        await tester.pump();
+        await tester.enterText(find.byType(TextField), 'not-an-address');
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pumpAndSettle();
+        // Refused in the sheet, which stays open.
+        expect(find.text('Must be in user@domain format'), findsOneWidget);
+
+        await tester.enterText(find.byType(TextField), 'bob@example.org');
+        await tester.tap(find.text('Use for this trade'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('bob@example.org'), findsOneWidget);
+        expect(
+          find.textContaining('bob@example.org, for this trade only'),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        await tester.pump();
+        expect(sent, const TakePayout.address(address: 'bob@example.org'));
       });
     });
   });
