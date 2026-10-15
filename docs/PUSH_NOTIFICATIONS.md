@@ -902,6 +902,18 @@ The trade and chat cards come from `lib/features/notifications/services/event_ca
 - **Filters** — the Settings toggles (payments, disputes, trade updates, messages), and
   anything older than the identity's `created_at`, so a restore does not replay history
   the user already lived through as news.
+- **A trade on another node** (#811) — every card records the node of its trade
+  (`NotificationModel.nodePubkey`, from `trade_node_of`), whichever node is active. A
+  trade on another node raises its usual cards with two more filters: nothing from
+  before `otherNodeCardsSince`, the date the first run with other nodes heard stored in
+  `SharedPreferences` (the kind-14 feed replays every history, and without it that run
+  would turn weeks of it into cards), and nothing for `canceled` or `expired` (a trade
+  that started never ends that way, so it is one that never did, with nothing at
+  stake). On screen, a group card whose node is not the active one shows an amber line
+  naming it, read as the card is shown, so it leaves once the user is on that node.
+  Tapping it opens nothing: a snackbar, with no button, says the trade is acted on from
+  its node, switched to in Settings (`NotificationGroupCard`). A card that recorded no
+  node reads as the active node's.
 
 ### 9.3 The OS notification
 
