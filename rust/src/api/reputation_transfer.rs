@@ -490,7 +490,10 @@ mod tests {
         let hex = "ab1db593a4d1196eb07335fdc702a314712ed29c631ceaebd84708a17d3bc2f7";
         let npub = reputation_identity_npub(hex.into()).unwrap();
         assert_eq!(identity_pubkey(hex).unwrap().to_hex(), hex);
-        assert_eq!(identity_pubkey(&format!("  {npub}\n")).unwrap().to_hex(), hex);
+        assert_eq!(
+            identity_pubkey(&format!("  {npub}\n")).unwrap().to_hex(),
+            hex
+        );
         assert_eq!(reputation_identity_npub(npub.clone()).unwrap(), npub);
         let broken_checksum = format!("{}q", &npub[..npub.len() - 1]);
         for garbage in ["", "npub1", "nope", &hex[..63], &broken_checksum] {
