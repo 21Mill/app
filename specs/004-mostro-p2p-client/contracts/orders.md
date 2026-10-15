@@ -180,9 +180,13 @@ to the book, and with the identity. The node's messages mark the latest
 open destination (`Submitted` or `Retrying`): its `payment-failed` →
 `Retrying` with the attempt count it announces (retries + 1), an
 `add-invoice` reading `settled-hold-invoice` → `Failed`, and
-`purchase-completed` → `Paid`. `Failed`, `Rejected` and `Paid` never change
-again, and each mark passes the status cursor first, so a replay moves
-nothing. Empty for a trade whose destinations were sent from another device.
+`purchase-completed` (or a public `success` of the buyer's own order) →
+`Paid`. The messages name no destination: a submission the node
+acknowledges turns every earlier open one `Replaced`, and a payment that
+finds more than one open marks them all `MaybePaid` instead of guessing.
+Only open destinations change, and each mark passes the status cursor
+first, so a replay moves nothing. An address shows the payout amount once
+the node has said it. Empty for a trade whose destinations were sent from another device.
 
 ---
 

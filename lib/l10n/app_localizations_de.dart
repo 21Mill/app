@@ -4916,4 +4916,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get payoutWillGoToLabel => 'Die Sats gehen an';
+
+  @override
+  String get payoutMaybePaidToLabel => 'Vielleicht bezahlt an';
+
+  @override
+  String get payoutOutcomeReplaced => 'Durch einen späteren ersetzt';
+
+  @override
+  String get payoutOutcomeMaybePaid =>
+      'An diesen oder einen anderen hier gelisteten bezahlt';
 }

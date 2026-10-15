@@ -2281,6 +2281,16 @@ pub async fn send_invoice(
                 "orders",
                 format!("add_invoice acknowledged by daemon for order={order_id}"),
             );
+            // The node took this one: any earlier one still open was replaced
+            // by it (PR #824 review).
+            let (sent_destination, sent_at) = &sent_key;
+            crate::mostro::payout_route::record_acknowledgement(
+                &order_id,
+                trade_index,
+                sent_destination,
+                *sent_at,
+            )
+            .await;
             Ok(())
         }
         _ => {
@@ -17498,6 +17508,9 @@ mod tests {
         let route = payout_route::destinations(&order_id).await;
         assert_eq!(route[0].outcome, PayoutOutcome::Failed);
         assert_eq!(route[0].outcome_at, Some(3_000));
+        // The address carried no amount; the node's request names the payout
+        // (PR #824 review).
+        assert_eq!(route[0].amount_sats, Some(1_677));
         let reason = loop {
             let update = updates.recv().await.expect("an update for the request");
             if update.order_id == order_id {

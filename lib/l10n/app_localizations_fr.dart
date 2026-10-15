@@ -4921,4 +4921,14 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get payoutWillGoToLabel => 'Les sats iront à';
+
+  @override
+  String get payoutMaybePaidToLabel => 'Peut-être payé à';
+
+  @override
+  String get payoutOutcomeReplaced => 'Remplacé par un suivant';
+
+  @override
+  String get payoutOutcomeMaybePaid =>
+      'Payé à celui-ci ou à un autre listé ici';
 }

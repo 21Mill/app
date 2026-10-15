@@ -1470,5 +1470,8 @@
   "tradeCardPayoutFailedMessage": "Mostro no pudo enviar tus sats a la dirección o factura que diste. Abre la operación para ver cuál falló y agrega una nueva factura si todavía hace falta.",
   "payoutInvoiceLabel": "Factura",
   "payoutInvoiceCopied": "Factura copiada",
-  "payoutWillGoToLabel": "Los sats irán a"
+  "payoutWillGoToLabel": "Los sats irán a",
+  "payoutMaybePaidToLabel": "Quizá pagado a",
+  "payoutOutcomeReplaced": "Reemplazado por uno posterior",
+  "payoutOutcomeMaybePaid": "Pagado a este o a otro de los listados aquí"
 }

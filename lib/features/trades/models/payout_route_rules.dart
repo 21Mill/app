@@ -22,7 +22,8 @@ bool payoutHasStarted(OrderStatus? status, List<PayoutDestination> route) =>
       (d) =>
           d.outcome == PayoutOutcome.retrying ||
           d.outcome == PayoutOutcome.failed ||
-          d.outcome == PayoutOutcome.paid,
+          d.outcome == PayoutOutcome.paid ||
+          d.outcome == PayoutOutcome.maybePaid,
     );
 
 /// The destination the card leads with: the one the node paid, else the
@@ -112,7 +113,9 @@ String outcomeLabel(AppLocalizations l10n, PayoutDestination d) => switch (d
         ? l10n.payoutOutcomeFailed
         : l10n.payoutOutcomeFailedAttempts(d.attempts!),
   PayoutOutcome.rejected => l10n.payoutOutcomeRejected,
+  PayoutOutcome.replaced => l10n.payoutOutcomeReplaced,
   PayoutOutcome.paid => l10n.payoutOutcomePaid,
+  PayoutOutcome.maybePaid => l10n.payoutOutcomeMaybePaid,
 };
 
 /// The machine word of an outcome for the `trade.payout` readout.
@@ -121,5 +124,7 @@ String outcomeMachineName(PayoutOutcome outcome) => switch (outcome) {
   PayoutOutcome.retrying => 'retrying',
   PayoutOutcome.failed => 'failed',
   PayoutOutcome.rejected => 'rejected',
+  PayoutOutcome.replaced => 'replaced',
   PayoutOutcome.paid => 'paid',
+  PayoutOutcome.maybePaid => 'maybe-paid',
 };

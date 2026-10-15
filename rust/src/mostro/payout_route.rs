@@ -12,10 +12,17 @@
 //! | `add-invoice` on a settled escrow | `Failed`: the node gave up and wants another |
 //! | `purchase-completed` | `Paid` |
 //!
-//! "Open" is `Submitted` or `Retrying`; `Failed`, `Rejected` and `Paid` never
-//! change again, so a replayed message finds nothing left to mark. The
-//! callers also apply the status cursor first, so a message older than one
-//! already applied never reaches here.
+//! "Open" is `Submitted` or `Retrying`; every other outcome is final, so a
+//! replayed message finds nothing left to mark. The callers also apply the
+//! status cursor first, so a message older than one already applied never
+//! reaches here.
+//!
+//! The messages name no destination, so at most one should be open. When
+//! the node acknowledges a submission, every earlier open one is `Replaced`:
+//! the node took the new one in its place. A submission the node never
+//! answered leaves the earlier one open too, and then a payment cannot be
+//! told apart: every open one becomes `MaybePaid` rather than a guess
+//! (PR #824 review).
 //!
 //! Stored as JSON under `payout_route:<order_id>`, scoped by the trade key
 //! index like the payout amount: a later take starts a new record, and the
@@ -137,31 +144,90 @@ pub(crate) fn with_news(
     at: i64,
 ) -> Option<PayoutRoute> {
     let mut route = stored.filter(|r| r.trade_index == trade_index)?;
-    let open = route.destinations.iter_mut().rev().find(|d| {
-        matches!(
-            d.outcome,
-            PayoutOutcome::Submitted | PayoutOutcome::Retrying
-        )
-    })?;
-    match news {
-        PayoutNews::Retrying { attempts } => {
-            // The node says it once, at the first failure.
-            if open.outcome != PayoutOutcome::Submitted {
-                return None;
+    let mut open: Vec<&mut PayoutDestination> = route
+        .destinations
+        .iter_mut()
+        .filter(|d| is_open(d))
+        .collect();
+    if open.is_empty() {
+        return None;
+    }
+    // Which one the news is about only shows when one is open.
+    let alone = open.len() == 1;
+    let mut changed = false;
+    for d in open.iter_mut() {
+        match news {
+            PayoutNews::Retrying { attempts } => {
+                // The node says it once, at the first failure.
+                if d.outcome != PayoutOutcome::Submitted {
+                    continue;
+                }
+                d.outcome = PayoutOutcome::Retrying;
+                d.attempts = attempts;
             }
-            open.outcome = PayoutOutcome::Retrying;
-            open.attempts = attempts;
+            // Given up on whichever it had: none of them is paid.
+            PayoutNews::Failed => d.outcome = PayoutOutcome::Failed,
+            PayoutNews::Paid { amount_sats } => {
+                d.outcome = if alone {
+                    PayoutOutcome::Paid
+                } else {
+                    PayoutOutcome::MaybePaid
+                };
+                if d.amount_sats.is_none() {
+                    d.amount_sats = amount_sats;
+                }
+            }
         }
-        PayoutNews::Failed => open.outcome = PayoutOutcome::Failed,
-        PayoutNews::Paid { amount_sats } => {
-            open.outcome = PayoutOutcome::Paid;
-            if open.amount_sats.is_none() {
-                open.amount_sats = amount_sats;
-            }
+        d.outcome_at = Some(at);
+        changed = true;
+    }
+    changed.then_some(route)
+}
+
+fn is_open(d: &PayoutDestination) -> bool {
+    matches!(
+        d.outcome,
+        PayoutOutcome::Submitted | PayoutOutcome::Retrying
+    )
+}
+
+/// The record after the node acknowledged the destination `destination`,
+/// sent at `submitted_at` on trade key `trade_index`: every destination
+/// still open before it was replaced by it. `None` when nothing changes.
+pub(crate) fn with_acknowledgement(
+    stored: Option<PayoutRoute>,
+    trade_index: u32,
+    destination: &str,
+    submitted_at: i64,
+) -> Option<PayoutRoute> {
+    let mut route = stored.filter(|r| r.trade_index == trade_index)?;
+    let taken = route
+        .destinations
+        .iter()
+        .rposition(|d| d.destination == destination && d.submitted_at == submitted_at)?;
+    let mut changed = false;
+    for d in route.destinations[..taken].iter_mut().filter(|d| is_open(d)) {
+        d.outcome = PayoutOutcome::Replaced;
+        d.outcome_at = Some(submitted_at);
+        changed = true;
+    }
+    changed.then_some(route)
+}
+
+/// `route`'s destinations with the payout amount filled in where they do
+/// not carry one: an address says nothing of it until the node does, and
+/// the amount is the trade's, whichever destination receives it (PR #824
+/// review).
+fn with_payout_amount(
+    mut destinations: Vec<PayoutDestination>,
+    payout_sats: Option<u64>,
+) -> Vec<PayoutDestination> {
+    if let Some(sats) = payout_sats {
+        for d in destinations.iter_mut().filter(|d| d.amount_sats.is_none()) {
+            d.amount_sats = Some(sats);
         }
     }
-    open.outcome_at = Some(at);
-    Some(route)
+    destinations
 }
 
 /// The record after the node refused the destination `destination`, sent
@@ -505,6 +571,26 @@ pub(crate) async fn record_rejection(
     }
 }
 
+/// Mark the earlier destinations a node-acknowledged one replaced; see
+/// [`with_acknowledgement`].
+pub(crate) async fn record_acknowledgement(
+    order_id: &str,
+    trade_index: u32,
+    destination: &str,
+    submitted_at: i64,
+) {
+    let Some(db) = crate::db::app_db::db() else {
+        return;
+    };
+    let changed = update(db, order_id, |stored| {
+        with_acknowledgement(stored, trade_index, destination, submitted_at)
+    })
+    .await;
+    if changed {
+        crate::api::trade_touch::touch_trade(order_id);
+    }
+}
+
 /// [`forget_take_in`] on the app's store.
 pub(crate) async fn forget_take(order_id: &str, trade_index: u32) {
     if let Some(db) = crate::db::app_db::db() {
@@ -523,7 +609,10 @@ pub(crate) async fn destinations(order_id: &str) -> Vec<PayoutDestination> {
         .ok()
         .flatten()
         .map(|trade| trade.trade_key_index);
-    destinations_for(load(db, order_id).await, row_index)
+    with_payout_amount(
+        destinations_for(load(db, order_id).await, row_index),
+        crate::api::invoice::payout_amount_of(order_id).await,
+    )
 }
 
 /// What the take on `trade_index` sent, when this device recorded it: the
@@ -751,6 +840,57 @@ mod tests {
         assert_eq!(with_rejection(Some(paid), 7, COFFEE, 150, 170), None);
         // A cleared record is not brought back.
         assert_eq!(with_rejection(None, 7, COFFEE, 150, 151), None);
+    }
+
+    /// A submission timed out and the buyer sent another (PR #824 review).
+    #[test]
+    fn an_acknowledged_resubmission_replaces_the_one_left_open() {
+        let first = sent(COFFEE, PayoutSource::Entered, 150);
+        let second = sent("bob@example.org", PayoutSource::Entered, 300);
+        let route = with_destination(Some(take_route(7)), 7, first).unwrap();
+        let route = with_destination(Some(route), 7, second).unwrap();
+
+        let route = with_acknowledgement(Some(route), 7, "bob@example.org", 300).unwrap();
+        assert_eq!(
+            outcomes(&route),
+            [PayoutOutcome::Replaced, PayoutOutcome::Replaced, PayoutOutcome::Submitted]
+        );
+        // Now only one is open: the payment is that one's.
+        let route = with_news(Some(route), 7, PayoutNews::Paid { amount_sats: None }, 400).unwrap();
+        assert_eq!(route.destinations[2].outcome, PayoutOutcome::Paid);
+        // The first submission's acknowledgement, late: nothing open before it.
+        assert_eq!(with_acknowledgement(Some(take_route(7)), 7, ADDRESS, 100), None);
+    }
+
+    #[test]
+    fn a_payment_with_two_open_destinations_is_not_guessed() {
+        let route = with_destination(
+            Some(take_route(7)),
+            7,
+            sent(COFFEE, PayoutSource::Entered, 150),
+        )
+        .unwrap();
+
+        let paid = with_news(Some(route.clone()), 7, PayoutNews::Paid { amount_sats: Some(9) }, 400)
+            .unwrap();
+        assert_eq!(outcomes(&paid), [PayoutOutcome::MaybePaid, PayoutOutcome::MaybePaid]);
+
+        // A failure is about whichever it had: none of them is paid.
+        let failed = with_news(Some(route), 7, PayoutNews::Failed, 400).unwrap();
+        assert_eq!(outcomes(&failed), [PayoutOutcome::Failed, PayoutOutcome::Failed]);
+    }
+
+    #[test]
+    fn an_address_shows_the_payout_amount_once_it_is_known() {
+        let route = take_route(7);
+        assert_eq!(route.destinations[0].amount_sats, None);
+
+        let shown = with_payout_amount(route.destinations.clone(), Some(1_677));
+        assert_eq!(shown[0].amount_sats, Some(1_677));
+        // An invoice's own amount stands.
+        let invoice = vec![sent(COFFEE, PayoutSource::Entered, 1)];
+        assert_eq!(with_payout_amount(invoice, Some(1))[0].amount_sats, Some(250_000));
+        assert_eq!(with_payout_amount(route.destinations, None)[0].amount_sats, None);
     }
 
     #[test]

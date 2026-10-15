@@ -203,6 +203,48 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('a payment the node did not tie to one destination is not '
+      'guessed (PR #824 review)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, [
+      fakePayoutDestination(outcome: PayoutOutcome.maybePaid),
+      fakePayoutDestination(
+        destination: 'bob@example.org',
+        source: PayoutSource.entered,
+        outcome: PayoutOutcome.maybePaid,
+      ),
+    ], status: OrderStatus.success);
+
+    expect(find.text('Maybe paid to'), findsOneWidget);
+    expect(find.text('bob@example.org'), findsOneWidget);
+    expect(
+      find.text('Paid to this one or another listed here'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('alice@example.com · Paid to this one or another listed here'),
+      findsOneWidget,
+    );
+    expect(find.text('Paid to'), findsNothing);
+    expect(_readout(tester), 'maybe-paid');
+    semantics.dispose();
+  });
+
+  testWidgets('a destination a later one replaced says so', (tester) async {
+    await _pump(tester, [
+      fakePayoutDestination(outcome: PayoutOutcome.replaced),
+      fakePayoutDestination(
+        destination: 'bob@example.org',
+        source: PayoutSource.entered,
+      ),
+    ]);
+
+    expect(
+      find.text('alice@example.com · Replaced by a later one'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a failure not replaced yet reads as not paid', (tester) async {
     final semantics = tester.ensureSemantics();
     await _pump(tester, [

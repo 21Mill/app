@@ -218,8 +218,8 @@ class AutomationIds {
 
   /// Readout: where this device sent the buyer's sats (#823), labelled with
   /// what became of the destination shown first (`submitted`, `retrying`,
-  /// `failed`, `rejected`, `paid`), or `scheduled` before the payout starts;
-  /// absent when it sent none.
+  /// `failed`, `rejected`, `replaced`, `paid`, `maybe-paid`), or `scheduled`
+  /// before the payout starts; absent when it sent none.
   static const String tradePayout = 'trade.payout';
   static const String bondSlashedViewPolicy = 'bond.slashed.viewPolicy';
 

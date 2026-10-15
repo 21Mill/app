@@ -4851,4 +4851,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get payoutWillGoToLabel => 'Sats will go to';
+
+  @override
+  String get payoutMaybePaidToLabel => 'Maybe paid to';
+
+  @override
+  String get payoutOutcomeReplaced => 'Replaced by a later one';
+
+  @override
+  String get payoutOutcomeMaybePaid =>
+      'Paid to this one or another listed here';
 }

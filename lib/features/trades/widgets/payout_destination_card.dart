@@ -89,10 +89,12 @@ class _PayoutDestinationRowsState extends State<PayoutDestinationRows> {
           label: switch (lead.outcome) {
             _ when !widget.started => l10n.payoutWillGoToLabel,
             PayoutOutcome.paid => l10n.payoutPaidToLabel,
+            PayoutOutcome.maybePaid => l10n.payoutMaybePaidToLabel,
             PayoutOutcome.submitted ||
             PayoutOutcome.retrying => l10n.payoutSendingToLabel,
             PayoutOutcome.failed ||
-            PayoutOutcome.rejected => l10n.payoutNotPaidLabel,
+            PayoutOutcome.rejected ||
+            PayoutOutcome.replaced => l10n.payoutNotPaidLabel,
           },
           value: OrderDataValue(destinationLabel(l10n, lead)),
         ),

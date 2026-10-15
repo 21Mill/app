@@ -1779,8 +1779,16 @@ enum PayoutOutcome {
   /// The node refused it when it was submitted.
   rejected,
 
+  /// The node acknowledged a later destination in its place, before
+  /// paying anything.
+  replaced,
+
   /// The node paid it: the trade completed.
   paid,
+
+  /// The node paid, but more than one destination was still open and its
+  /// message does not say which one: this one or another marked the same.
+  maybePaid,
 }
 
 /// How a payout destination was chosen (#823).

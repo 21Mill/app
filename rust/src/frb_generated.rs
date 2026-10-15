@@ -10470,7 +10470,9 @@ impl SseDecode for crate::api::types::PayoutOutcome {
             1 => crate::api::types::PayoutOutcome::Retrying,
             2 => crate::api::types::PayoutOutcome::Failed,
             3 => crate::api::types::PayoutOutcome::Rejected,
-            4 => crate::api::types::PayoutOutcome::Paid,
+            4 => crate::api::types::PayoutOutcome::Replaced,
+            5 => crate::api::types::PayoutOutcome::Paid,
+            6 => crate::api::types::PayoutOutcome::MaybePaid,
             _ => unreachable!("Invalid variant for PayoutOutcome: {}", inner),
         };
     }
@@ -13382,7 +13384,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::PayoutOutcome {
             Self::Retrying => 1.into_dart(),
             Self::Failed => 2.into_dart(),
             Self::Rejected => 3.into_dart(),
-            Self::Paid => 4.into_dart(),
+            Self::Replaced => 4.into_dart(),
+            Self::Paid => 5.into_dart(),
+            Self::MaybePaid => 6.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -15934,7 +15938,9 @@ impl SseEncode for crate::api::types::PayoutOutcome {
                 crate::api::types::PayoutOutcome::Retrying => 1,
                 crate::api::types::PayoutOutcome::Failed => 2,
                 crate::api::types::PayoutOutcome::Rejected => 3,
-                crate::api::types::PayoutOutcome::Paid => 4,
+                crate::api::types::PayoutOutcome::Replaced => 4,
+                crate::api::types::PayoutOutcome::Paid => 5,
+                crate::api::types::PayoutOutcome::MaybePaid => 6,
                 _ => {
                     unimplemented!("");
                 }

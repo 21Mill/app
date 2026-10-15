@@ -178,7 +178,9 @@ void main() {
       'retrying',
       'failed',
       'rejected',
+      'replaced',
       'paid',
+      'maybe-paid',
     ]);
   });
 }

@@ -947,8 +947,14 @@ pub enum PayoutOutcome {
     Failed,
     /// The node refused it when it was submitted.
     Rejected,
+    /// The node acknowledged a later destination in its place, before
+    /// paying anything.
+    Replaced,
     /// The node paid it: the trade completed.
     Paid,
+    /// The node paid, but more than one destination was still open and its
+    /// message does not say which one: this one or another marked the same.
+    MaybePaid,
 }
 
 /// One destination the buyer's payout was sent to, as this device submitted

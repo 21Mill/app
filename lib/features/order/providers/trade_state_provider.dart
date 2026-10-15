@@ -135,8 +135,13 @@ final payoutDestinationsProvider = StreamProvider.family
         ref,
         orderId,
         read: () => read(orderId),
-        // A paid destination is the last word on it.
-        isFinal: (route) => route.any((d) => d.outcome == PayoutOutcome.paid),
+        // A payment is the last word on it, known or not which one.
+        isFinal:
+            (route) => route.any(
+              (d) =>
+                  d.outcome == PayoutOutcome.paid ||
+                  d.outcome == PayoutOutcome.maybePaid,
+            ),
       );
     });
 

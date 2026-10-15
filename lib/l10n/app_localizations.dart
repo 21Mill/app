@@ -8037,6 +8037,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sats will go to'**
   String get payoutWillGoToLabel;
+
+  /// Trade detail payout card (#823): row label when the node paid but more than one destination was open and its message does not say which
+  ///
+  /// In en, this message translates to:
+  /// **'Maybe paid to'**
+  String get payoutMaybePaidToLabel;
+
+  /// Trade detail payout card (#823): the node took a later destination in place of this one before paying
+  ///
+  /// In en, this message translates to:
+  /// **'Replaced by a later one'**
+  String get payoutOutcomeReplaced;
+
+  /// Trade detail payout card (#823): the node paid this destination or another one listed on the card; its message does not say which
+  ///
+  /// In en, this message translates to:
+  /// **'Paid to this one or another listed here'**
+  String get payoutOutcomeMaybePaid;
 }
 
 class _AppLocalizationsDelegate

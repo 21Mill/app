@@ -4891,4 +4891,14 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get payoutWillGoToLabel => 'De sats gaan naar';
+
+  @override
+  String get payoutMaybePaidToLabel => 'Misschien betaald aan';
+
+  @override
+  String get payoutOutcomeReplaced => 'Vervangen door een latere';
+
+  @override
+  String get payoutOutcomeMaybePaid =>
+      'Betaald aan deze of een andere die hier staat';
 }
