@@ -7785,6 +7785,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Whoever holds this identity will be able to export your reputation from this Mostro, and your current identity no longer will:\n\n{npub}\n\nSign only for an identity that is yours.'**
   String reputationRebindConfirmBody(String npub);
+
+  /// Trade detail payout card (#823): row label before the destination the buyer's sats were paid to
+  ///
+  /// In en, this message translates to:
+  /// **'Paid to'**
+  String get payoutPaidToLabel;
+
+  /// Trade detail payout card (#823): row label before the destination the sats are being sent to, not paid yet
+  ///
+  /// In en, this message translates to:
+  /// **'Sending to'**
+  String get payoutSendingToLabel;
+
+  /// Trade detail payout card (#823): row label before a destination the node could not pay or refused
+  ///
+  /// In en, this message translates to:
+  /// **'Not paid to'**
+  String get payoutNotPaidLabel;
+
+  /// Trade detail payout card (#823): row label before who chose the destination
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen by'**
+  String get payoutChosenByLabel;
+
+  /// Trade detail payout card (#823): row label before the sats the destination receives
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get payoutAmountLabel;
+
+  /// Trade detail payout card (#823): row label before the invoice's payment hash; the whole row copies it
+  ///
+  /// In en, this message translates to:
+  /// **'Payment hash'**
+  String get payoutHashLabel;
+
+  /// Trade detail payout card (#823): row label before an earlier destination of the same trade
+  ///
+  /// In en, this message translates to:
+  /// **'Tried before'**
+  String get payoutTriedBeforeLabel;
+
+  /// Trade detail payout card (#823): value of an earlier destination row: where, then what became of it
+  ///
+  /// In en, this message translates to:
+  /// **'{destination} · {outcome}'**
+  String payoutTriedBeforeValue(String destination, String outcome);
+
+  /// Payout destination (#823): an invoice the user's NWC wallet generated, when the wallet gives no name
+  ///
+  /// In en, this message translates to:
+  /// **'Your NWC wallet'**
+  String get payoutNwcWallet;
+
+  /// Payout destination (#823): an invoice the user's NWC wallet generated, with the wallet's own name
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (NWC)'**
+  String payoutNwcWalletNamed(String name);
+
+  /// Payout destination (#823): a Lightning invoice the user entered, shortened
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice {invoice}'**
+  String payoutInvoice(String invoice);
+
+  /// Trade detail payout card (#823): the destination is the default Lightning address saved in Settings
+  ///
+  /// In en, this message translates to:
+  /// **'Your default address'**
+  String get payoutSourceDefaultAddress;
+
+  /// Trade detail payout card (#823): the connected NWC wallet generated the invoice and the app sent it on its own
+  ///
+  /// In en, this message translates to:
+  /// **'Your NWC wallet'**
+  String get payoutSourceNwcWallet;
+
+  /// Trade detail payout card (#823): the user entered this invoice or address for this trade
+  ///
+  /// In en, this message translates to:
+  /// **'You, for this trade'**
+  String get payoutSourceEntered;
+
+  /// Trade detail payout card (#823): status of a destination sent to the node, not paid yet
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get payoutOutcomeSubmitted;
+
+  /// Trade detail payout card (#823): the node's first payment failed and it is trying again
+  ///
+  /// In en, this message translates to:
+  /// **'Failed, retrying'**
+  String get payoutOutcomeRetrying;
+
+  /// Trade detail payout card (#823): the node gave up paying this destination and asked for another
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get payoutOutcomeFailed;
+
+  /// Trade detail payout card (#823): the node gave up after trying count times
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Failed after 1 attempt} other{Failed after {count} attempts}}'**
+  String payoutOutcomeFailedAttempts(int count);
+
+  /// Trade detail payout card (#823): the node refused this invoice or address when it was sent
+  ///
+  /// In en, this message translates to:
+  /// **'Refused by the node'**
+  String get payoutOutcomeRejected;
+
+  /// Trade detail payout card (#823): the node paid this destination
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get payoutOutcomePaid;
+
+  /// Snackbar after copying the payout's payment hash (#823)
+  ///
+  /// In en, this message translates to:
+  /// **'Payment hash copied'**
+  String get payoutHashCopied;
+
+  /// Take order screen (#823): row label before where the buyer's sats will be sent
+  ///
+  /// In en, this message translates to:
+  /// **'Your sats go to'**
+  String get takeOrderPayoutLabel;
+
+  /// Take order screen (#823): the buyer will add an invoice after taking instead of using an address
+  ///
+  /// In en, this message translates to:
+  /// **'An invoice you add'**
+  String get takeOrderPayoutInvoice;
+
+  /// Take order screen (#823): accessibility hint of the row that opens the payout choice
+  ///
+  /// In en, this message translates to:
+  /// **'Change where your sats go'**
+  String get takeOrderPayoutChangeHint;
+
+  /// Take order screen (#823): explanatory note when the default Lightning address will receive the sats
+  ///
+  /// In en, this message translates to:
+  /// **'Your sats will be sent to {address}, your default Lightning address.'**
+  String takeOrderPayoutNoteDefault(String address);
+
+  /// Take order screen (#823): explanatory note when another Lightning address, for this trade only, will receive the sats
+  ///
+  /// In en, this message translates to:
+  /// **'Your sats will be sent to {address}, for this trade only.'**
+  String takeOrderPayoutNoteAddress(String address);
+
+  /// Take order screen (#823): explanatory note when the buyer chose to add an invoice after taking
+  ///
+  /// In en, this message translates to:
+  /// **'After you take the order, you will add the invoice your sats are paid to.'**
+  String get takeOrderPayoutNoteInvoice;
+
+  /// Take order screen (#823): title of the sheet that chooses where the sats go
+  ///
+  /// In en, this message translates to:
+  /// **'Where your sats go'**
+  String get takeOrderPayoutSheetTitle;
+
+  /// Take order payout sheet (#823): option for the default Lightning address from Settings
+  ///
+  /// In en, this message translates to:
+  /// **'My default Lightning address'**
+  String get takeOrderPayoutSheetDefault;
+
+  /// Take order payout sheet (#823): option for another Lightning address, for this trade only
+  ///
+  /// In en, this message translates to:
+  /// **'Another Lightning address'**
+  String get takeOrderPayoutSheetOther;
+
+  /// Take order payout sheet (#823): option to add an invoice after taking instead of an address
+  ///
+  /// In en, this message translates to:
+  /// **'An invoice I add after taking'**
+  String get takeOrderPayoutSheetInvoice;
+
+  /// Take order payout sheet (#823): the sheet's answer, applies the choice to this trade
+  ///
+  /// In en, this message translates to:
+  /// **'Use for this trade'**
+  String get takeOrderPayoutSheetApply;
+
+  /// Add-invoice screen (#823): the node could not pay the destination the buyer gave earlier
+  ///
+  /// In en, this message translates to:
+  /// **'The payment to {destination} failed.'**
+  String invoicePayoutFailed(String destination);
+
+  /// Add-invoice screen (#823): the node gave up paying the earlier destination after count attempts
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The payment to {destination} failed after 1 attempt.} other{The payment to {destination} failed after {count} attempts.}}'**
+  String invoicePayoutFailedAttempts(String destination, int count);
+
+  /// Add-invoice screen (#823): after a failed payout, the connected NWC wallet (no name) makes the new invoice on its own
+  ///
+  /// In en, this message translates to:
+  /// **'Your NWC wallet is making a new invoice for these sats.'**
+  String get invoicePayoutFailedNwc;
+
+  /// Add-invoice screen (#823): after a failed payout, the connected NWC wallet, by its name, makes the new invoice on its own
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is making a new invoice for these sats.'**
+  String invoicePayoutFailedNwcNamed(String name);
+
+  /// Add-invoice screen (#823): after a failed payout, the buyer must add a new invoice
+  ///
+  /// In en, this message translates to:
+  /// **'Add a new invoice to receive your sats.'**
+  String get invoicePayoutFailedManual;
+
+  /// Notifications card title (#823): the node could not pay the buyer and asks for a new invoice
+  ///
+  /// In en, this message translates to:
+  /// **'Your payment failed'**
+  String get tradeCardPayoutFailedTitle;
+
+  /// Notifications card body (#823): the node could not pay the address or invoice the buyer gave
+  ///
+  /// In en, this message translates to:
+  /// **'Mostro could not pay the address or invoice you gave. Open the trade to see where your sats will go.'**
+  String get tradeCardPayoutFailedMessage;
 }
 
 class _AppLocalizationsDelegate

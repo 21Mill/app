@@ -20,8 +20,11 @@ import 'package:mostro/features/order/widgets/invoice_clock.dart';
 import 'package:mostro/features/order/widgets/invoice_input_field.dart';
 import 'package:mostro/features/order/widgets/invoice_widgets.dart';
 import 'package:mostro/features/order/widgets/order_detail_cards.dart';
+import 'package:mostro/features/order/widgets/payout_failed_notice.dart';
 import 'package:mostro/features/settings/providers/nwc_provider.dart';
 import 'package:mostro/features/settings/providers/settings_provider.dart';
+import 'package:mostro/features/trades/models/payout_route_rules.dart'
+    show payoutSourceFor;
 import 'package:mostro/features/trades/providers/trades_providers.dart'
     show refreshTrades, tradeInfoProvider;
 import 'package:mostro/l10n/app_localizations.dart';
@@ -121,6 +124,10 @@ class _AddLightningInvoiceScreenState
 
   /// `true` when NWC is connected but generation failed → show manual form.
   bool _manualMode = false;
+
+  /// The text in the field is the invoice the NWC wallet generated, not one
+  /// the buyer typed: the trade's payout record says so (#823).
+  bool _walletInvoice = false;
 
   /// One-shot guard so we don't navigate twice as further updates stream in.
   bool _navigated = false;
@@ -300,6 +307,7 @@ class _AddLightningInvoiceScreenState
   void _supersede() => _evaluation++;
 
   void _onInputChanged() {
+    _walletInvoice = false;
     _checkTimer?.cancel();
     _supersede();
     // The daemon's verdict was about the previous input; the new one gets
@@ -592,15 +600,20 @@ class _AddLightningInvoiceScreenState
     }
   }
 
-  static Future<void> _bridgeSubmit(
-    String orderId,
-    String invoice,
-    BigInt sats,
-  ) => orders_api.sendInvoice(
-    orderId: orderId,
-    invoiceOrAddress: invoice,
-    amountSats: sats,
-  );
+  /// Sends [invoice] with how it was chosen and the wallet that made it, for
+  /// the trade's payout record (#823).
+  Future<void> _bridgeSubmit(String orderId, String invoice, BigInt sats) =>
+      ref.read(invoiceSenderProvider)((
+        orderId: orderId,
+        invoice: invoice,
+        sats: sats,
+        source: payoutSourceFor(
+          fromWallet: _walletInvoice,
+          submitted: invoice,
+          defaultAddress: ref.read(settingsProvider).defaultLightningAddress,
+        ),
+        walletName: _walletInvoice ? ref.read(nwcProvider)?.walletName : null,
+      ));
 
   Future<void> _refreshClipboard() async {
     if (kIsWeb) return;
@@ -828,6 +841,12 @@ class _AddLightningInvoiceScreenState
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               children: [
+                // A new invoice after a failed payment: the buyer learns
+                // which destination failed before the wallet's goes out.
+                PayoutFailedNotice(
+                  orderId: widget.orderId,
+                  walletMakesInvoice: true,
+                ),
                 // The maker must see who took their order even when NWC
                 // auto-generates the invoice and the flow can proceed on its
                 // own — that is exactly where the decision matters most (#305).
@@ -856,6 +875,7 @@ class _AddLightningInvoiceScreenState
                               generateInvoice: widget.generateInvoice,
                               onInvoiceConfirmed: (invoice) async {
                                 _invoiceController.text = invoice;
+                                _walletInvoice = true;
                                 // Nothing else moves this screen on when the invoice
                                 // is held back, and the widget has already stopped
                                 // drawing: without the form, the screen stays blank.
@@ -945,6 +965,8 @@ class _AddLightningInvoiceScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Why the invoice is asked for again, when it is (#823).
+        PayoutFailedNotice(orderId: widget.orderId, walletMakesInvoice: false),
         // Sats amount calculated by the daemon (arrives in the take /
         // add-invoice reply and lands in the trade record).
         if (sats != null) ...[

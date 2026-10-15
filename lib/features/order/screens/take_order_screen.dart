@@ -26,6 +26,8 @@ import 'package:mostro/features/order/widgets/explanatory_note.dart';
 import 'package:mostro/features/order/widgets/hero_amount_card.dart';
 import 'package:mostro/features/order/widgets/order_detail_cards.dart';
 import 'package:mostro/features/order/widgets/range_amount_modal.dart';
+import 'package:mostro/features/order/widgets/take_payout_sheet.dart';
+import 'package:mostro/features/settings/providers/settings_provider.dart';
 import 'package:mostro/features/trades/providers/trades_providers.dart'
     show refreshTrades;
 import 'package:mostro/l10n/app_localizations.dart';
@@ -85,6 +87,10 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
   /// unavailable in place once the relay drops it.
   OrderItem? _lastOrder;
   double? _selectedAmount;
+
+  /// Where a buyer's sats go for this trade (#823), when they changed it
+  /// from the default Lightning address; null keeps the default.
+  TakePayout? _payout;
 
   @override
   void initState() {
@@ -193,6 +199,7 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
         orderId: widget.orderId,
         role: widget.isBuying ? TradeRole.buyer : TradeRole.seller,
         fiatAmount: _selectedAmount,
+        payout: widget.isBuying ? _payout : null,
       );
       if (!mounted) return;
 
@@ -256,11 +263,20 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
         // right whichever way the setting would have read.
         String? payTo;
         var settingsRead = true;
-        try {
-          payTo = (await settings_api.getSettings()).defaultLightningAddress;
-        } catch (e, st) {
-          settingsRead = false;
-          debugPrint('[TakeOrderScreen] settings read failed: $e\n$st');
+        switch (_payout) {
+          // The buyer chose for this trade: no setting to read.
+          case TakePayout_Address(:final address):
+            payTo = address;
+          case TakePayout_AskForInvoice():
+            payTo = null;
+          default:
+            try {
+              payTo =
+                  (await settings_api.getSettings()).defaultLightningAddress;
+            } catch (e, st) {
+              settingsRead = false;
+              debugPrint('[TakeOrderScreen] settings read failed: $e\n$st');
+            }
         }
         if (!mounted) return;
         context.go(AppRoute.tradeDetailPath(widget.orderId));
@@ -352,6 +368,36 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
     return l10n.takeOrderBondNoticeEstimate(formats.decimal.format(estimate));
   }
 
+  /// Where the buyer's sats go, in the words of the payout row (#823).
+  String _payoutTarget(AppLocalizations l10n, String defaultAddress) =>
+      switch (_payout) {
+        TakePayout_Address(:final address) => address,
+        TakePayout_AskForInvoice() => l10n.takeOrderPayoutInvoice,
+        _ => defaultAddress,
+      };
+
+  /// The sentence the note adds about where the sats go (#823).
+  String _payoutNote(AppLocalizations l10n, String defaultAddress) =>
+      switch (_payout) {
+        TakePayout_Address(:final address) => l10n.takeOrderPayoutNoteAddress(
+          address,
+        ),
+        TakePayout_AskForInvoice() => l10n.takeOrderPayoutNoteInvoice,
+        _ => l10n.takeOrderPayoutNoteDefault(defaultAddress),
+      };
+
+  Future<void> _changePayout(String defaultAddress) async {
+    final chosen = await showTakePayoutSheet(
+      context,
+      defaultAddress: defaultAddress,
+      current: _payout,
+    );
+    if (chosen == null || !mounted) return;
+    setState(
+      () => _payout = chosen is TakePayout_DefaultAddress ? null : chosen,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final live = ref.watch(orderByIdProvider(widget.orderId));
@@ -397,6 +443,13 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
     }
 
     final privacyMode = ref.watch(privacyModeProvider);
+    // A buyer with a default Lightning address sees where the sats go and can
+    // change it for this trade (#823): the take sends it without asking.
+    final savedAddress = ref.watch(settingsProvider).defaultLightningAddress;
+    final defaultAddress =
+        widget.isBuying && savedAddress != null && savedAddress.isNotEmpty
+            ? savedAddress
+            : null;
     // Not while a take is in flight: the user's own take moves the order out
     // of `pending` before it settles (Rust updates the book entry as soon as
     // the daemon confirms, then persists the trade and subscribes, and only
@@ -454,6 +507,12 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
                       isClosed: isUnavailable,
                     ),
               ),
+              if (defaultAddress != null)
+                _PayoutRow(
+                  target: _payoutTarget(l10n, defaultAddress),
+                  enabled: cta == TakeOrderCta.idle,
+                  onTap: () => _changePayout(defaultAddress),
+                ),
               OrderIdRow(orderId: order.id),
             ],
           ),
@@ -463,6 +522,7 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
               widget.isBuying
                   ? l10n.takeOrderNoteBuyer
                   : l10n.takeOrderNoteSeller,
+              if (defaultAddress != null) _payoutNote(l10n, defaultAddress),
               _bondNotice(l10n, order),
             ].nonNulls.join(' '),
           ),
@@ -478,6 +538,48 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
         ),
       ),
     );
+  }
+}
+
+// ── Payout row ────────────────────────────────────────────────────────────────
+
+/// `Your sats go to · alice@example.com ›` (#823): where the take sends the
+/// buyer's sats, a row that opens the choice for this trade (DS-CMP-27: a
+/// neutral value and a trailing chevron). Dead while a take is in flight or
+/// the order is gone.
+class _PayoutRow extends StatelessWidget {
+  const _PayoutRow({
+    required this.target,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String target;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final book = OrderBookPalette.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      hint: enabled ? l10n.takeOrderPayoutChangeHint : null,
+      child: OrderDataRow(
+        icon: Icons.bolt_rounded,
+        label: l10n.takeOrderPayoutLabel,
+        value: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(child: OrderDataValue(target)),
+            if (enabled) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, size: 16, color: book.textTertiary),
+            ],
+          ],
+        ),
+        onTap: enabled ? onTap : null,
+      ),
+    ).withAutomationId(AutomationIds.orderTakePayout);
   }
 }
 

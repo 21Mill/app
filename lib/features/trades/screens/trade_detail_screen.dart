@@ -46,6 +46,7 @@ import 'package:mostro/features/order/models/invoice_rules.dart';
 import 'package:mostro/features/trades/widgets/bond_claim_banner.dart';
 import 'package:mostro/features/trades/widgets/bond_slashed_notice.dart';
 import 'package:mostro/features/trades/widgets/cancel_request_notice.dart';
+import 'package:mostro/features/trades/widgets/payout_destination_card.dart';
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/shared/mascot/mascot_cues.dart';
 import 'package:mostro/shared/utils/countdown.dart';
@@ -865,6 +866,10 @@ class _TradeDetailScreenState extends ConsumerState<TradeDetailScreen>
                               ),
                     ),
                   ),
+                  // Where the buyer's sats go, or went, as this device sent
+                  // them (#823); nothing for the seller.
+                  if (role == true)
+                    PayoutDestinationCard(orderId: widget.orderId),
                   // The share of a slashed bond, when the daemon offered one
                   // (docs/ANTI_ABUSE_BOND.md §8.3); nothing otherwise.
                   BondClaimBanner(orderId: widget.orderId),

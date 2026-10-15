@@ -8,7 +8,8 @@ import 'package:mostro/features/trades/providers/trades_providers.dart'
     show tradeInfoProvider;
 import 'package:mostro/shared/utils/platform_int64.dart';
 import 'package:mostro/src/rust/api/invoice.dart' as invoice_api;
-import 'package:mostro/src/rust/api/types.dart' show OrderStatus;
+import 'package:mostro/src/rust/api/orders.dart' as orders_api;
+import 'package:mostro/src/rust/api/types.dart' show OrderStatus, PayoutSource;
 
 /// mostrod's default `expiration_seconds`, used while the node has not
 /// advertised its own.
@@ -60,6 +61,31 @@ final invoiceCheckerProvider =
                       : BigInt.from(request.minRemainingSecs!),
               now: intToPlatformInt64(request.now),
             ),
+          ),
+    );
+
+/// A buyer invoice on its way to the node: the destination, with how it was
+/// chosen and the NWC wallet that made it, for the payout record (#823).
+typedef InvoiceSubmission =
+    ({
+      String orderId,
+      String invoice,
+      BigInt sats,
+      PayoutSource source,
+      String? walletName,
+    });
+
+/// Sends a buyer invoice through the bridge and waits for the node's
+/// verdict; a seam, so the screen's choice of source is testable.
+final invoiceSenderProvider =
+    Provider<Future<void> Function(InvoiceSubmission)>(
+      (ref) =>
+          (submission) => orders_api.sendInvoice(
+            orderId: submission.orderId,
+            invoiceOrAddress: submission.invoice,
+            amountSats: submission.sats,
+            source: submission.source,
+            walletName: submission.walletName,
           ),
     );
 

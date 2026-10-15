@@ -42,6 +42,7 @@ typedef _Take =
       required String orderId,
       required TradeRole role,
       double? fiatAmount,
+      TakePayout? payout,
     });
 
 Future<StreamController<List<OrderItem>>> _pump(
@@ -461,7 +462,9 @@ void main() {
         await _pump(
           tester,
           order: _order(),
-          take: ({required orderId, required role, fiatAmount}) => reply.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  reply.future,
         );
 
         await tester.tap(find.text('Take order'));
@@ -486,7 +489,9 @@ void main() {
         final books = await _pump(
           tester,
           order: _order(),
-          take: ({required orderId, required role, fiatAmount}) => reply.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  reply.future,
         );
 
         await tester.tap(find.text('Take order'));
@@ -513,7 +518,9 @@ void main() {
         final books = await _pump(
           tester,
           order: _order(),
-          take: ({required orderId, required role, fiatAmount}) => reply.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  reply.future,
         );
 
         await tester.tap(find.text('Take order'));
@@ -550,7 +557,8 @@ void main() {
             order: _order(kind: isBuying ? 'sell' : 'buy'),
             isBuying: isBuying,
             take:
-                ({required orderId, required role, fiatAmount}) => reply.future,
+                ({required orderId, required role, fiatAmount, payout}) =>
+                    reply.future,
           );
 
           await tester.tap(find.text('Take order'));
@@ -602,7 +610,7 @@ void main() {
           tester,
           order: _order(expiresIn: const Duration(seconds: 2)),
           take:
-              ({required orderId, required role, fiatAmount}) =>
+              ({required orderId, required role, fiatAmount, payout}) =>
                   Completer<TradeInfo>().future,
         );
 
@@ -628,7 +636,9 @@ void main() {
         await _pump(
           tester,
           order: _order(expiresIn: const Duration(seconds: 2)),
-          take: ({required orderId, required role, fiatAmount}) => reply.future,
+          take:
+              ({required orderId, required role, fiatAmount, payout}) =>
+                  reply.future,
         );
 
         await tester.tap(find.text('Take order'));
@@ -651,7 +661,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(OrderAlreadyTaken)'),
         );
 
@@ -674,7 +684,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(CantDo:InvalidOrderStatus)'),
         );
 
@@ -697,7 +707,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(CantDo:NotFound)'),
         );
 
@@ -717,7 +727,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(CantDo:SomeNewReason)'),
         );
 
@@ -821,7 +831,7 @@ void main() {
           tester,
           order: _order(),
           take:
-              ({required orderId, required role, fiatAmount}) async =>
+              ({required orderId, required role, fiatAmount, payout}) async =>
                   throw Exception('AnyhowException(NoDaemonResponse)'),
         );
 
@@ -846,7 +856,7 @@ void main() {
           tester,
           order: _order(),
           readTrades: () => rows.future,
-          take: ({required orderId, required role, fiatAmount}) {
+          take: ({required orderId, required role, fiatAmount, payout}) {
             taken.add(orderId);
             // Left unanswered: only the dispatch is under test.
             return Completer<TradeInfo>().future;
@@ -872,7 +882,7 @@ void main() {
         await _pump(
           tester,
           order: _order(),
-          take: ({required orderId, required role, fiatAmount}) async {
+          take: ({required orderId, required role, fiatAmount, payout}) async {
             attempts++;
             throw Exception('AnyhowException(NoDaemonResponse)');
           },
@@ -957,7 +967,7 @@ void main() {
           trades: [
             fakeTrade(id: 'ended', orderId: _id, status: OrderStatus.canceled),
           ],
-          take: ({required orderId, required role, fiatAmount}) {
+          take: ({required orderId, required role, fiatAmount, payout}) {
             taken.add(orderId);
             // Left unanswered: only the dispatch is under test.
             return Completer<TradeInfo>().future;
@@ -987,7 +997,7 @@ void main() {
           tester,
           order: _order(),
           readTrades: () async => throw Exception('storage is unreadable'),
-          take: ({required orderId, required role, fiatAmount}) {
+          take: ({required orderId, required role, fiatAmount, payout}) {
             taken.add(orderId);
             return Completer<TradeInfo>().future;
           },

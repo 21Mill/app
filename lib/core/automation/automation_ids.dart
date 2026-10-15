@@ -196,6 +196,10 @@ class AutomationIds {
   static const String orderTakeAmountConfirm = 'order.take.amount.confirm';
   static const String orderTakeConfirm = 'order.take.confirm';
 
+  /// Where a buyer's sats go (#823), shown when a default Lightning address
+  /// is set: opens the choice for this trade.
+  static const String orderTakePayout = 'order.take.payout';
+
   // Trade detail
   static const String orderId = 'order.id';
   static const String orderStatus = 'order.status';
@@ -211,6 +215,11 @@ class AutomationIds {
   /// slashed.
   static const String tradeBondSlashed = 'trade.bondSlashed';
   static const String tradeCancelRequest = 'trade.cancelRequest';
+
+  /// Readout: where this device sent the buyer's sats (#823), labelled with
+  /// what became of the destination shown first (`submitted`, `retrying`,
+  /// `failed`, `rejected`, `paid`); absent when it sent none.
+  static const String tradePayout = 'trade.payout';
   static const String bondSlashedViewPolicy = 'bond.slashed.viewPolicy';
 
   /// Present only while the slashed trade's row still exists (a timeout
@@ -273,6 +282,10 @@ class AutomationIds {
   /// answered yet (#615). Present until the screen leaves for the trade, or
   /// the invoice field is edited, or a new submission starts.
   static const String invoiceAwaiting = 'invoice.awaiting';
+
+  /// Readout: the node could not pay the destination given earlier and asks
+  /// for a new invoice (#823). Translated prose: assert that it exists.
+  static const String invoicePayoutFailed = 'invoice.payoutFailed';
   static const String invoiceCancel = 'invoice.cancel';
   static const String payInvoiceText = 'pay.invoice.text';
 

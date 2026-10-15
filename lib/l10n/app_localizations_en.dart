@@ -4691,4 +4691,155 @@ class AppLocalizationsEn extends AppLocalizations {
   String reputationRebindConfirmBody(String npub) {
     return 'Whoever holds this identity will be able to export your reputation from this Mostro, and your current identity no longer will:\n\n$npub\n\nSign only for an identity that is yours.';
   }
+
+  @override
+  String get payoutPaidToLabel => 'Paid to';
+
+  @override
+  String get payoutSendingToLabel => 'Sending to';
+
+  @override
+  String get payoutNotPaidLabel => 'Not paid to';
+
+  @override
+  String get payoutChosenByLabel => 'Chosen by';
+
+  @override
+  String get payoutAmountLabel => 'Amount';
+
+  @override
+  String get payoutHashLabel => 'Payment hash';
+
+  @override
+  String get payoutTriedBeforeLabel => 'Tried before';
+
+  @override
+  String payoutTriedBeforeValue(String destination, String outcome) {
+    return '$destination · $outcome';
+  }
+
+  @override
+  String get payoutNwcWallet => 'Your NWC wallet';
+
+  @override
+  String payoutNwcWalletNamed(String name) {
+    return '$name (NWC)';
+  }
+
+  @override
+  String payoutInvoice(String invoice) {
+    return 'Invoice $invoice';
+  }
+
+  @override
+  String get payoutSourceDefaultAddress => 'Your default address';
+
+  @override
+  String get payoutSourceNwcWallet => 'Your NWC wallet';
+
+  @override
+  String get payoutSourceEntered => 'You, for this trade';
+
+  @override
+  String get payoutOutcomeSubmitted => 'Waiting';
+
+  @override
+  String get payoutOutcomeRetrying => 'Failed, retrying';
+
+  @override
+  String get payoutOutcomeFailed => 'Failed';
+
+  @override
+  String payoutOutcomeFailedAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Failed after $count attempts',
+      one: 'Failed after 1 attempt',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payoutOutcomeRejected => 'Refused by the node';
+
+  @override
+  String get payoutOutcomePaid => 'Paid';
+
+  @override
+  String get payoutHashCopied => 'Payment hash copied';
+
+  @override
+  String get takeOrderPayoutLabel => 'Your sats go to';
+
+  @override
+  String get takeOrderPayoutInvoice => 'An invoice you add';
+
+  @override
+  String get takeOrderPayoutChangeHint => 'Change where your sats go';
+
+  @override
+  String takeOrderPayoutNoteDefault(String address) {
+    return 'Your sats will be sent to $address, your default Lightning address.';
+  }
+
+  @override
+  String takeOrderPayoutNoteAddress(String address) {
+    return 'Your sats will be sent to $address, for this trade only.';
+  }
+
+  @override
+  String get takeOrderPayoutNoteInvoice =>
+      'After you take the order, you will add the invoice your sats are paid to.';
+
+  @override
+  String get takeOrderPayoutSheetTitle => 'Where your sats go';
+
+  @override
+  String get takeOrderPayoutSheetDefault => 'My default Lightning address';
+
+  @override
+  String get takeOrderPayoutSheetOther => 'Another Lightning address';
+
+  @override
+  String get takeOrderPayoutSheetInvoice => 'An invoice I add after taking';
+
+  @override
+  String get takeOrderPayoutSheetApply => 'Use for this trade';
+
+  @override
+  String invoicePayoutFailed(String destination) {
+    return 'The payment to $destination failed.';
+  }
+
+  @override
+  String invoicePayoutFailedAttempts(String destination, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'The payment to $destination failed after $count attempts.',
+      one: 'The payment to $destination failed after 1 attempt.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get invoicePayoutFailedNwc =>
+      'Your NWC wallet is making a new invoice for these sats.';
+
+  @override
+  String invoicePayoutFailedNwcNamed(String name) {
+    return '$name is making a new invoice for these sats.';
+  }
+
+  @override
+  String get invoicePayoutFailedManual =>
+      'Add a new invoice to receive your sats.';
+
+  @override
+  String get tradeCardPayoutFailedTitle => 'Your payment failed';
+
+  @override
+  String get tradeCardPayoutFailedMessage =>
+      'Mostro could not pay the address or invoice you gave. Open the trade to see where your sats will go.';
 }
