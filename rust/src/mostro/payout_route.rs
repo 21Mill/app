@@ -880,6 +880,49 @@ mod tests {
         assert_eq!(outcomes(&failed), [PayoutOutcome::Failed, PayoutOutcome::Failed]);
     }
 
+    /// The payment can be filed before the acknowledgement that came ahead
+    /// of it: they are written from separate tasks (PR #824 review).
+    #[test]
+    fn an_acknowledgement_filed_after_the_payment_still_names_the_paid_one() {
+        let route = with_destination(
+            Some(take_route(7)),
+            7,
+            sent(COFFEE, PayoutSource::Entered, 150),
+        )
+        .unwrap();
+        let paid = with_news(Some(route), 7, PayoutNews::Paid { amount_sats: None }, 400).unwrap();
+        assert_eq!(outcomes(&paid), [PayoutOutcome::MaybePaid, PayoutOutcome::MaybePaid]);
+
+        let route = with_acknowledgement(Some(paid), 7, COFFEE, 150).unwrap();
+
+        assert_eq!(outcomes(&route), [PayoutOutcome::Replaced, PayoutOutcome::Paid]);
+        assert_eq!(route.destinations[0].outcome_at, Some(150));
+        assert_eq!(route.destinations[1].outcome_at, Some(400));
+    }
+
+    /// A later submission was still open at the payment, and the node never
+    /// said whether it took it: the acknowledged one stays in doubt.
+    #[test]
+    fn a_late_acknowledgement_does_not_settle_a_later_doubt() {
+        let route = with_destination(
+            Some(take_route(7)),
+            7,
+            sent(COFFEE, PayoutSource::Entered, 150),
+        )
+        .unwrap();
+        let route =
+            with_destination(Some(route), 7, sent("bob@example.org", PayoutSource::Entered, 300))
+                .unwrap();
+        let paid = with_news(Some(route), 7, PayoutNews::Paid { amount_sats: None }, 400).unwrap();
+
+        let route = with_acknowledgement(Some(paid), 7, COFFEE, 150).unwrap();
+
+        assert_eq!(
+            outcomes(&route),
+            [PayoutOutcome::Replaced, PayoutOutcome::MaybePaid, PayoutOutcome::MaybePaid]
+        );
+    }
+
     #[test]
     fn an_address_shows_the_payout_amount_once_it_is_known() {
         let route = take_route(7);

@@ -17549,6 +17549,77 @@ mod tests {
         assert_eq!(payout_route::destinations(&order_id).await, route);
     }
 
+    /// The node's acknowledgement of a resubmission, arriving after its
+    /// caller stopped waiting, still says which destination the node took
+    /// (PR #824 review): the dispatcher that matches the nonce records it,
+    /// not the caller that may be gone.
+    #[tokio::test]
+    async fn a_late_acknowledgement_still_replaces_the_destination_left_open() {
+        use crate::api::types::{PayoutOutcome, PayoutSource, TakePayout};
+        use crate::mostro::payout_route;
+        use mostro_core::message::{Action, Message};
+
+        let path = std::env::temp_dir()
+            .join(format!("mostro_payout_route_ack_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        db.save_trade(&cancel_test_row(wire_order(
+            &order_id,
+            OrderStatus::WaitingBuyerInvoice,
+        )))
+        .await
+        .expect("save the trade row");
+        // The take's address went unanswered; the buyer sent an invoice.
+        let address = payout_route::destination(
+            "alice@example.com",
+            PayoutSource::DefaultLightningAddress,
+            None,
+            1_000,
+            None,
+        );
+        payout_route::record_take(&order_id, 1, TakePayout::DefaultAddress, Some(address)).await;
+        let invoice = crate::api::invoice::test_vectors::COFFEE;
+        let since = payout_route::clear_epoch(&order_id);
+        let sent = payout_route::destination(invoice, PayoutSource::Entered, None, 2_000, None);
+        payout_route::record_destination_since(&order_id, 1, sent, since).await;
+        // Its caller timed out: the record stays, without a waiter.
+        let trade_key = "ff00ff78";
+        let nonce = 7_801;
+        register_add_invoice_request(trade_key, nonce, 1).expect("registers");
+        detach_request_waiter(trade_key, nonce);
+
+        let sender = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())
+            .expect("valid mostro pubkey");
+        dispatch_mostro_message(
+            mostro_core::transport::UnwrappedMessage {
+                message: Message::new_order(
+                    Some(order_uuid),
+                    Some(nonce),
+                    None,
+                    Action::WaitingSellerToPay,
+                    None,
+                ),
+                signature: None,
+                sender,
+                identity: sender,
+                created_at: nostr_sdk::prelude::Timestamp::from(2_100),
+            },
+            &format!("test-late-ack-{order_uuid}"),
+            trade_key,
+            1,
+        )
+        .await;
+
+        let outcomes: Vec<_> = payout_route::destinations(&order_id)
+            .await
+            .iter()
+            .map(|d| d.outcome)
+            .collect();
+        assert_eq!(outcomes, [PayoutOutcome::Replaced, PayoutOutcome::Submitted]);
+    }
+
     /// The public `success` can land before the buyer's `purchase-completed`
     /// (two relay streams): the row is already terminal and the status gate
     /// refuses the message, but the payout it reports is still recorded
