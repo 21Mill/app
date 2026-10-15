@@ -184,7 +184,11 @@ open destination (`Submitted` or `Retrying`): its `payment-failed` →
 `Paid`. The messages name no destination: a submission the node
 acknowledges turns every earlier open one `Replaced`, and a payment that
 finds more than one open marks them all `MaybePaid` instead of guessing.
-Only open destinations change, and each mark passes the status cursor
+The acknowledgement is recorded when the reply's nonce is matched, also
+after `send_invoice` stopped waiting, and it may be filed after the payment
+it came ahead of: the earlier `MaybePaid` ones then turn `Replaced` too, and
+the acknowledged one `Paid` once no other is in doubt.
+Otherwise only open destinations change, and each mark passes the status cursor
 first, so a replay moves nothing. An address shows the payout amount once
 the node has said it. Empty for a trade whose destinations were sent from another device.
 

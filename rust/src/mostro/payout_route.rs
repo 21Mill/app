@@ -24,6 +24,11 @@
 //! told apart: every open one becomes `MaybePaid` rather than a guess
 //! (PR #824 review).
 //!
+//! The acknowledgement is recorded by the dispatcher that matches its nonce,
+//! also once the caller stopped waiting, and it settles a `MaybePaid` filed
+//! before it: the public `success` arrives on another subscription, so the
+//! two can be written in either order.
+//!
 //! Stored as JSON under `payout_route:<order_id>`, scoped by the trade key
 //! index like the payout amount: a later take starts a new record, and the
 //! key goes with the row (`wipe_trade_row`, `clear_maker_step_start`) and
@@ -194,6 +199,11 @@ fn is_open(d: &PayoutDestination) -> bool {
 /// The record after the node acknowledged the destination `destination`,
 /// sent at `submitted_at` on trade key `trade_index`: every destination
 /// still open before it was replaced by it. `None` when nothing changes.
+///
+/// A payment can be filed first, from another task, and leave them all
+/// `MaybePaid` (PR #824 review). The node took this one in their place, so
+/// it paid none of the earlier ones: they are `Replaced` too, and this one
+/// is `Paid` once no other is left in doubt.
 pub(crate) fn with_acknowledgement(
     stored: Option<PayoutRoute>,
     trade_index: u32,
@@ -206,9 +216,22 @@ pub(crate) fn with_acknowledgement(
         .iter()
         .rposition(|d| d.destination == destination && d.submitted_at == submitted_at)?;
     let mut changed = false;
-    for d in route.destinations[..taken].iter_mut().filter(|d| is_open(d)) {
+    for d in route.destinations[..taken]
+        .iter_mut()
+        .filter(|d| is_open(d) || d.outcome == PayoutOutcome::MaybePaid)
+    {
         d.outcome = PayoutOutcome::Replaced;
         d.outcome_at = Some(submitted_at);
+        changed = true;
+    }
+    let in_doubt = route
+        .destinations
+        .iter()
+        .filter(|d| d.outcome == PayoutOutcome::MaybePaid)
+        .count();
+    let acknowledged = &mut route.destinations[taken];
+    if in_doubt == 1 && acknowledged.outcome == PayoutOutcome::MaybePaid {
+        acknowledged.outcome = PayoutOutcome::Paid;
         changed = true;
     }
     changed.then_some(route)
@@ -891,11 +914,17 @@ mod tests {
         )
         .unwrap();
         let paid = with_news(Some(route), 7, PayoutNews::Paid { amount_sats: None }, 400).unwrap();
-        assert_eq!(outcomes(&paid), [PayoutOutcome::MaybePaid, PayoutOutcome::MaybePaid]);
+        assert_eq!(
+            outcomes(&paid),
+            [PayoutOutcome::MaybePaid, PayoutOutcome::MaybePaid]
+        );
 
         let route = with_acknowledgement(Some(paid), 7, COFFEE, 150).unwrap();
 
-        assert_eq!(outcomes(&route), [PayoutOutcome::Replaced, PayoutOutcome::Paid]);
+        assert_eq!(
+            outcomes(&route),
+            [PayoutOutcome::Replaced, PayoutOutcome::Paid]
+        );
         assert_eq!(route.destinations[0].outcome_at, Some(150));
         assert_eq!(route.destinations[1].outcome_at, Some(400));
     }
@@ -910,9 +939,12 @@ mod tests {
             sent(COFFEE, PayoutSource::Entered, 150),
         )
         .unwrap();
-        let route =
-            with_destination(Some(route), 7, sent("bob@example.org", PayoutSource::Entered, 300))
-                .unwrap();
+        let route = with_destination(
+            Some(route),
+            7,
+            sent("bob@example.org", PayoutSource::Entered, 300),
+        )
+        .unwrap();
         let paid = with_news(Some(route), 7, PayoutNews::Paid { amount_sats: None }, 400).unwrap();
 
         let route = with_acknowledgement(Some(paid), 7, COFFEE, 150).unwrap();

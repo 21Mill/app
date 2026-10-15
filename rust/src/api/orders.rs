@@ -17,7 +17,7 @@ use crate::mostro::pending::{
     pending_local_uuid_for, pending_requests, purge_detached_pending_request,
     register_add_invoice_request, remove_pending_request, take_matching_add_invoice,
     take_matching_dispute, take_matching_request, take_matching_restore, take_matching_take,
-    DaemonReply, DisputeMatch, PendingRequest, PendingRequestKind, Wake,
+    DaemonReply, DisputeMatch, PendingRequest, PendingRequestKind, SentPayout, Wake,
 };
 use crate::mostro::status::{
     add_invoice_sync, cancellation_wipes_history, is_hard_terminal, map_core_status,
@@ -2195,8 +2195,24 @@ pub async fn send_invoice(
     // Read before the node is asked: a clear of the payout record while it
     // answers means this submission belongs to a step that is over.
     let payout_epoch = crate::mostro::payout_route::clear_epoch(&order_id);
+    // The record carries what this submission sends, so the dispatcher that
+    // matches the node's acknowledgement can name it as the destination
+    // taken — also after this caller stopped waiting (PR #824 review).
+    let sent = crate::mostro::payout_route::destination(
+        &destination,
+        source,
+        wallet_name,
+        crate::rt::unix_now(),
+        amount_opt,
+    );
+    let sent_key = SentPayout {
+        order_id: order_id.clone(),
+        destination: sent.destination.clone(),
+        submitted_at: sent.submitted_at,
+    };
     let trade_pk_hex = sender_keys.public_key().to_hex();
-    let Some(conf_rx) = register_add_invoice_request(&trade_pk_hex, request_id, trade_index)
+    let Some(conf_rx) =
+        register_add_invoice_request(&trade_pk_hex, request_id, trade_index, sent_key.clone())
     else {
         crate::api::logging::blog_warn(
             "orders",
@@ -2216,14 +2232,6 @@ pub async fn send_invoice(
     // that completes before the wait below ends finds it open (PR #824
     // review). An unanswered submission stays sent: a late acceptance pays
     // it. A refusal marks it below.
-    let sent = crate::mostro::payout_route::destination(
-        &destination,
-        source,
-        wallet_name,
-        crate::rt::unix_now(),
-        amount_opt,
-    );
-    let sent_key = (sent.destination.clone(), sent.submitted_at);
     note_payout_sent(&order_id, trade_index, sent, payout_epoch).await;
     crate::api::logging::blog_info(
         "orders",
@@ -2254,12 +2262,11 @@ pub async fn send_invoice(
             ..
         }))
     ) {
-        let (sent_destination, sent_at) = &sent_key;
         crate::mostro::payout_route::record_rejection(
             &order_id,
             trade_index,
-            sent_destination,
-            *sent_at,
+            &sent_key.destination,
+            sent_key.submitted_at,
             crate::rt::unix_now(),
         )
         .await;
@@ -2281,14 +2288,14 @@ pub async fn send_invoice(
                 "orders",
                 format!("add_invoice acknowledged by daemon for order={order_id}"),
             );
-            // The node took this one: any earlier one still open was replaced
-            // by it (PR #824 review).
-            let (sent_destination, sent_at) = &sent_key;
+            // The dispatcher recorded it before waking this caller — unless
+            // the acknowledgement beat `note_payout_sent` above, so it is
+            // recorded again here; a second time changes nothing.
             crate::mostro::payout_route::record_acknowledgement(
                 &order_id,
                 trade_index,
-                sent_destination,
-                *sent_at,
+                &sent_key.destination,
+                sent_key.submitted_at,
             )
             .await;
             Ok(())
@@ -3968,6 +3975,19 @@ async fn dispatch_mostro_message(
         // asymmetry with takes is deliberate: a take's caller applies the
         // reply itself, an add-invoice's caller only needs success/failure.
         if let Some(pending) = take_matching_add_invoice(trade_pubkey_hex, kind.request_id) {
+            // The nonce says which submission the node took: recorded here,
+            // before the caller wakes and under this order's guard, so a
+            // payment queued behind this message cannot be filed first, and
+            // a caller that stopped waiting does not lose it (PR #824 review).
+            if let PendingRequestKind::AddInvoice { sent } = &pending.kind {
+                crate::mostro::payout_route::record_acknowledgement(
+                    &sent.order_id,
+                    pending.trade_index,
+                    &sent.destination,
+                    sent.submitted_at,
+                )
+                .await;
+            }
             if let Some(tx) = pending.tx {
                 crate::api::logging::blog_info(
                     "daemon-msg",
@@ -13926,7 +13946,9 @@ mod tests {
             PendingRequest {
                 request_id: 52,
                 trade_index: 4,
-                kind: PendingRequestKind::AddInvoice,
+                kind: PendingRequestKind::AddInvoice {
+                    sent: SentPayout::untracked(),
+                },
                 tx: Some(tx),
             },
         );
@@ -13939,7 +13961,10 @@ mod tests {
         assert!(take_matching_add_invoice(ai_key, None).is_none());
         assert!(take_matching_add_invoice(ai_key, Some(99)).is_none());
         let pending = take_matching_add_invoice(ai_key, Some(52)).expect("must match");
-        assert!(matches!(pending.kind, PendingRequestKind::AddInvoice));
+        assert!(matches!(
+            pending.kind,
+            PendingRequestKind::AddInvoice { .. }
+        ));
         assert!(!pending_requests().lock().unwrap().contains_key(ai_key));
 
         pending_requests().lock().unwrap().remove(take_key);
@@ -17559,8 +17584,8 @@ mod tests {
         use crate::mostro::payout_route;
         use mostro_core::message::{Action, Message};
 
-        let path = std::env::temp_dir()
-            .join(format!("mostro_payout_route_ack_{}.db", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("mostro_payout_route_ack_{}.db", std::process::id()));
         let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
         let db = crate::db::app_db::db().expect("store initialised");
         let order_uuid = uuid::Uuid::new_v4();
@@ -17583,11 +17608,16 @@ mod tests {
         let invoice = crate::api::invoice::test_vectors::COFFEE;
         let since = payout_route::clear_epoch(&order_id);
         let sent = payout_route::destination(invoice, PayoutSource::Entered, None, 2_000, None);
+        let sent_key = SentPayout {
+            order_id: order_id.clone(),
+            destination: sent.destination.clone(),
+            submitted_at: sent.submitted_at,
+        };
         payout_route::record_destination_since(&order_id, 1, sent, since).await;
         // Its caller timed out: the record stays, without a waiter.
         let trade_key = "ff00ff78";
         let nonce = 7_801;
-        register_add_invoice_request(trade_key, nonce, 1).expect("registers");
+        register_add_invoice_request(trade_key, nonce, 1, sent_key).expect("registers");
         detach_request_waiter(trade_key, nonce);
 
         let sender = nostr_sdk::prelude::PublicKey::from_hex(&active_mostro_pubkey())
