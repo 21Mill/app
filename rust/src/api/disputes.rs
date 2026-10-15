@@ -3444,4 +3444,53 @@ mod tests {
             "the share must be cleared with the other dispute keys"
         );
     }
+
+    /// #811: a dispute's chat with the solver stays on the trade's node.
+    /// On another node's trade nothing is sent and the caller is told why.
+    #[tokio::test]
+    async fn dispute_chat_on_a_trade_of_another_node_is_refused() {
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row, trade,
+        };
+        let mut outcomes = Vec::new();
+        for node in nodes_other_than_the_active_one() {
+            // Arrange
+            let order_id = uuid::Uuid::new_v4().to_string();
+            store_trade_row(&trade(
+                &order_id,
+                7,
+                crate::api::types::OrderStatus::Dispute,
+                &node,
+            ))
+            .await;
+
+            // Act
+            let sends = [
+                (
+                    "submit_evidence",
+                    submit_evidence(order_id.clone(), "proof".into())
+                        .await
+                        .err(),
+                ),
+                (
+                    "share_chat_key_with_solver",
+                    share_chat_key_with_solver(order_id.clone()).await.err(),
+                ),
+                (
+                    "send_dispute_file",
+                    send_dispute_file(order_id.clone(), vec![1, 2, 3], "a.txt".into(), "u1".into())
+                        .await
+                        .err(),
+                ),
+            ];
+            forget_trade_row(&order_id).await;
+            outcomes.push(sends.map(|(name, err)| (name, err.map(|e| e.to_string()))));
+        }
+
+        // Assert
+        for (name, err) in outcomes.into_iter().flatten() {
+            let err = err.unwrap_or_else(|| format!("{name} was not refused"));
+            assert!(err.contains("TradeOnOtherNode"), "{name}: got {err}");
+        }
+    }
 }

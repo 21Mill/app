@@ -298,4 +298,136 @@ mod tests {
             }
         }
     }
+
+    /// A trade key index no other test binds: a shared one would resolve to
+    /// another test's row.
+    fn unbound_trade_index() -> u32 {
+        (uuid::Uuid::new_v4().as_u128() as u32) | 1 << 31
+    }
+
+    /// #811: the node that issued a trade is heard about it, whichever node
+    /// is active, so a trade on another node moves to its real status.
+    #[tokio::test]
+    async fn a_message_from_the_trades_own_node_is_heard() {
+        use crate::mostro::test_fixtures::{forget_trade_row, store_trade_row};
+        // Arrange
+        let node = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let index = unbound_trade_index();
+        store_trade_row(&trade(&order_id, index, OrderStatus::Active, &node)).await;
+
+        // Act
+        let speaker = speaker(&node, index).await;
+        forget_trade_row(&order_id).await;
+
+        // Assert
+        assert!(heard(speaker, false), "the trade's node: got {speaker:?}");
+    }
+
+    /// #811: no other node is heard about a trade: not one that issued none
+    /// of it, and none at all for a row that does not know its node or a
+    /// key bound to no row. The active node still is.
+    #[tokio::test]
+    async fn only_the_active_node_and_the_trades_own_are_heard() {
+        use crate::mostro::test_fixtures::{forget_trade_row, store_trade_row};
+        let node = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let other = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let active = crate::config::active_mostro_pubkey();
+        let on_node = (uuid::Uuid::new_v4().to_string(), unbound_trade_index());
+        let unknown = (uuid::Uuid::new_v4().to_string(), unbound_trade_index());
+        store_trade_row(&trade(&on_node.0, on_node.1, OrderStatus::Active, &node)).await;
+        store_trade_row(&trade(&unknown.0, unknown.1, OrderStatus::Active, "")).await;
+
+        let cases = [
+            ("another node", other.as_str(), on_node.1, false),
+            ("a row without a node", node.as_str(), unknown.1, false),
+            (
+                "a key bound to no row",
+                node.as_str(),
+                unbound_trade_index(),
+                false,
+            ),
+            ("the active node", active.as_str(), on_node.1, true),
+        ];
+        let mut outcomes = Vec::new();
+        for (case, sender, index, expected) in cases {
+            let speaker = speaker(sender, index).await;
+            outcomes.push((case, speaker, expected));
+        }
+        forget_trade_row(&on_node.0).await;
+        forget_trade_row(&unknown.0).await;
+
+        for (case, speaker, expected) in outcomes {
+            assert_eq!(heard(speaker, false), expected, "{case}: got {speaker:?}");
+        }
+    }
+
+    /// The envelope builders of a trade's chat, peer and dispute alike
+    /// (#811).
+    const CHAT_ENVELOPES: [&str; 2] = ["mostro_wrap", "mostro_wrap_reaction"];
+    /// The functions that only pass a chat send through, to their callers.
+    const CHAT_RELAYS: [&str; 4] = [
+        "publish_chat_payload",
+        "publish_chat_payload_for",
+        "publish_delivered_chat_payload_for",
+        "send_attachment",
+    ];
+    /// Where a trade's chat is sent from: each refuses a trade of another
+    /// node.
+    const CHAT_SENDERS: [&str; 6] = [
+        "send_message",
+        "send_reaction",
+        "send_file",
+        "submit_evidence",
+        "share_chat_key_with_solver",
+        "send_dispute_file",
+    ];
+
+    /// #811: everything about a trade happens on its own node, its chat
+    /// included. Every chat send goes through a sender that refuses a trade
+    /// of another node; a new path has to be one of them.
+    #[test]
+    fn every_chat_send_refuses_a_trade_of_another_node() {
+        let sources = production_sources();
+        let mut pending: Vec<String> = CHAT_ENVELOPES
+            .iter()
+            .map(|e| format!("transport::{e}("))
+            .collect();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut senders = std::collections::BTreeSet::new();
+        while let Some(call) = pending.pop() {
+            for (path, source) in &sources {
+                for (at, _) in source.match_indices(&call) {
+                    if source[..at].ends_with("fn ") {
+                        continue;
+                    }
+                    let caller = enclosing_fn(source, at);
+                    if CHAT_RELAYS.contains(&caller.as_str()) {
+                        if seen.insert(caller.clone()) {
+                            pending.push(format!("{caller}("));
+                        }
+                    } else {
+                        assert!(
+                            CHAT_SENDERS.contains(&caller.as_str()),
+                            "{path}: `{caller}` sends a trade's chat without refusing \
+                             another node's trade: add the check and list it"
+                        );
+                        senders.insert((path.clone(), caller));
+                    }
+                }
+            }
+        }
+        for name in CHAT_SENDERS {
+            let (path, _) = senders
+                .iter()
+                .find(|(_, caller)| caller == name)
+                .unwrap_or_else(|| panic!("`{name}` sends no chat any more: unlist it"));
+            let source = &sources.iter().find(|(p, _)| p == path).unwrap().1;
+            let body = fn_body(source, name).unwrap();
+            assert!(
+                body.contains("trade_node::refuse_other_node("),
+                "{path}: `{name}` must refuse a trade of another node"
+            );
+        }
+    }
 }

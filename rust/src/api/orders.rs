@@ -25111,6 +25111,27 @@ mod tests {
             }
         }
     }
+
+    /// #811: the global feed decides who may speak about a trade before it
+    /// records the message as seen. A message recorded and then refused is
+    /// never handled again in this process, since nostr-sdk does not deliver
+    /// an event twice either.
+    #[test]
+    fn the_global_feed_decides_who_is_heard_before_recording_a_message() {
+        use crate::source_guard::{item_body, production_code};
+        let body = item_body(
+            &production_code(include_str!("orders.rs")),
+            "async fn _run_order_subscription()",
+        )
+        .unwrap();
+        let decided = body
+            .find("crate::mostro::trade_node::speaker(")
+            .expect("the feed asks who the author is to the trade");
+        let handled = body
+            .find("handle_global_daemon_message(")
+            .expect("the feed hands the message on");
+        assert!(decided < handled, "who is heard is decided first");
+    }
 }
 
 #[cfg(test)]

@@ -5078,4 +5078,54 @@ mod tests {
             .to_string()
             .starts_with("ReactionTooLarge"));
     }
+
+    /// #811: a trade's chat stays on its node. On another node's trade,
+    /// nothing is sent and the caller is told why; on a row that does not
+    /// know its node, the chat goes on as before.
+    #[tokio::test]
+    async fn chat_on_a_trade_of_another_node_is_refused() {
+        use crate::mostro::test_fixtures::{
+            forget_trade_row, nodes_other_than_the_active_one, store_trade_row, trade,
+        };
+        let mut outcomes = Vec::new();
+        for node in nodes_other_than_the_active_one() {
+            // Arrange
+            let order_id = uuid::Uuid::new_v4().to_string();
+            store_trade_row(&trade(
+                &order_id,
+                7,
+                crate::api::types::OrderStatus::Active,
+                &node,
+            ))
+            .await;
+
+            // Act
+            let sends = [
+                (
+                    "send_message",
+                    send_message(order_id.clone(), "hi".into()).await.err(),
+                ),
+                (
+                    "send_reaction",
+                    send_reaction(order_id.clone(), "m1".into(), "👍".into())
+                        .await
+                        .err(),
+                ),
+                (
+                    "send_file",
+                    send_file(order_id.clone(), vec![1, 2, 3], "a.txt".into(), "u1".into())
+                        .await
+                        .err(),
+                ),
+            ];
+            forget_trade_row(&order_id).await;
+            outcomes.push(sends.map(|(name, err)| (name, err.map(|e| e.to_string()))));
+        }
+
+        // Assert
+        for (name, err) in outcomes.into_iter().flatten() {
+            let err = err.unwrap_or_else(|| format!("{name} was not refused"));
+            assert!(err.contains("TradeOnOtherNode"), "{name}: got {err}");
+        }
+    }
 }
