@@ -3597,37 +3597,23 @@ async fn dispatch_mostro_message(
         created_at: event_created_at,
     } = unwrapped;
 
-    // Daemon authentication: the kind-14 event author (`sender`) must be the
-    // active Mostro pubkey. The event signature is verified inside
-    // `unwrap_incoming`, so `sender` is the cryptographically authoritative
-    // origin.
+    // Daemon authentication: who the kind-14 event author (`sender`) is to
+    // the trade decides whether it is heard. The event signature is verified
+    // inside `unwrap_incoming`, so `sender` is the cryptographically
+    // authoritative origin.
     let sender_hex = sender.to_hex();
-    match nostr_sdk::prelude::PublicKey::from_hex(&crate::config::active_mostro_pubkey()) {
-        Ok(expected) if expected == sender => {}
-        // A node that issued a still-open payout claim may speak to this
-        // client about claims only (docs/ANTI_ABUSE_BOND.md §6.4); every
-        // other action from a non-active node is refused as before.
-        Ok(_) if crate::mostro::bond_claims::is_claim_node(&sender_hex)
-            && is_claim_action(&msg) => {}
-        Ok(expected) => {
-            crate::api::logging::blog_warn(
-                "daemon-msg",
-                format!(
-                    "rejecting daemon message: sender={} != active mostro={} (trade={})",
-                    &sender.to_hex()[..8],
-                    &expected.to_hex()[..8],
-                    &trade_pubkey_hex[..8],
-                ),
-            );
-            return;
-        }
-        Err(e) => {
-            crate::api::logging::blog_warn(
-                "daemon-msg",
-                format!("active mostro pubkey is invalid: {e} — cannot authenticate the sender"),
-            );
-            return;
-        }
+    let speaker = crate::mostro::trade_node::speaker(&sender_hex, trade_index).await;
+    if !crate::mostro::trade_node::heard(speaker, is_claim_action(&msg)) {
+        crate::api::logging::blog_warn(
+            "daemon-msg",
+            format!(
+                "rejecting daemon message: sender={} != active mostro={} (trade={})",
+                crate::api::logging::short_id(&sender_hex),
+                crate::api::logging::short_id(&crate::config::active_mostro_pubkey()),
+                &trade_pubkey_hex[..8],
+            ),
+        );
+        return;
     }
 
     // Centralized response validation: catches malformed `request_id` fields

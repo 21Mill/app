@@ -11,6 +11,9 @@
 //! the step depends on what the app keeps for the active node alone (PoW,
 //! protocol version, escrow mode, fee, bond policy). [`trade_action_node`] is
 //! where every trade action takes its destination from (#810).
+//!
+//! A daemon message is heard according to who its author is to the trade it
+//! is addressed to ([`speaker`], [`heard`]).
 
 use crate::api::types::TradeInfo;
 use nostr_sdk::prelude::PublicKey;
@@ -48,6 +51,41 @@ pub(crate) async fn trade_action_node(order_id: &str) -> anyhow::Result<PublicKe
             ),
         );
     })
+}
+
+/// Who the author of a daemon message is to the trade it is addressed to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Speaker {
+    /// The active node.
+    ActiveNode,
+    /// A node still owed a payout claim's traffic (docs/ANTI_ABUSE_BOND.md
+    /// §6.4): heard about claims only.
+    ClaimNode,
+    /// Anyone else.
+    Stranger,
+}
+
+/// Who `sender_hex`, the verified author of a daemon message addressed to
+/// the trade key at `trade_index`, is to that trade. The trade itself is not
+/// consulted yet.
+pub(crate) async fn speaker(sender_hex: &str, _trade_index: u32) -> Speaker {
+    if sender_hex.eq_ignore_ascii_case(&crate::config::active_mostro_pubkey()) {
+        Speaker::ActiveNode
+    } else if crate::mostro::bond_claims::is_claim_node(sender_hex) {
+        Speaker::ClaimNode
+    } else {
+        Speaker::Stranger
+    }
+}
+
+/// Whether a message from `speaker` is heard: the active node's always, a
+/// claim node's about claims only, anyone else's never.
+pub(crate) fn heard(speaker: Speaker, claim_action: bool) -> bool {
+    match speaker {
+        Speaker::ActiveNode => true,
+        Speaker::ClaimNode => claim_action,
+        Speaker::Stranger => false,
+    }
 }
 
 /// `node` when it is the `active` one, else `TradeOnOtherNode`.
