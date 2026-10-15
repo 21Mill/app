@@ -25187,6 +25187,67 @@ mod tests {
         assert_eq!(no_row, "");
     }
 
+    /// #811: a trade canceled before it went active loses its row before its
+    /// update is emitted, and a card of another node must still learn that
+    /// node: the wipe tombstone keeps it.
+    #[tokio::test]
+    async fn a_wiped_trade_still_names_its_node() {
+        use crate::db::Storage as _;
+        use crate::mostro::test_fixtures::{store_trade_row, trade};
+        // Arrange
+        let node = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let order_id = uuid::Uuid::new_v4().to_string();
+        store_trade_row(&trade(&order_id, 7, OrderStatus::Pending, &node)).await;
+        let db = crate::db::app_db::db().unwrap();
+
+        // Act
+        wipe_trade_row(db, &order_id, 1000, 7).await.unwrap();
+        let named = trade_node_of(order_id.clone()).await;
+        let tombstone = crate::db::settings_keys::trade_wiped(&order_id);
+        let value = db.get_setting(&tombstone).await.unwrap();
+        db.delete_setting(&tombstone).await.unwrap();
+        db.delete_trade_key(&order_id).await.unwrap();
+
+        // Assert
+        assert_eq!(named, node);
+        let value = value.expect("the wipe leaves its tombstone");
+        assert!(
+            tombstone_covers(&value, 7),
+            "it still covers its generation"
+        );
+        assert!(!tombstone_covers(&value, 8), "and not a later one");
+    }
+
+    /// A tombstone written before the node was kept (`<at>:<index>`) still
+    /// covers its generation, and names no node.
+    #[tokio::test]
+    async fn a_tombstone_without_a_node_names_none() {
+        use crate::db::Storage as _;
+        use crate::mostro::test_fixtures::store_trade_row;
+        // Arrange — any row opens the shared test store.
+        let other = uuid::Uuid::new_v4().to_string();
+        store_trade_row(&crate::mostro::test_fixtures::trade(
+            &other,
+            7,
+            OrderStatus::Active,
+            "",
+        ))
+        .await;
+        crate::mostro::test_fixtures::forget_trade_row(&other).await;
+        let db = crate::db::app_db::db().unwrap();
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let tombstone = crate::db::settings_keys::trade_wiped(&order_id);
+        db.set_setting(&tombstone, "1000:7").await.unwrap();
+
+        // Act
+        let named = trade_node_of(order_id.clone()).await;
+        db.delete_setting(&tombstone).await.unwrap();
+
+        // Assert
+        assert_eq!(named, "");
+        assert!(tombstone_covers("1000:7", 7));
+    }
+
     /// #811: the global feed decides who may speak about a trade before it
     /// records the message as seen. A message recorded and then refused is
     /// never handled again in this process, since nostr-sdk does not deliver
