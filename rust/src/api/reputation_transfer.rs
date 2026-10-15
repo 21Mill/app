@@ -93,11 +93,13 @@ pub fn get_reputation_support() -> ReputationSupportInfo {
     }
 }
 
-/// Encode the displayed identity as npub for comparison with lnp2pBot's
-/// confirmation. Dart supplies the same hex key used in the bot link.
+/// Encode an identity as npub, for the user to confirm before it is bound or
+/// authorised: the import screen compares it with lnp2pBot's confirmation,
+/// and the reputation screen shows it before a rebind is signed. Takes the
+/// key as hex or npub, so a typed npub is checked here too.
 #[flutter_rust_bridge::frb(sync)]
-pub fn reputation_identity_npub(identity_hex: String) -> Result<String> {
-    Ok(pubkey(&identity_hex)?.to_bech32()?)
+pub fn reputation_identity_npub(identity: String) -> Result<String> {
+    Ok(identity_pubkey(&identity)?.to_bech32()?)
 }
 
 /// Verify an attestation pasted or received, without sending anything: the
@@ -252,13 +254,13 @@ pub async fn get_pending_reputation_attestation() -> Result<Option<ReputationAtt
 }
 
 /// Sign, with the identity the reputation at `issuer` is bound to now, the
-/// authorisation to move that binding to `new_identity` (hex). Pass it as
+/// authorisation to move that binding to `new_identity` (npub or hex). Pass it as
 /// `rebind` to [`export_reputation`] from the new identity, or paste it into
 /// lnp2pBot. Valid for an hour.
 pub async fn sign_reputation_rebind(issuer: String, new_identity: String) -> Result<String> {
     let bound = identity_keys().await?;
     let issuer = pubkey(&issuer)?;
-    let new_identity = pubkey(&new_identity)?;
+    let new_identity = identity_pubkey(&new_identity)?;
     let event = ReputationRebind::build(
         &bound,
         &issuer,
@@ -305,6 +307,11 @@ async fn while_still_current(
 /// A hex public key from user input, or the `InvalidPubkey` marker.
 fn pubkey(hex: &str) -> Result<PublicKey> {
     PublicKey::from_hex(hex.trim()).map_err(|_| anyhow::anyhow!("InvalidPubkey: {}", hex.trim()))
+}
+
+/// An identity the user typed, as npub or hex.
+fn identity_pubkey(input: &str) -> Result<PublicKey> {
+    PublicKey::parse(input.trim()).map_err(|_| anyhow::anyhow!("InvalidPubkey: {}", input.trim()))
 }
 
 /// The id of the event in `json`, whatever its formatting.
@@ -476,6 +483,28 @@ mod tests {
             .unwrap_err()
             .to_string()
             .starts_with("InvalidPubkey"));
+    }
+
+    #[test]
+    fn an_identity_is_read_as_hex_or_npub_and_nothing_else() {
+        let hex = "ab1db593a4d1196eb07335fdc702a314712ed29c631ceaebd84708a17d3bc2f7";
+        let npub = reputation_identity_npub(hex.into()).unwrap();
+        assert_eq!(identity_pubkey(hex).unwrap().to_hex(), hex);
+        assert_eq!(
+            identity_pubkey(&format!("  {npub}\n")).unwrap().to_hex(),
+            hex
+        );
+        assert_eq!(reputation_identity_npub(npub.clone()).unwrap(), npub);
+        let broken_checksum = format!("{}q", &npub[..npub.len() - 1]);
+        for garbage in ["", "npub1", "nope", &hex[..63], &broken_checksum] {
+            assert!(
+                identity_pubkey(garbage)
+                    .unwrap_err()
+                    .to_string()
+                    .starts_with("InvalidPubkey"),
+                "{garbage:?} must be refused"
+            );
+        }
     }
 
     #[test]

@@ -304,6 +304,16 @@ class AutomationIds {
   static const String payCancel = 'pay.cancel';
 
   // Reputation portability (#674)
+  static const String settingsReputation = 'settings.reputation';
+  static const String reputationOpenImport = 'reputation.open_import';
+  static const String reputationExport = 'reputation.export';
+  static const String reputationExportConfirm = 'reputation.export.confirm';
+  static const String reputationExported = 'reputation.export.result';
+  static const String reputationRebindInput = 'reputation.export.rebind';
+  static const String reputationRebindIdentity = 'reputation.rebind.identity';
+  static const String reputationRebindSign = 'reputation.rebind.sign';
+  static const String reputationRebindConfirm = 'reputation.rebind.confirm';
+  static const String reputationRebindResult = 'reputation.rebind.result';
   static const String reputationImportIdentity = 'reputation.import.identity';
   static const String reputationImportOpenBot = 'reputation.import.open_bot';
   static const String reputationImportInput = 'reputation.import.input';

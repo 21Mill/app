@@ -590,7 +590,7 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiNostrRemoveRelay({required String url});
 
   String crateApiReputationTransferReputationIdentityNpub({
-    required String identityHex,
+    required String identity,
   });
 
   Future<TradeInfo> crateApiOrdersRequestBondInvoiceAgain({
@@ -6098,13 +6098,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   String crateApiReputationTransferReputationIdentityNpub({
-    required String identityHex,
+    required String identity,
   }) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(identityHex, serializer);
+          sse_encode_String(identity, serializer);
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -6116,7 +6116,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiReputationTransferReputationIdentityNpubConstMeta,
-        argValues: [identityHex],
+        argValues: [identity],
         apiImpl: this,
       ),
     );
@@ -6126,7 +6126,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   get kCrateApiReputationTransferReputationIdentityNpubConstMeta =>
       const TaskConstMeta(
         debugName: "reputation_identity_npub",
-        argNames: ["identityHex"],
+        argNames: ["identity"],
       );
 
   @override

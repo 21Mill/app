@@ -1413,5 +1413,20 @@
   "reputationOpenLnp2pbotFailed": "Impossible d'ouvrir Telegram. Ouvrez lnp2pBot vous-même dans Telegram et collez ici ce qu'il vous envoie.",
   "reputationIdentityHint": "Avant de confirmer dans lnp2pBot, vérifiez que cette même clé publique s’affiche :",
   "reputationUnavailable": "Impossible de vérifier si la réputation peut être importée. Réessayez.",
-  "reputationIdentityChanged": "Votre identité a changé. Vérifiez la clé publique affichée ici avant de réessayer."
+  "reputationIdentityChanged": "Votre identité a changé. Vérifiez la clé publique affichée ici avant de réessayer.",
+  "reputationSettingTitle": "Réputation",
+  "reputationImportCardBody": "Apportez sur ce Mostro la réputation gagnée sur lnp2pBot ou sur un autre Mostro.",
+  "reputationExportTitle": "Exporter ma réputation",
+  "reputationExportCardBody": "Obtenez une copie signée de la réputation gagnée sur ce Mostro pour l'importer sur un autre.",
+  "reputationExportConfirmTitle": "Exporter vers cette identité ?",
+  "reputationExportConfirmBody": "Votre réputation sur ce Mostro sera exportée pour cette identité :\n\n{npub}\n\nUne fois exportée, elle y est liée : l'exporter plus tard pour une autre identité exige une autorisation signée avec celle-ci.",
+  "reputationExportConfirmButton": "Exporter",
+  "reputationExported": "Votre réputation est prête. Passez au Mostro où vous la voulez et importez-la ; elle est valable 7 jours.",
+  "reputationRebindBody": "Vous changez d'identité ? Signez ici une autorisation pour la nouvelle, avec l'identité à laquelle votre réputation est liée maintenant. Puis, depuis la nouvelle identité, collez-la dans le champ d'autorisation ci-dessus et exportez.",
+  "reputationNewIdentityHint": "Nouvelle identité (npub ou hex)",
+  "reputationRebindSign": "Signer l'autorisation",
+  "reputationInvalidIdentity": "Ce n'est pas un npub ni une clé hex valide.",
+  "reputationRebindInputHint": "Autorisation de votre identité précédente (facultatif)",
+  "reputationRebindConfirmTitle": "Autoriser cette identité ?",
+  "reputationRebindConfirmBody": "Qui détient cette identité pourra exporter votre réputation depuis ce Mostro, et votre identité actuelle ne le pourra plus :\n\n{npub}\n\nNe signez que pour une identité qui vous appartient."
 }

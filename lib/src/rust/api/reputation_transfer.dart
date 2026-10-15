@@ -6,19 +6,21 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ask`, `check_exported`, `check_importable`, `event_id`, `identity_keys`, `importable`, `is_export_reply`, `is_import_reply`, `new`, `parse`, `pending_slot`, `pubkey`, `publish_request`, `refusal`, `same_identity`, `while_still_current`
+// These functions are ignored because they are not marked as `pub`: `ask`, `check_exported`, `check_importable`, `event_id`, `identity_keys`, `identity_pubkey`, `importable`, `is_export_reply`, `is_import_reply`, `new`, `parse`, `pending_slot`, `pubkey`, `publish_request`, `refusal`, `same_identity`, `while_still_current`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
 
 /// What the active node advertises, as of its last capability fetch.
 ReputationSupportInfo getReputationSupport() =>
     RustLib.instance.api.crateApiReputationTransferGetReputationSupport();
 
-/// Encode the displayed identity as npub for comparison with lnp2pBot's
-/// confirmation. Dart supplies the same hex key used in the bot link.
-String reputationIdentityNpub({required String identityHex}) => RustLib
+/// Encode an identity as npub, for the user to confirm before it is bound or
+/// authorised: the import screen compares it with lnp2pBot's confirmation,
+/// and the reputation screen shows it before a rebind is signed. Takes the
+/// key as hex or npub, so a typed npub is checked here too.
+String reputationIdentityNpub({required String identity}) => RustLib
     .instance
     .api
-    .crateApiReputationTransferReputationIdentityNpub(identityHex: identityHex);
+    .crateApiReputationTransferReputationIdentityNpub(identity: identity);
 
 /// Verify an attestation pasted or received, without sending anything: the
 /// event's own rules (signature, kind, tags, clock). Whether the node trusts
@@ -71,7 +73,7 @@ Future<ReputationAttestationInfo?> getPendingReputationAttestation() =>
         .crateApiReputationTransferGetPendingReputationAttestation();
 
 /// Sign, with the identity the reputation at `issuer` is bound to now, the
-/// authorisation to move that binding to `new_identity` (hex). Pass it as
+/// authorisation to move that binding to `new_identity` (npub or hex). Pass it as
 /// `rebind` to [`export_reputation`] from the new identity, or paste it into
 /// lnp2pBot. Valid for an hour.
 Future<String> signReputationRebind({

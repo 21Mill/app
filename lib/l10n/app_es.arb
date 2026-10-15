@@ -1413,5 +1413,20 @@
   "reputationOpenLnp2pbotFailed": "No se pudo abrir Telegram. Abre lnp2pBot en Telegram por tu cuenta y pega aquí lo que te envíe.",
   "reputationIdentityHint": "Antes de confirmar en lnp2pBot, comprueba que muestre esta misma clave pública:",
   "reputationUnavailable": "No se pudo comprobar si se puede importar la reputación. Inténtalo de nuevo.",
-  "reputationIdentityChanged": "Tu identidad cambió. Comprueba la clave pública que se muestra aquí antes de volver a intentarlo."
+  "reputationIdentityChanged": "Tu identidad cambió. Comprueba la clave pública que se muestra aquí antes de volver a intentarlo.",
+  "reputationSettingTitle": "Reputación",
+  "reputationImportCardBody": "Trae a este Mostro la reputación que ganaste en lnp2pBot o en otro Mostro.",
+  "reputationExportTitle": "Exportar mi reputación",
+  "reputationExportCardBody": "Obtén una copia firmada de la reputación que ganaste en este Mostro para importarla en otro.",
+  "reputationExportConfirmTitle": "¿Exportar a esta identidad?",
+  "reputationExportConfirmBody": "Tu reputación en este Mostro se exportará para esta identidad:\n\n{npub}\n\nUna vez exportada queda ligada a ella: exportarla después para otra identidad requiere una autorización firmada con esta.",
+  "reputationExportConfirmButton": "Exportar",
+  "reputationExported": "Tu reputación está lista. Cambia al Mostro donde la quieres e impórtala; es válida durante 7 días.",
+  "reputationRebindBody": "¿Te mudas a una identidad nueva? Firma aquí una autorización para ella, con la identidad a la que está ligada tu reputación ahora. Luego, desde la identidad nueva, pégala en el campo de autorización de arriba y exporta.",
+  "reputationNewIdentityHint": "Identidad nueva (npub o hex)",
+  "reputationRebindSign": "Firmar autorización",
+  "reputationInvalidIdentity": "Ese no es un npub ni una clave hex válidos.",
+  "reputationRebindInputHint": "Autorización de tu identidad anterior (opcional)",
+  "reputationRebindConfirmTitle": "¿Autorizar esta identidad?",
+  "reputationRebindConfirmBody": "Quien tenga esta identidad podrá exportar tu reputación de este Mostro, y tu identidad actual ya no podrá:\n\n{npub}\n\nFirma solo para una identidad que sea tuya."
 }

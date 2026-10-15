@@ -23,6 +23,7 @@ import 'package:mostro/features/about/screens/about_screen.dart';
 import 'package:mostro/features/about/screens/node_technical_data_screen.dart';
 import 'package:mostro/features/settings/screens/nwc_wallet_screen.dart';
 import 'package:mostro/features/reputation/screens/import_reputation_screen.dart';
+import 'package:mostro/features/reputation/screens/reputation_screen.dart';
 import 'package:mostro/features/settings/screens/log_report_screen.dart';
 import 'package:mostro/features/settings/screens/notification_settings_screen.dart';
 import 'package:mostro/features/settings/screens/settings_screen.dart';
@@ -64,6 +65,7 @@ abstract final class AppRoute {
   static const notificationSettings = '/notification_settings';
   static const logs = '/logs';
   static const importReputation = '/import_reputation';
+  static const reputation = '/reputation';
   static const disputeChat = '/dispute_chat/:disputeId';
 
   /// Embedded Cashu wallet. Only reachable from Settings when the active node
@@ -246,6 +248,10 @@ final GoRouter appRouter = GoRouter(
         _onHome(
           AppRoute.importReputation,
           builder: (_, __) => const ImportReputationScreen(),
+        ),
+        _onHome(
+          AppRoute.reputation,
+          builder: (_, __) => const ReputationScreen(),
         ),
         _onHome(
           AppRoute.about,

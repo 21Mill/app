@@ -4674,4 +4674,60 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get reputationIdentityChanged =>
       'Je identiteit is gewijzigd. Controleer de openbare sleutel die hier wordt getoond voordat je het opnieuw probeert.';
+
+  @override
+  String get reputationSettingTitle => 'Reputatie';
+
+  @override
+  String get reputationImportCardBody =>
+      'Breng de reputatie die je op lnp2pBot of een andere Mostro verdiende naar deze.';
+
+  @override
+  String get reputationExportTitle => 'Mijn reputatie exporteren';
+
+  @override
+  String get reputationExportCardBody =>
+      'Haal een ondertekende kopie op van de reputatie die je op deze Mostro verdiende, om ze op een andere te importeren.';
+
+  @override
+  String get reputationExportConfirmTitle => 'Exporteren naar deze identiteit?';
+
+  @override
+  String reputationExportConfirmBody(String npub) {
+    return 'Je reputatie op deze Mostro wordt geëxporteerd voor deze identiteit:\n\n$npub\n\nNa het exporteren is ze eraan gekoppeld: later exporteren voor een andere identiteit vereist een toestemming ondertekend met deze.';
+  }
+
+  @override
+  String get reputationExportConfirmButton => 'Exporteren';
+
+  @override
+  String get reputationExported =>
+      'Je reputatie is klaar. Schakel over naar de Mostro waar je ze wilt en importeer ze; ze is 7 dagen geldig.';
+
+  @override
+  String get reputationRebindBody =>
+      'Stap je over op een nieuwe identiteit? Onderteken hier een toestemming voor de nieuwe, met de identiteit waaraan je reputatie nu gekoppeld is. Plak die daarna vanaf de nieuwe identiteit in het toestemmingsveld hierboven en exporteer.';
+
+  @override
+  String get reputationNewIdentityHint => 'Nieuwe identiteit (npub of hex)';
+
+  @override
+  String get reputationRebindSign => 'Toestemming ondertekenen';
+
+  @override
+  String get reputationInvalidIdentity =>
+      'Dat is geen geldige npub- of hex-sleutel.';
+
+  @override
+  String get reputationRebindInputHint =>
+      'Toestemming van je vorige identiteit (optioneel)';
+
+  @override
+  String get reputationRebindConfirmTitle =>
+      'Deze identiteit toestemming geven?';
+
+  @override
+  String reputationRebindConfirmBody(String npub) {
+    return 'Wie deze identiteit bezit, kan je reputatie van deze Mostro exporteren, en je huidige identiteit kan dat niet meer:\n\n$npub\n\nOnderteken alleen voor een identiteit die van jou is.';
+  }
 }

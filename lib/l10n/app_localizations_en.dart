@@ -4636,4 +4636,59 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get reputationIdentityChanged =>
       'Your identity changed. Check the public key shown here before trying again.';
+
+  @override
+  String get reputationSettingTitle => 'Reputation';
+
+  @override
+  String get reputationImportCardBody =>
+      'Bring the reputation you earned on lnp2pBot or on another Mostro to this one.';
+
+  @override
+  String get reputationExportTitle => 'Export my reputation';
+
+  @override
+  String get reputationExportCardBody =>
+      'Get a signed copy of the reputation you earned on this Mostro, to import it on another one.';
+
+  @override
+  String get reputationExportConfirmTitle => 'Export to this identity?';
+
+  @override
+  String reputationExportConfirmBody(String npub) {
+    return 'Your reputation on this Mostro will be exported for this identity:\n\n$npub\n\nOnce exported, it is bound to it: exporting it for another identity later needs an authorization signed with this one.';
+  }
+
+  @override
+  String get reputationExportConfirmButton => 'Export';
+
+  @override
+  String get reputationExported =>
+      'Your reputation is ready. Switch to the Mostro where you want it and import it; it is valid for 7 days.';
+
+  @override
+  String get reputationRebindBody =>
+      'Moving to a new identity? Sign an authorization for it here, with the identity your reputation is bound to now. Then, from the new identity, paste it in the authorization field above and export.';
+
+  @override
+  String get reputationNewIdentityHint => 'New identity (npub or hex)';
+
+  @override
+  String get reputationRebindSign => 'Sign authorization';
+
+  @override
+  String get reputationInvalidIdentity =>
+      'That is not a valid npub or hex key.';
+
+  @override
+  String get reputationRebindInputHint =>
+      'Authorization from your previous identity (optional)';
+
+  @override
+  String get reputationRebindConfirmTitle => 'Authorize this identity?';
+
+  @override
+  String reputationRebindConfirmBody(String npub) {
+    return 'Whoever holds this identity will be able to export your reputation from this Mostro, and your current identity no longer will:\n\n$npub\n\nSign only for an identity that is yours.';
+  }
 }

@@ -7695,6 +7695,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your identity changed. Check the public key shown here before trying again.'**
   String get reputationIdentityChanged;
+
+  /// No description provided for @reputationSettingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reputation'**
+  String get reputationSettingTitle;
+
+  /// No description provided for @reputationImportCardBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Bring the reputation you earned on lnp2pBot or on another Mostro to this one.'**
+  String get reputationImportCardBody;
+
+  /// No description provided for @reputationExportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export my reputation'**
+  String get reputationExportTitle;
+
+  /// No description provided for @reputationExportCardBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Get a signed copy of the reputation you earned on this Mostro, to import it on another one.'**
+  String get reputationExportCardBody;
+
+  /// No description provided for @reputationExportConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export to this identity?'**
+  String get reputationExportConfirmTitle;
+
+  /// No description provided for @reputationExportConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your reputation on this Mostro will be exported for this identity:\n\n{npub}\n\nOnce exported, it is bound to it: exporting it for another identity later needs an authorization signed with this one.'**
+  String reputationExportConfirmBody(String npub);
+
+  /// No description provided for @reputationExportConfirmButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get reputationExportConfirmButton;
+
+  /// No description provided for @reputationExported.
+  ///
+  /// In en, this message translates to:
+  /// **'Your reputation is ready. Switch to the Mostro where you want it and import it; it is valid for 7 days.'**
+  String get reputationExported;
+
+  /// No description provided for @reputationRebindBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Moving to a new identity? Sign an authorization for it here, with the identity your reputation is bound to now. Then, from the new identity, paste it in the authorization field above and export.'**
+  String get reputationRebindBody;
+
+  /// No description provided for @reputationNewIdentityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'New identity (npub or hex)'**
+  String get reputationNewIdentityHint;
+
+  /// No description provided for @reputationRebindSign.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign authorization'**
+  String get reputationRebindSign;
+
+  /// No description provided for @reputationInvalidIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a valid npub or hex key.'**
+  String get reputationInvalidIdentity;
+
+  /// Reputation screen: optional field on export for the authorization signed by the identity the reputation is bound to now
+  ///
+  /// In en, this message translates to:
+  /// **'Authorization from your previous identity (optional)'**
+  String get reputationRebindInputHint;
+
+  /// Title of the dialog confirming the identity a rebind authorization is signed for
+  ///
+  /// In en, this message translates to:
+  /// **'Authorize this identity?'**
+  String get reputationRebindConfirmTitle;
+
+  /// Dialog body before signing a rebind authorization: the key that will take the reputation over
+  ///
+  /// In en, this message translates to:
+  /// **'Whoever holds this identity will be able to export your reputation from this Mostro, and your current identity no longer will:\n\n{npub}\n\nSign only for an identity that is yours.'**
+  String reputationRebindConfirmBody(String npub);
 }
 
 class _AppLocalizationsDelegate

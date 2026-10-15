@@ -30,10 +30,13 @@ retracts an older answer, so both read `None` until the node is fetched again.
 
 ---
 
-### reputation_identity_npub(identity_hex: String) → String *(sync)*
-Encode a hex public key as npub in Rust. The import screen displays the complete,
-selectable value for comparison with lnp2pBot's confirmation. The bot link uses
-that same hex key; no private key is exposed. Invalid hex returns `InvalidPubkey`.
+### reputation_identity_npub(identity: String) → String *(sync)*
+Encode a public key, given as hex or npub (surrounding whitespace ignored), as
+npub in Rust. The import screen displays the complete, selectable value for
+comparison with lnp2pBot's confirmation; the bot link uses the same key as hex.
+The reputation screen shows it before a rebind authorisation is signed, which
+also validates what the user typed. No private key is exposed. Anything else
+returns `InvalidPubkey`.
 
 ---
 
@@ -116,9 +119,10 @@ after that identity was deleted or replaced; null when no identity is loaded.
 
 ### sign_reputation_rebind(issuer: String, new_identity: String) → String
 Sign, with the identity the reputation at `issuer` is bound to now, the
-authorisation to move that binding to `new_identity` (both hex). Returned as
-event JSON, to pass as `rebind` to `export_reputation` from the new identity
-or to paste into lnp2pBot. Valid for an hour.
+authorisation to move that binding to `new_identity`. `issuer` is hex;
+`new_identity` is hex or npub. Returned as event JSON, to pass as `rebind` to
+`export_reputation` from the new identity, or to paste into lnp2pBot when
+`issuer` is the bot's key. Valid for an hour.
 
 **Errors**: `PrivacyModeEnabled`, `InvalidPubkey`, `InvalidReputationRebind`.
 
@@ -155,10 +159,41 @@ expiration: i64
 json: String         # the event JSON as received, to import unchanged
 ```
 
+## Reputation screen
+
+`/reputation`, inside the persistent home shell, is reached from the
+**Reputation** row of Settings. It has three parts:
+
+- **Import** opens `/import_reputation` (below).
+- **Export**, shown only while the active node advertises `reputation_issuer`.
+  The screen rereads `get_reputation_support()` every two seconds, so an issuer
+  key that arrives with a capability fetch finishing after the screen opened
+  still shows the card. Export first shows the identity as an npub
+  (`reputation_identity_npub`) in a confirmation dialog, because the request
+  binds the node's account to it. An optional field takes a rebind
+  authorisation signed by the identity the account is bound to now; when
+  filled, it is passed trimmed as `rebind` to `export_reputation`. The returned
+  attestation is shown to select or copy, and Rust keeps it as pending.
+- **Moving to a new identity.** The user types the new identity as npub or hex.
+  It is validated and encoded through `reputation_identity_npub`, then shown in
+  a confirmation dialog stating that whoever holds that key can export the
+  reputation from this node. Only after confirmation is
+  `sign_reputation_rebind` called with the node's issuer key. The result is
+  shown to select or copy, for the new identity to paste in the export field
+  above.
+
+In full privacy mode a notice explains why every action is disabled.
+
+Automation identifiers: `settings.reputation`, `reputation.open_import`,
+`reputation.export`, `reputation.export.rebind`, `reputation.export.confirm`,
+`reputation.export.result`, `reputation.rebind.identity`,
+`reputation.rebind.sign`, `reputation.rebind.confirm` and
+`reputation.rebind.result`.
+
 ## Import screen
 
-`/import_reputation` is a route inside the persistent home shell. Its Settings
-entry is delivered separately. It imports into the active node and discloses
+`/import_reputation` is a route inside the persistent home shell, reached
+from the reputation screen. It imports into the active node and discloses
 that importing links the source and destination accounts.
 
 - Actions stay disabled while privacy and identity are loading, on read failure,

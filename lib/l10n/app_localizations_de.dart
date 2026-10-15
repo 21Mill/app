@@ -4698,4 +4698,59 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get reputationIdentityChanged =>
       'Deine Identität hat sich geändert. Prüfe den hier angezeigten öffentlichen Schlüssel, bevor du es erneut versuchst.';
+
+  @override
+  String get reputationSettingTitle => 'Reputation';
+
+  @override
+  String get reputationImportCardBody =>
+      'Bring die auf lnp2pBot oder einem anderen Mostro verdiente Reputation hierher.';
+
+  @override
+  String get reputationExportTitle => 'Meine Reputation exportieren';
+
+  @override
+  String get reputationExportCardBody =>
+      'Hol dir eine signierte Kopie der auf diesem Mostro verdienten Reputation, um sie auf einem anderen zu importieren.';
+
+  @override
+  String get reputationExportConfirmTitle => 'An diese Identität exportieren?';
+
+  @override
+  String reputationExportConfirmBody(String npub) {
+    return 'Deine Reputation auf diesem Mostro wird für diese Identität exportiert:\n\n$npub\n\nNach dem Export ist sie an sie gebunden: Ein späterer Export für eine andere Identität erfordert eine mit dieser signierte Autorisierung.';
+  }
+
+  @override
+  String get reputationExportConfirmButton => 'Exportieren';
+
+  @override
+  String get reputationExported =>
+      'Deine Reputation ist bereit. Wechsle zu dem Mostro, auf dem du sie haben willst, und importiere sie; sie ist 7 Tage gültig.';
+
+  @override
+  String get reputationRebindBody =>
+      'Wechselst du zu einer neuen Identität? Signiere hier mit der Identität, an die deine Reputation jetzt gebunden ist, eine Autorisierung für die neue. Füge sie dann mit der neuen Identität oben in das Autorisierungsfeld ein und exportiere.';
+
+  @override
+  String get reputationNewIdentityHint => 'Neue Identität (npub oder Hex)';
+
+  @override
+  String get reputationRebindSign => 'Autorisierung signieren';
+
+  @override
+  String get reputationInvalidIdentity =>
+      'Das ist kein gültiger npub- oder Hex-Schlüssel.';
+
+  @override
+  String get reputationRebindInputHint =>
+      'Autorisierung deiner bisherigen Identität (optional)';
+
+  @override
+  String get reputationRebindConfirmTitle => 'Diese Identität autorisieren?';
+
+  @override
+  String reputationRebindConfirmBody(String npub) {
+    return 'Wer diese Identität besitzt, kann deine Reputation von diesem Mostro exportieren, und deine aktuelle Identität kann es nicht mehr:\n\n$npub\n\nSigniere nur für eine Identität, die dir gehört.';
+  }
 }
