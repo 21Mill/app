@@ -1634,12 +1634,21 @@ fn resolve_take_payout(
         TakePayout::Address { address } => match crate::api::invoice::classify(&address) {
             PaymentDestination::LightningAddress(_) => {
                 let address = crate::api::invoice::normalize(&address).to_string();
-                Ok((
+                // The take screen names the default it showed rather than
+                // asking for "the default", so a change in Settings meanwhile
+                // cannot send another one (PR #824 review). It is still the
+                // default, and the record says so.
+                let choice = if default_address
+                    .as_deref()
+                    .is_some_and(|saved| saved.eq_ignore_ascii_case(&address))
+                {
+                    TakePayout::DefaultAddress
+                } else {
                     TakePayout::Address {
                         address: address.clone(),
-                    },
-                    Some(address),
-                ))
+                    }
+                };
+                Ok((choice, Some(address)))
             }
             _ => Err(anyhow::anyhow!("InvalidLightningAddress")),
         },
@@ -2203,6 +2212,19 @@ pub async fn send_invoice(
         remove_pending_request(&trade_pk_hex, request_id);
         return Err(e);
     }
+    // On the wire: recorded as sent before the node can answer, so a payout
+    // that completes before the wait below ends finds it open (PR #824
+    // review). An unanswered submission stays sent: a late acceptance pays
+    // it. A refusal marks it below.
+    let sent = crate::mostro::payout_route::destination(
+        &destination,
+        source,
+        wallet_name,
+        crate::rt::unix_now(),
+        amount_opt,
+    );
+    let sent_key = (sent.destination.clone(), sent.submitted_at);
+    note_payout_sent(&order_id, trade_index, sent, payout_epoch).await;
     crate::api::logging::blog_info(
         "orders",
         format!(
@@ -2225,15 +2247,6 @@ pub async fn send_invoice(
         detach_request_waiter(&trade_pk_hex, request_id);
     }
 
-    // What went out, for the trade's payout record (#823). An unanswered
-    // submission counts as sent: a late acceptance pays it.
-    let mut sent = crate::mostro::payout_route::destination(
-        &destination,
-        source,
-        wallet_name,
-        crate::rt::unix_now(),
-        amount_opt,
-    );
     if matches!(
         reply,
         Ok(Ok(Wake {
@@ -2241,18 +2254,13 @@ pub async fn send_invoice(
             ..
         }))
     ) {
-        sent.outcome = crate::api::types::PayoutOutcome::Rejected;
-        sent.outcome_at = Some(sent.submitted_at);
-    }
-    // Only for the trade it was sent for: a maker's order back on the book
-    // keeps its trade key for the next take, so a destination written now
-    // would read as that take's (PR #824 review).
-    if payout_row_is_current(&order_id, trade_index).await {
-        crate::mostro::payout_route::record_destination_since(
+        let (sent_destination, sent_at) = &sent_key;
+        crate::mostro::payout_route::record_rejection(
             &order_id,
             trade_index,
-            sent,
-            payout_epoch,
+            sent_destination,
+            *sent_at,
+            crate::rt::unix_now(),
         )
         .await;
     }
@@ -2290,6 +2298,28 @@ pub async fn send_invoice(
                 crate::mostro::pending::INVOICE_AWAITING_DAEMON
             ))
         }
+    }
+}
+
+/// Record `sent` in the trade's payout record as on its way (#823), only
+/// for the trade it was sent for: a maker's order back on the book keeps
+/// its trade key for the next take, so a destination written for it would
+/// read as that take's, and a clear since `epoch` means the step is over
+/// (PR #824 review).
+async fn note_payout_sent(
+    order_id: &str,
+    trade_index: u32,
+    sent: crate::api::types::PayoutDestination,
+    epoch: u64,
+) {
+    if payout_row_is_current(order_id, trade_index).await {
+        crate::mostro::payout_route::record_destination_since(
+            order_id,
+            trade_index,
+            sent,
+            epoch,
+        )
+        .await;
     }
 }
 
@@ -14841,6 +14871,15 @@ mod tests {
             resolve_take_payout(Some(TakePayout::AskForInvoice), default.clone()).unwrap(),
             (TakePayout::AskForInvoice, None)
         );
+        // The default named by its address is still the default (PR #824
+        // review: the screen sends the one it showed).
+        let shown = TakePayout::Address {
+            address: "Alice@Example.com".into(),
+        };
+        assert_eq!(
+            resolve_take_payout(Some(shown), default.clone()).unwrap(),
+            (TakePayout::DefaultAddress, Some("Alice@Example.com".into()))
+        );
         // Not an address: refused before a trade key is spent.
         let invoice = TakePayout::Address {
             address: crate::api::invoice::test_vectors::COFFEE.into(),
@@ -17528,6 +17567,51 @@ mod tests {
         // Nor does another take's key.
         db.save_trade(&row).await.expect("save the trade row");
         assert!(!payout_row_is_current(&order_id, 2).await);
+    }
+
+    /// The node accepts an invoice and pays it before `send_invoice`'s wait
+    /// is over: the destination is recorded as sent before the node can
+    /// answer, so the payout finds it open (PR #824 review). A refusal marks
+    /// that destination, and never one already paid.
+    #[tokio::test]
+    async fn a_payout_faster_than_the_submissions_wait_is_recorded_paid() {
+        use crate::api::types::{PayoutOutcome, PayoutSource};
+        use crate::mostro::payout_route;
+        use mostro_core::message::Action;
+
+        let path = std::env::temp_dir()
+            .join(format!("mostro_payout_route_fast_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+        let order_uuid = uuid::Uuid::new_v4();
+        let order_id = order_uuid.to_string();
+        db.save_trade(&cancel_test_row(wire_order(
+            &order_id,
+            OrderStatus::SettledHoldInvoice,
+        )))
+        .await
+        .expect("save the trade row");
+        let sent = payout_route::destination(
+            crate::api::invoice::test_vectors::COFFEE,
+            PayoutSource::Entered,
+            None,
+            1_000,
+            None,
+        );
+        let key = (sent.destination.clone(), sent.submitted_at);
+
+        // send_invoice: published, recorded, then waiting...
+        note_payout_sent(&order_id, 1, sent, payout_route::clear_epoch(&order_id)).await;
+        // ...while the node already paid it.
+        dispatch_daemon_message_at(order_uuid, Action::PurchaseCompleted, None, 5_000).await;
+        let route = payout_route::destinations(&order_id).await;
+        assert_eq!(route.len(), 1);
+        assert_eq!(route[0].outcome, PayoutOutcome::Paid);
+
+        // A refusal arriving after it (it cannot, but a stale one) changes
+        // nothing: only a destination still sent is refused.
+        payout_route::record_rejection(&order_id, 1, &key.0, key.1, 6_000).await;
+        assert_eq!(payout_route::destinations(&order_id).await, route);
     }
 
     /// An active take, its public `in-progress` noted by the d-tag path.

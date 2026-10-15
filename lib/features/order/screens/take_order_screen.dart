@@ -33,7 +33,6 @@ import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/shared/mascot/mascot_cues.dart';
 import 'package:mostro/shared/utils/countdown.dart';
 import 'package:mostro/shared/widgets/countdown_urgency_announcer.dart';
-import 'package:mostro/src/rust/api/settings.dart' as settings_api;
 import 'package:mostro/src/rust/api/types.dart';
 
 /// What the single button is doing.
@@ -186,6 +185,21 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
       _selectedAmount = amount;
     }
 
+    // What the screen showed is what the take sends (PR #824 review): the
+    // default it named, by its address, or an invoice when it named none.
+    // The button waits for that answer, so it is here.
+    TakePayout? payout;
+    if (widget.isBuying) {
+      final shown = ref.read(takeDefaultAddressProvider);
+      if (shown.isLoading) return;
+      final address = shown.valueOrNull;
+      payout =
+          _payout ??
+          (address == null
+              ? const TakePayout.askForInvoice()
+              : TakePayout.address(address: address));
+    }
+
     setState(() => _cta = TakeOrderCta.loading);
     // `context.go` does not unmount this screen at once: it stays in the tree
     // while the next route animates in, long enough for the `finally` below
@@ -198,7 +212,7 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
         orderId: widget.orderId,
         role: widget.isBuying ? TradeRole.buyer : TradeRole.seller,
         fiatAmount: _selectedAmount,
-        payout: widget.isBuying ? _payout : null,
+        payout: payout,
       );
       if (!mounted) return;
 
@@ -260,26 +274,14 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
         // whose errors mean no trade was created. The trade screen offers the
         // invoice step itself for a buyer waiting on it, so landing there is
         // right whichever way the setting would have read.
-        String? payTo;
-        var settingsRead = true;
-        switch (_payout) {
-          // The buyer chose for this trade: no setting to read.
-          case TakePayout_Address(:final address):
-            payTo = address;
-          case TakePayout_AskForInvoice():
-            payTo = null;
-          default:
-            try {
-              payTo =
-                  (await settings_api.getSettings()).defaultLightningAddress;
-            } catch (e, st) {
-              settingsRead = false;
-              debugPrint('[TakeOrderScreen] settings read failed: $e\n$st');
-            }
-        }
-        if (!mounted) return;
+        // The take named its destination: an address is paid directly, and
+        // without one the invoice step comes next.
+        final payTo = switch (payout) {
+          TakePayout_Address(:final address) => address,
+          _ => null,
+        };
         context.go(AppRoute.tradeDetailPath(widget.orderId));
-        if (settingsRead && payTo == null) {
+        if (payTo == null) {
           context.push(AppRoute.addInvoicePath(widget.orderId));
         }
       } else {
@@ -444,10 +446,11 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
     final privacyMode = ref.watch(privacyModeProvider);
     // A buyer with a default Lightning address sees where the sats go and can
     // change it for this trade (#823): the take sends it without asking.
-    final defaultAddress =
-        widget.isBuying
-            ? ref.watch(takeDefaultAddressProvider).valueOrNull
-            : null;
+    // While it loads the row cannot say where the sats go, so Take waits.
+    final shownAddress =
+        widget.isBuying ? ref.watch(takeDefaultAddressProvider) : null;
+    final defaultAddress = shownAddress?.valueOrNull;
+    final payoutKnown = shownAddress == null || !shownAddress.isLoading;
     // Not while a take is in flight: the user's own take moves the order out
     // of `pending` before it settles (Rust updates the book entry as soon as
     // the daemon confirms, then persists the trade and subscribes, and only
@@ -532,7 +535,12 @@ class _TakeOrderScreenState extends ConsumerState<TakeOrderScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [_TakeButton(state: cta, onPressed: _onTakeOrder)],
+          children: [
+            _TakeButton(
+              state: cta,
+              onPressed: payoutKnown ? _onTakeOrder : null,
+            ),
+          ],
         ),
       ),
     );
@@ -902,7 +910,9 @@ class _TakeButton extends StatelessWidget {
   const _TakeButton({required this.state, required this.onPressed});
 
   final TakeOrderCta state;
-  final VoidCallback onPressed;
+
+  /// Null while where the sats go is still being read.
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

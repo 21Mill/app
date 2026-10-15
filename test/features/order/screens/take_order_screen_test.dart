@@ -59,6 +59,7 @@ Future<StreamController<List<OrderItem>>> _pump(
   int? bondEstimate,
   String? defaultAddress,
   String? settingsAddress,
+  Future<String?>? coreAddress,
   Future<bool> Function(String)? isLightningAddress,
 }) async {
   tester.view.physicalSize = const Size(360, 760);
@@ -77,7 +78,9 @@ Future<StreamController<List<OrderItem>>> _pump(
       ),
       if (take != null) takeOrderActionProvider.overrideWithValue(take),
       // The core's copy, which the row shows; Settings' own may differ.
-      takeDefaultAddressProvider.overrideWith((ref) async => defaultAddress),
+      takeDefaultAddressProvider.overrideWith(
+        (ref) => coreAddress ?? Future.value(defaultAddress),
+      ),
       settingsProvider.overrideWith(
         (ref) => SettingsNotifier(
           initial: AppSettingsState(
@@ -553,7 +556,9 @@ void main() {
 
     for (final (side, isBuying, lands) in [
       ('seller', false, 'pay'),
-      ('buyer', true, 'trade'),
+      // No default address: the take sent none, so the invoice step is
+      // certainly next (PR #824 review).
+      ('buyer', true, 'add invoice'),
     ]) {
       testWidgets('a $side take that succeeds never reads unavailable on the '
           'way out', (tester) async {
@@ -561,11 +566,8 @@ void main() {
         // animates in, so the frames after a successful take are the screen's
         // too, and its own take is already in the book by then (#454).
         //
-        // The buyer path reads the default Lightning address before it
-        // navigates, and that bridge call throws in a widget test — which is
-        // the unreadable-settings path itself: the take stands, the error
-        // never reaches `_showTakeError`, and the trade screen is where the
-        // user lands, offering the invoice step it owns.
+        // The buyer's take names its destination (here none, so the node
+        // asks for an invoice): where it lands follows from what it sent.
         await withClock(Clock.fixed(kFakeNow), () async {
           final reply = Completer<TradeInfo>();
           final books = await _pump(
@@ -610,11 +612,8 @@ void main() {
             );
           }
           expect(find.text(lands), findsOneWidget);
-          // A take that stands is never reported as a failure, and an
-          // unreadable setting does not send the buyer to a step the daemon
-          // may not be waiting for.
+          // A take that stands is never reported as a failure.
           expect(find.byType(SnackBar), findsNothing);
-          if (isBuying) expect(find.text('add invoice'), findsNothing);
         });
       });
     }
@@ -1059,8 +1058,9 @@ void main() {
         await tester.tap(find.text('Take order'));
         await tester.pump();
         await tester.pump();
-        // No choice made: the default, as before.
-        expect(sent, isNull);
+        // No choice made: the default, named by the address the row showed
+        // (PR #824 review).
+        expect(sent, const TakePayout.address(address: 'alice@example.com'));
       });
     });
 
@@ -1094,7 +1094,40 @@ void main() {
         await tester.tap(find.text('Take order'));
         await tester.pump();
         await tester.pump();
-        expect(sent, isNull);
+        // Nothing named, nothing sent: the node asks for an invoice.
+        expect(sent, const TakePayout.askForInvoice());
+      });
+    });
+
+    testWidgets('Take waits while the default address is read '
+        '(PR #824 review)', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        final core = Completer<String?>();
+        final sent = <TakePayout?>[];
+        await _pump(
+          tester,
+          order: _order(),
+          coreAddress: core.future,
+          take: ({required orderId, required role, fiatAmount, payout}) {
+            sent.add(payout);
+            return Completer<TradeInfo>().future;
+          },
+        );
+
+        // Not known yet: no row, and Take does nothing.
+        expect(find.text('Your sats go to'), findsNothing);
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        expect(sent, isEmpty);
+
+        // Known: the row names it, and Take sends that very address.
+        core.complete('alice@example.com');
+        await tester.pumpAndSettle();
+        expect(find.text('alice@example.com'), findsOneWidget);
+        await tester.tap(find.text('Take order'));
+        await tester.pump();
+        await tester.pump();
+        expect(sent, [const TakePayout.address(address: 'alice@example.com')]);
       });
     });
 
