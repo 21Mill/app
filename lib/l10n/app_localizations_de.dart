@@ -4913,4 +4913,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get payoutInvoiceCopied => 'Rechnung kopiert';
+
+  @override
+  String get payoutWillGoToLabel => 'Die Sats gehen an';
 }

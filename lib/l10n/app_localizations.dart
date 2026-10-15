@@ -8031,6 +8031,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Invoice copied'**
   String get payoutInvoiceCopied;
+
+  /// Trade detail payout card (#823): row label before where the buyer's sats will be sent, before the seller releases them
+  ///
+  /// In en, this message translates to:
+  /// **'Sats will go to'**
+  String get payoutWillGoToLabel;
 }
 
 class _AppLocalizationsDelegate

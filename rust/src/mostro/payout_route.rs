@@ -418,22 +418,28 @@ pub(crate) async fn forget_take_in(db: &impl Storage, order_id: &str, trade_inde
 }
 
 /// Drop `order_id`'s record whoever wrote it: the row it describes is gone.
-pub(crate) async fn forget_in(db: &impl Storage, order_id: &str) {
+/// Returns whether the store dropped it: a caller that must not go on with
+/// the record still there (the maker's republish) counts it as a failure.
+pub(crate) async fn forget_in(db: &impl Storage, order_id: &str) -> bool {
     let _guard = write_lock().lock().await;
-    forget_unlocked(db, order_id).await;
+    forget_unlocked(db, order_id).await
 }
 
-async fn forget_unlocked(db: &impl Storage, order_id: &str) {
+async fn forget_unlocked(db: &impl Storage, order_id: &str) -> bool {
     bump_clear_epoch(order_id);
     let key = crate::db::settings_keys::payout_route(order_id);
-    if let Err(e) = db.delete_setting(&key).await {
-        crate::api::logging::blog_warn(
-            "payout",
-            format!(
-                "record not cleared for order={}: {e}",
-                crate::api::logging::short_id(order_id),
-            ),
-        );
+    match db.delete_setting(&key).await {
+        Ok(()) => true,
+        Err(e) => {
+            crate::api::logging::blog_warn(
+                "payout",
+                format!(
+                    "record not cleared for order={}: {e}",
+                    crate::api::logging::short_id(order_id),
+                ),
+            );
+            false
+        }
     }
 }
 

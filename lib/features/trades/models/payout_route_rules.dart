@@ -4,7 +4,26 @@ library;
 
 import 'package:mostro/l10n/app_localizations.dart';
 import 'package:mostro/src/rust/api/types.dart'
-    show PayoutDestination, PayoutOutcome, PayoutSource;
+    show OrderStatus, PayoutDestination, PayoutOutcome, PayoutSource;
+
+/// Whether the node is paying the buyer, or has tried to: the seller
+/// released (or a solver settled) the sats, or the record already holds
+/// news of a payment. Before that a destination is only where the sats will
+/// go, not one being paid (PR #824 review).
+bool payoutHasStarted(OrderStatus? status, List<PayoutDestination> route) =>
+    switch (status) {
+      OrderStatus.settledHoldInvoice ||
+      OrderStatus.success ||
+      OrderStatus.settledByAdmin ||
+      OrderStatus.completedByAdmin => true,
+      _ => false,
+    } ||
+    route.any(
+      (d) =>
+          d.outcome == PayoutOutcome.retrying ||
+          d.outcome == PayoutOutcome.failed ||
+          d.outcome == PayoutOutcome.paid,
+    );
 
 /// The destination the card leads with: the one the node paid, else the
 /// latest one sent.

@@ -31,13 +31,17 @@ class PayoutDestinationCard extends ConsumerWidget {
         ref.watch(payoutDestinationsProvider(orderId)).valueOrNull ?? const [];
     final lead = leadingDestination(route);
     if (lead == null) return const SizedBox.shrink();
+    final started = payoutHasStarted(
+      ref.watch(tradeStatusProvider(orderId)).valueOrNull,
+      route,
+    );
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: PayoutDestinationRows(route: route),
+      child: PayoutDestinationRows(route: route, started: started),
     ).withAutomationId(
       AutomationIds.tradePayout,
       merge: false,
-      label: outcomeMachineName(lead.outcome),
+      label: started ? outcomeMachineName(lead.outcome) : 'scheduled',
     );
   }
 }
@@ -46,9 +50,17 @@ class PayoutDestinationCard extends ConsumerWidget {
 /// one destination. Each destination tried before is one row that opens in
 /// place to the same details as the leading one (PR #824 review).
 class PayoutDestinationRows extends StatefulWidget {
-  const PayoutDestinationRows({super.key, required this.route});
+  const PayoutDestinationRows({
+    super.key,
+    required this.route,
+    this.started = true,
+  });
 
   final List<PayoutDestination> route;
+
+  /// The node is paying, or tried to ([payoutHasStarted]). Before that the
+  /// card only says where the sats will go: no "sending", no status.
+  final bool started;
 
   @override
   State<PayoutDestinationRows> createState() => _PayoutDestinationRowsState();
@@ -75,6 +87,7 @@ class _PayoutDestinationRowsState extends State<PayoutDestinationRows> {
         OrderDataRow(
           icon: Icons.bolt_rounded,
           label: switch (lead.outcome) {
+            _ when !widget.started => l10n.payoutWillGoToLabel,
             PayoutOutcome.paid => l10n.payoutPaidToLabel,
             PayoutOutcome.submitted ||
             PayoutOutcome.retrying => l10n.payoutSendingToLabel,
@@ -83,11 +96,12 @@ class _PayoutDestinationRowsState extends State<PayoutDestinationRows> {
           },
           value: OrderDataValue(destinationLabel(l10n, lead)),
         ),
-        OrderDataRow(
-          icon: Icons.info_outline_rounded,
-          label: l10n.statusLabel,
-          value: OrderDataValue(outcomeLabel(l10n, lead)),
-        ),
+        if (widget.started)
+          OrderDataRow(
+            icon: Icons.info_outline_rounded,
+            label: l10n.statusLabel,
+            value: OrderDataValue(outcomeLabel(l10n, lead)),
+          ),
         ..._details(context, l10n, lead),
         for (final earlier in earlierDestinations(widget.route)) ...[
           _earlierRow(l10n, earlier),

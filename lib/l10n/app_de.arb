@@ -1469,5 +1469,6 @@
   "tradeCardPayoutFailedTitle": "Mostro konnte dir deine Sats nicht senden",
   "tradeCardPayoutFailedMessage": "Mostro konnte deine Sats nicht an die angegebene Adresse oder Rechnung senden. Öffne den Trade, um zu sehen, welche fehlgeschlagen ist, und füge eine neue Rechnung hinzu, falls noch nötig.",
   "payoutInvoiceLabel": "Rechnung",
-  "payoutInvoiceCopied": "Rechnung kopiert"
+  "payoutInvoiceCopied": "Rechnung kopiert",
+  "payoutWillGoToLabel": "Die Sats gehen an"
 }

@@ -13,10 +13,17 @@ import 'package:mostro/src/rust/api/types.dart';
 import '../../../support/fake_payout.dart';
 
 /// The trade detail's payout card over [route], as the bridge would read it.
-Future<void> _pump(WidgetTester tester, List<PayoutDestination> route) async {
+Future<void> _pump(
+  WidgetTester tester,
+  List<PayoutDestination> route, {
+  OrderStatus status = OrderStatus.settledHoldInvoice,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        tradeStatusProvider.overrideWith(
+          (ref, orderId) => Stream.value(status),
+        ),
         payoutDestinationsReaderProvider.overrideWithValue(
           (orderId) async => route,
         ),
@@ -158,6 +165,41 @@ void main() {
     expect(find.text('Waiting'), findsOneWidget);
     expect(find.text('Payment hash'), findsOneWidget);
     expect(_readout(tester), 'submitted');
+    semantics.dispose();
+  });
+
+  testWidgets('before the release it only says where the sats will go '
+      '(PR #824 review)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    for (final status in [
+      OrderStatus.waitingPayment,
+      OrderStatus.active,
+      OrderStatus.fiatSent,
+    ]) {
+      await _pump(tester, [fakePayoutDestination()], status: status);
+
+      expect(find.text('Sats will go to'), findsOneWidget, reason: '$status');
+      expect(find.text('alice@example.com'), findsOneWidget);
+      expect(find.text('Sending to'), findsNothing, reason: '$status');
+      expect(find.text('Waiting'), findsNothing, reason: '$status');
+      expect(_readout(tester), 'scheduled');
+    }
+    semantics.dispose();
+  });
+
+  testWidgets('a failed payout stays shown while a new invoice is asked for', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    // The node asks again: the trade reads waiting-buyer-invoice, but the
+    // payout has started and its failure is the news.
+    await _pump(tester, [
+      fakePayoutDestination(outcome: PayoutOutcome.failed, attempts: 3),
+    ], status: OrderStatus.waitingBuyerInvoice);
+
+    expect(find.text('Not paid to'), findsOneWidget);
+    expect(find.text('Failed after 3 attempts'), findsOneWidget);
+    expect(_readout(tester), 'failed');
     semantics.dispose();
   });
 

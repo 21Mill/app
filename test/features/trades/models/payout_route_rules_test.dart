@@ -52,6 +52,22 @@ void main() {
     });
   });
 
+  test('the payout starts at the release, or with news of a payment', () {
+    final sent = [fakePayoutDestination()];
+    expect(payoutHasStarted(OrderStatus.active, sent), isFalse);
+    expect(payoutHasStarted(OrderStatus.fiatSent, sent), isFalse);
+    expect(payoutHasStarted(null, sent), isFalse);
+    expect(payoutHasStarted(OrderStatus.settledHoldInvoice, sent), isTrue);
+    expect(payoutHasStarted(OrderStatus.success, sent), isTrue);
+    // A new invoice asked for after a failure: started, whatever the status.
+    expect(
+      payoutHasStarted(OrderStatus.waitingBuyerInvoice, [
+        fakePayoutDestination(outcome: PayoutOutcome.failed),
+      ]),
+      isTrue,
+    );
+  });
+
   test('a failure is unreplaced until another destination is sent', () {
     final failed = fakePayoutDestination(outcome: PayoutOutcome.failed);
 

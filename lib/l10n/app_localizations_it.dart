@@ -4898,4 +4898,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get payoutInvoiceCopied => 'Fattura copiata';
+
+  @override
+  String get payoutWillGoToLabel => 'I sats andranno a';
 }

@@ -1469,5 +1469,6 @@
   "tradeCardPayoutFailedTitle": "Mostro n'a pas pu t'envoyer tes sats",
   "tradeCardPayoutFailedMessage": "Mostro n'a pas pu envoyer tes sats à l'adresse ou à la facture que tu as donnée. Ouvre la transaction pour voir laquelle a échoué, et ajoute une nouvelle facture si c'est encore nécessaire.",
   "payoutInvoiceLabel": "Facture",
-  "payoutInvoiceCopied": "Facture copiée"
+  "payoutInvoiceCopied": "Facture copiée",
+  "payoutWillGoToLabel": "Les sats iront à"
 }

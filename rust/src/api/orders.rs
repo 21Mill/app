@@ -6748,8 +6748,9 @@ async fn clear_maker_step_start(db: &impl Storage, order_id: &str) -> bool {
     ];
     // Through the payout module, which also stops a submission still waiting
     // on the node from writing it back for the next take (PR #824 review).
-    crate::mostro::payout_route::forget_in(db, order_id).await;
-    let mut cleared = true;
+    // A record left behind would show this take's destinations on the next
+    // one, so it fails the clear like the keys below.
+    let mut cleared = crate::mostro::payout_route::forget_in(db, order_id).await;
     for (what, key) in keys {
         if let Err(e) = db.delete_setting(&key).await {
             crate::api::logging::blog_warn(
@@ -7913,6 +7914,11 @@ async fn apply_single_order_update(mut order: OrderInfo, revision_at: Option<i64
         "38383/d-tag",
     );
     let completes = applies && completes_trade(local.as_ref(), &order.status);
+    // The node paid the buyer even if its `purchase-completed` never reaches
+    // this device (PR #824 review).
+    if completes && order.status == crate::api::types::OrderStatus::Success {
+        note_payout_paid_from_book(&order.id, revision_at).await;
+    }
     // Gated whole on `applies`: a public bucket that may not replace the
     // private status must not sneak its amount into the row either (#394
     // review), and an event carrying what the row already holds writes
@@ -8428,6 +8434,33 @@ async fn close_rating_step(order_id: &str, rated_at: i64) {
 /// `completed_at` is when the book says the trade completed: this may be the
 /// first sight of a payout that completed while the app was closed, and the
 /// chat's grace window runs from then, not from now (#642).
+/// The public book says the trade succeeded, which for the buyer means the
+/// node paid the destination it had (#823). Recorded here too, for the
+/// buyer's own trade only, because the buyer's `purchase-completed` may
+/// never reach this device (PR #824 review). Only an open destination is
+/// marked, and a paid one never changes again, so whichever of the two
+/// arrives second changes nothing.
+async fn note_payout_paid_from_book(order_id: &str, at: Option<i64>) {
+    let Some(db) = crate::db::app_db::db() else {
+        return;
+    };
+    let Ok(Some(trade)) = db.get_trade_by_order_id(order_id).await else {
+        return;
+    };
+    if trade.role != crate::api::types::TradeRole::Buyer {
+        return;
+    }
+    crate::mostro::payout_route::record_news(
+        order_id,
+        trade.trade_key_index,
+        crate::mostro::payout_route::PayoutNews::Paid {
+            amount_sats: crate::api::invoice::payout_amount_of(order_id).await,
+        },
+        at.unwrap_or_else(crate::rt::unix_now),
+    )
+    .await;
+}
+
 async fn apply_payout_completed(order_id: &str, completed_at: Option<i64>) {
     let _order = lock_order(order_id).await;
     if local_trade_status(order_id).await
@@ -8461,6 +8494,7 @@ async fn apply_payout_completed(order_id: &str, completed_at: Option<i64>) {
             crate::api::logging::short_id(order_id)
         ),
     );
+    note_payout_paid_from_book(order_id, completed_at).await;
     // Dated like the completion: found after a restore, the payout is old
     // news and must not read as "just now" in Notifications.
     emit_trade_update_at(
@@ -15622,6 +15656,8 @@ mod tests {
     /// test bug, not silent success.
     enum PersistProbe {
         FailSave,
+        /// Every `delete_setting` of a key with this prefix fails.
+        FailDelete(&'static str),
         PauseSave {
             entered: Arc<tokio::sync::Notify>,
             release: Arc<tokio::sync::Notify>,
@@ -15647,6 +15683,7 @@ mod tests {
         async fn save_trade(&self, _trade: &crate::api::types::TradeInfo) -> Result<()> {
             match self {
                 Self::FailSave => anyhow::bail!("injected save failure"),
+                Self::FailDelete(_) => unimplemented!(),
                 Self::PauseSave { entered, release } => {
                     entered.notify_one();
                     release.notified().await;
@@ -15795,8 +15832,13 @@ mod tests {
         async fn set_setting(&self, _key: &str, _value: &str) -> Result<()> {
             unimplemented!()
         }
-        async fn delete_setting(&self, _key: &str) -> Result<()> {
-            Ok(())
+        async fn delete_setting(&self, key: &str) -> Result<()> {
+            match self {
+                Self::FailDelete(prefix) if key.starts_with(prefix) => {
+                    anyhow::bail!("injected delete failure")
+                }
+                _ => Ok(()),
+            }
         }
         async fn save_active_mostro_pubkey(&self, _pubkey: &str) -> Result<()> {
             unimplemented!()
@@ -17612,6 +17654,82 @@ mod tests {
         // nothing: only a destination still sent is refused.
         payout_route::record_rejection(&order_id, 1, &key.0, key.1, 6_000).await;
         assert_eq!(payout_route::destinations(&order_id).await, route);
+    }
+
+    /// A payout record the maker's cleanup could not drop fails the clear,
+    /// so the order is not written back as `Pending` with it in place
+    /// (PR #824 review).
+    #[tokio::test]
+    async fn a_payout_record_left_behind_fails_the_maker_step_clear() {
+        use crate::db::settings_keys::{PAYOUT_AMOUNT_PREFIX, PAYOUT_ROUTE_PREFIX};
+        assert!(!clear_maker_step_start(&PersistProbe::FailDelete(PAYOUT_ROUTE_PREFIX), "o").await);
+        // As any key of the step does.
+        assert!(!clear_maker_step_start(&PersistProbe::FailDelete(PAYOUT_AMOUNT_PREFIX), "o").await);
+        assert!(clear_maker_step_start(&PersistProbe::FailDelete("nothing:"), "o").await);
+    }
+
+    /// The buyer's `purchase-completed` never arrives, only the public
+    /// `success`: the payout is recorded as paid all the same, on the d-tag
+    /// path and on the payout check; a seller's trade records nothing
+    /// (PR #824 review).
+    #[tokio::test]
+    async fn the_public_success_alone_records_the_buyers_payout() {
+        use crate::api::types::{PayoutOutcome, PayoutSource, TakePayout};
+        use crate::mostro::payout_route;
+
+        let path = std::env::temp_dir()
+            .join(format!("mostro_payout_route_book_{}.db", std::process::id()));
+        let _ = crate::db::app_db::init_db(path.to_str().unwrap()).await;
+        let db = crate::db::app_db::db().expect("store initialised");
+        let take = |order_id: &str| {
+            let order_id = order_id.to_string();
+            async move {
+                let address = payout_route::destination(
+                    "alice@example.com",
+                    PayoutSource::DefaultLightningAddress,
+                    None,
+                    1_000,
+                    None,
+                );
+                payout_route::record_take(&order_id, 1, TakePayout::DefaultAddress, Some(address))
+                    .await;
+            }
+        };
+
+        // The d-tag subscription brings the public `success`.
+        let order_id = uuid::Uuid::new_v4().to_string();
+        db.save_trade(&cancel_test_row(wire_order(&order_id, OrderStatus::SettledHoldInvoice)))
+            .await
+            .expect("save the trade row");
+        take(&order_id).await;
+        apply_single_order_update(wire_order(&order_id, OrderStatus::Success), Some(5_000)).await;
+        let route = payout_route::destinations(&order_id).await;
+        assert_eq!(route[0].outcome, PayoutOutcome::Paid);
+        assert_eq!(route[0].outcome_at, Some(5_000));
+
+        // The payout check finds it in the book.
+        let order_id = uuid::Uuid::new_v4().to_string();
+        db.save_trade(&cancel_test_row(wire_order(&order_id, OrderStatus::SettledHoldInvoice)))
+            .await
+            .expect("save the trade row");
+        take(&order_id).await;
+        apply_payout_completed(&order_id, Some(6_000)).await;
+        assert_eq!(
+            payout_route::destinations(&order_id).await[0].outcome,
+            PayoutOutcome::Paid
+        );
+
+        // A seller's trade: nothing to record.
+        let order_id = uuid::Uuid::new_v4().to_string();
+        let mut seller = cancel_test_row(wire_order(&order_id, OrderStatus::SettledHoldInvoice));
+        seller.role = TradeRole::Seller;
+        db.save_trade(&seller).await.expect("save the trade row");
+        take(&order_id).await;
+        apply_payout_completed(&order_id, Some(7_000)).await;
+        assert_eq!(
+            payout_route::destinations(&order_id).await[0].outcome,
+            PayoutOutcome::Submitted
+        );
     }
 
     /// An active take, its public `in-progress` noted by the d-tag path.

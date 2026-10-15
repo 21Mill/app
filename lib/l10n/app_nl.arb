@@ -1469,5 +1469,6 @@
   "tradeCardPayoutFailedTitle": "Mostro kon je sats niet versturen",
   "tradeCardPayoutFailedMessage": "Mostro kon je sats niet versturen naar het adres of de invoice die je gaf. Open de trade om te zien welke mislukte, en voeg een nieuwe invoice toe als dat nog nodig is.",
   "payoutInvoiceLabel": "Invoice",
-  "payoutInvoiceCopied": "Invoice gekopieerd"
+  "payoutInvoiceCopied": "Invoice gekopieerd",
+  "payoutWillGoToLabel": "De sats gaan naar"
 }

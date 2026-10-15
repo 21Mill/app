@@ -4888,4 +4888,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get payoutInvoiceCopied => 'Invoice gekopieerd';
+
+  @override
+  String get payoutWillGoToLabel => 'De sats gaan naar';
 }
