@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mostro/core/app_theme.dart';
+import 'package:mostro/core/daemon_errors.dart';
 import 'package:mostro/features/chat/attachments/attachment_flow.dart';
 import 'package:mostro/features/chat/attachments/upload_controller.dart';
 import 'package:mostro/features/chat/models/chat_list_rules.dart';
@@ -258,7 +259,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.messageSendFailed),
+          content: Text(
+            localizedDaemonError(l10n, e, fallback: l10n.messageSendFailed),
+          ),
           // design-check: ignore DS-COL-1 — the v1 send-failure snackbar (§14), unchanged; the chat has no palette yet
           backgroundColor: Colors.red,
         ),
@@ -383,7 +386,10 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     } catch (e) {
       debugPrint('[chat] sendReaction failed: $e');
       if (!mounted) return;
-      showOrderDetailSnackBar(context, l10n.reactionSendFailed);
+      showOrderDetailSnackBar(
+        context,
+        localizedDaemonError(l10n, e, fallback: l10n.reactionSendFailed),
+      );
     }
   }
 

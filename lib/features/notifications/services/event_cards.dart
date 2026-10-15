@@ -16,6 +16,10 @@
 /// - it is the user's own doing (their own messages, their own cancel, the
 ///   maker bond of their own order) or not a trade state at all (the public
 ///   book's `pending` / `in-progress`).
+///
+/// A trade on another node raises no status card yet (#811): its history
+/// is heard whichever node is active, and without a cutoff the first run
+/// would turn weeks of it into cards.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -58,6 +62,7 @@ class EventCards {
     required this.identityCreatedAt,
     required this.currentLocation,
     this.disputeIdForTrade = _noDispute,
+    this.isOnOtherNode = _onActiveNode,
   });
 
   final NotificationsNotifier Function() notifications;
@@ -78,6 +83,11 @@ class EventCards {
 
   static String? _noDispute(String tradeId) => null;
 
+  /// Whether a trade lives on a node other than the active one (#811).
+  final Future<bool> Function(String orderId) isOnOtherNode;
+
+  static Future<bool> _onActiveNode(String orderId) async => false;
+
   Future<void> onTradeUpdate(TradeUpdate update) async {
     final event = tradeCardEvent(update.status);
     if (event == null) return;
@@ -88,6 +98,7 @@ class EventCards {
     if (!isEnabled(event)) return;
     final at = _secondsToDate(update.occurredAt);
     if (await _predatesIdentity(at)) return;
+    if (await isOnOtherNode(update.orderId)) return;
     await notifications().addIfNew(
       NotificationModel.tradeStatus(
         orderId: update.orderId,

@@ -36,7 +36,7 @@ Future<Dispute> openDispute({required String tradeId, String? reason}) =>
 /// Delivered as an admin-type message in the dispute chat.
 ///
 /// **Errors**: `EvidenceEmpty`, `NoOpenDispute`, `AdminNotAssigned`,
-/// `TradeNotFound`.
+/// `TradeNotFound`, `TradeOnOtherNode`.
 Future<ChatMessage> submitEvidence({
   required String tradeId,
   required String text,
@@ -65,7 +65,8 @@ Future<ChatMessage> submitEvidence({
 /// simply want it sent again. The record only tells the screen.
 ///
 /// **Errors**: `NoOpenDispute`, `AdminNotAssigned`, `TradeNotFound`,
-/// `NoSharedKey` (the counterparty is not known), `SendFailed`.
+/// `NoSharedKey` (the counterparty is not known), `SendFailed`,
+/// `TradeOnOtherNode`.
 Future<ChatMessage> shareChatKeyWithSolver({required String tradeId}) => RustLib
     .instance
     .api
@@ -80,7 +81,7 @@ Future<ChatMessage> shareChatKeyWithSolver({required String tradeId}) => RustLib
 ///
 /// **Errors**: `FileTooLarge`, `UnsupportedFileType`, `InvalidImage`,
 /// `NoOpenDispute`, `AdminNotAssigned`, `TradeNotFound`, `UploadFailed`,
-/// `SendFailed`.
+/// `SendFailed`, `TradeOnOtherNode`.
 Future<ChatMessage> sendDisputeFile({
   required String tradeId,
   required List<int> fileBytes,

@@ -3597,37 +3597,32 @@ async fn dispatch_mostro_message(
         created_at: event_created_at,
     } = unwrapped;
 
-    // Daemon authentication: the kind-14 event author (`sender`) must be the
-    // active Mostro pubkey. The event signature is verified inside
-    // `unwrap_incoming`, so `sender` is the cryptographically authoritative
-    // origin.
+    // Daemon authentication: who the kind-14 event author (`sender`) is to
+    // the trade decides whether it is heard. The event signature is verified
+    // inside `unwrap_incoming`, so `sender` is the cryptographically
+    // authoritative origin.
     let sender_hex = sender.to_hex();
-    match nostr_sdk::prelude::PublicKey::from_hex(&crate::config::active_mostro_pubkey()) {
-        Ok(expected) if expected == sender => {}
-        // A node that issued a still-open payout claim may speak to this
-        // client about claims only (docs/ANTI_ABUSE_BOND.md §6.4); every
-        // other action from a non-active node is refused as before.
-        Ok(_) if crate::mostro::bond_claims::is_claim_node(&sender_hex)
-            && is_claim_action(&msg) => {}
-        Ok(expected) => {
-            crate::api::logging::blog_warn(
-                "daemon-msg",
-                format!(
-                    "rejecting daemon message: sender={} != active mostro={} (trade={})",
-                    &sender.to_hex()[..8],
-                    &expected.to_hex()[..8],
-                    &trade_pubkey_hex[..8],
-                ),
-            );
-            return;
-        }
-        Err(e) => {
-            crate::api::logging::blog_warn(
-                "daemon-msg",
-                format!("active mostro pubkey is invalid: {e} — cannot authenticate the sender"),
-            );
-            return;
-        }
+    let speaker = crate::mostro::trade_node::speaker(&sender_hex, trade_index).await;
+    let named_order = msg.get_inner_message_kind().id.map(|id| id.to_string());
+    if !crate::mostro::trade_node::heard_about(
+        speaker,
+        is_claim_action(&msg),
+        &sender_hex,
+        trade_index,
+        named_order.as_deref(),
+    )
+    .await
+    {
+        crate::api::logging::blog_warn(
+            "daemon-msg",
+            format!(
+                "rejecting daemon message: sender={} != active mostro={} (trade={})",
+                crate::api::logging::short_id(&sender_hex),
+                crate::api::logging::short_id(&crate::config::active_mostro_pubkey()),
+                &trade_pubkey_hex[..8],
+            ),
+        );
+        return;
     }
 
     // Centralized response validation: catches malformed `request_id` fields
@@ -9656,6 +9651,29 @@ async fn build_trade_key_map() -> HashMap<String, (nostr_sdk::prelude::Keys, u32
 async fn resolve_dm_recipient(
     event: &nostr_sdk::prelude::Event,
 ) -> Option<(String, nostr_sdk::prelude::Keys, u32)> {
+    if let Some(recipient) = find_dm_recipient(event).await {
+        return Some(recipient);
+    }
+    let map_len = global_dm_keys().read().await.len();
+    // The bulk filter pins author + our own p-tags, so a kind-14 that reaches
+    // here without a matching key is an anomaly (stale filter after
+    // regenerate? key map gap?) — worth a warn.
+    crate::api::logging::blog_warn(
+        "daemon-msg",
+        format!(
+            "drop ev={} reason=no-matching-p-tag map={}",
+            crate::api::logging::short_id(&event.id.to_hex()),
+            map_len,
+        ),
+    );
+    None
+}
+
+/// [`resolve_dm_recipient`] without its warning, for a kind-14 that may well
+/// be peer chat: the key map is read only for the lookup itself.
+async fn find_dm_recipient(
+    event: &nostr_sdk::prelude::Event,
+) -> Option<(String, nostr_sdk::prelude::Keys, u32)> {
     let map = global_dm_keys().read().await;
     for tag in event.tags.iter() {
         let s = tag.as_slice();
@@ -9667,24 +9685,14 @@ async fn resolve_dm_recipient(
             }
         }
     }
-    // The bulk filter pins author + our own p-tags, so a kind-14 that reaches
-    // here without a matching key is an anomaly (stale filter after
-    // regenerate? key map gap?) — worth a warn.
-    crate::api::logging::blog_warn(
-        "daemon-msg",
-        format!(
-            "drop ev={} reason=no-matching-p-tag map={}",
-            crate::api::logging::short_id(&event.id.to_hex()),
-            map.len(),
-        ),
-    );
     None
 }
 
 /// Handle a kind-14 Mostro reply received on the global subscription.
 ///
-/// The caller has already pinned the author to the active Mostro pubkey and
-/// resolved the addressed trade key via [`resolve_dm_recipient`]. Decrypts
+/// The caller has already resolved the addressed trade key and found the
+/// author may speak about that trade ([`crate::mostro::trade_node::speaker`]),
+/// so nothing it records as seen here was refused. Decrypts
 /// via `mostro_core::transport::unwrap_incoming` and dispatches the recovered
 /// `Message` through `dispatch_mostro_message`.
 async fn handle_global_daemon_message(
@@ -10081,17 +10089,29 @@ async fn _run_order_subscription() {
 
                 // ── Kind 14 NIP-44 Mostro reply: decrypt and dispatch ──
                 if event.kind == nostr_sdk::prelude::Kind::PrivateDirectMessage {
-                    // Disambiguate from NIP-17 peer chat (also kind 14): only
-                    // the active node may author a Mostro reply — or a node
-                    // still owed a payout claim's traffic (§6.4).
-                    if event.pubkey != active_mostro
-                        && !crate::mostro::bond_claims::is_claim_node(&event.pubkey.to_hex())
+                    // Disambiguate from NIP-17 peer chat (also kind 14): a
+                    // Mostro reply is p-tagged to one of our trade keys. Only
+                    // a node's traffic missing a key is an anomaly worth a
+                    // warning; peer chat never carries one.
+                    let author = event.pubkey.to_hex();
+                    let recipient = if event.pubkey == active_mostro
+                        || crate::mostro::bond_claims::is_claim_node(&author)
                     {
+                        resolve_dm_recipient(&event).await
+                    } else {
+                        find_dm_recipient(&event).await
+                    };
+                    let Some(recipient) = recipient else {
+                        continue;
+                    };
+                    // Who may speak about this trade is decided before the
+                    // message is recorded as seen: one recorded and refused
+                    // is never handled again in this process (#811).
+                    let speaker = crate::mostro::trade_node::speaker(&author, recipient.2).await;
+                    if speaker == crate::mostro::trade_node::Speaker::Stranger {
                         continue;
                     }
-                    if let Some(recipient) = resolve_dm_recipient(&event).await {
-                        handle_global_daemon_message(&event, recipient).await;
-                    }
+                    handle_global_daemon_message(&event, recipient).await;
                     continue;
                 }
 
@@ -10890,6 +10910,25 @@ pub async fn get_trade_role(order_id: String) -> Result<Option<crate::api::types
         Err(e) => {
             log::warn!("[orders] get_trade_role DB error for order={order_id}: {e}");
             Ok(None)
+        }
+    }
+}
+
+/// The node that issued the trade `order_id`, or empty when its row does not
+/// know it or there is no row. Dart tells a trade of another node apart with
+/// it (#811): no card and no automatic navigation for one.
+pub async fn trade_node_of(order_id: String) -> String {
+    let Some(db) = crate::db::app_db::db() else {
+        return String::new();
+    };
+    match db.get_trade_by_order_id(&order_id).await {
+        Ok(Some(trade)) => crate::mostro::trade_node::trade_node(&trade)
+            .unwrap_or_default()
+            .to_string(),
+        Ok(None) => String::new(),
+        Err(e) => {
+            log::warn!("[orders] trade_node_of DB error for order={order_id}: {e}");
+            String::new()
         }
     }
 }
@@ -25124,6 +25163,49 @@ mod tests {
                 forget_trade_row(&order_id).await;
             }
         }
+    }
+
+    /// #811: Dart learns the node a trade lives on, to tell another node's
+    /// apart; a row that does not know it, or no row, reads as empty.
+    #[tokio::test]
+    async fn trade_node_of_names_the_rows_node() {
+        use crate::mostro::test_fixtures::{forget_trade_row, store_trade_row, trade};
+        let node = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
+        let known = uuid::Uuid::new_v4().to_string();
+        let unknown = uuid::Uuid::new_v4().to_string();
+        store_trade_row(&trade(&known, 7, OrderStatus::Active, &node)).await;
+        store_trade_row(&trade(&unknown, 7, OrderStatus::Active, "")).await;
+
+        let named = trade_node_of(known.clone()).await;
+        let unnamed = trade_node_of(unknown.clone()).await;
+        let no_row = trade_node_of(uuid::Uuid::new_v4().to_string()).await;
+        forget_trade_row(&known).await;
+        forget_trade_row(&unknown).await;
+
+        assert_eq!(named, node);
+        assert_eq!(unnamed, "");
+        assert_eq!(no_row, "");
+    }
+
+    /// #811: the global feed decides who may speak about a trade before it
+    /// records the message as seen. A message recorded and then refused is
+    /// never handled again in this process, since nostr-sdk does not deliver
+    /// an event twice either.
+    #[test]
+    fn the_global_feed_decides_who_is_heard_before_recording_a_message() {
+        use crate::source_guard::{item_body, production_code};
+        let body = item_body(
+            &production_code(include_str!("orders.rs")),
+            "async fn _run_order_subscription()",
+        )
+        .unwrap();
+        let decided = body
+            .find("crate::mostro::trade_node::speaker(")
+            .expect("the feed asks who the author is to the trade");
+        let handled = body
+            .find("handle_global_daemon_message(")
+            .expect("the feed hands the message on");
+        assert!(decided < handled, "who is heard is decided first");
     }
 }
 
