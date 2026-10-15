@@ -1473,5 +1473,7 @@
   "payoutWillGoToLabel": "Die Sats gehen an",
   "payoutMaybePaidToLabel": "Vielleicht bezahlt an",
   "payoutOutcomeReplaced": "Durch einen späteren ersetzt",
-  "payoutOutcomeMaybePaid": "An diesen oder einen anderen hier gelisteten bezahlt"
+  "payoutOutcomeMaybePaid": "An diesen oder einen anderen hier gelisteten bezahlt",
+  "otherNodeCardLine": "Handel auf Node: {nodeName}",
+  "otherNodeCardOpenHint": "Dieser Handel ist auf Node {nodeName}. Um ihn zu bearbeiten, wechsle in den Einstellungen zu diesem Node."
 }

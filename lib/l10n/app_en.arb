@@ -5121,5 +5121,23 @@
   "payoutOutcomeMaybePaid": "Paid to this one or another listed here",
   "@payoutOutcomeMaybePaid": {
     "description": "Trade detail payout card (#823): the node paid this destination or another one listed on the card; its message does not say which"
+  },
+  "otherNodeCardLine": "Trade on node: {nodeName}",
+  "@otherNodeCardLine": {
+    "description": "Notifications (#811): amber line on a card whose trade is on a node other than the active one",
+    "placeholders": {
+      "nodeName": {
+        "type": "String"
+      }
+    }
+  },
+  "otherNodeCardOpenHint": "This trade is on node {nodeName}. To act on it, switch to that node in Settings.",
+  "@otherNodeCardOpenHint": {
+    "description": "Notifications (#811): snackbar when the user taps a card whose trade is on another node; informational only, nodes are switched in Settings",
+    "placeholders": {
+      "nodeName": {
+        "type": "String"
+      }
+    }
   }
 }

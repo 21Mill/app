@@ -4901,4 +4901,14 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get payoutOutcomeMaybePaid =>
       'Betaald aan deze of een andere die hier staat';
+
+  @override
+  String otherNodeCardLine(String nodeName) {
+    return 'Trade op node: $nodeName';
+  }
+
+  @override
+  String otherNodeCardOpenHint(String nodeName) {
+    return 'Deze trade staat op node $nodeName. Schakel in Instellingen over naar die node om ermee verder te gaan.';
+  }
 }

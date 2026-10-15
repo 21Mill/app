@@ -1473,5 +1473,7 @@
   "payoutWillGoToLabel": "I sats andranno a",
   "payoutMaybePaidToLabel": "Forse pagato a",
   "payoutOutcomeReplaced": "Sostituito da uno successivo",
-  "payoutOutcomeMaybePaid": "Pagato a questo o a un altro elencato qui"
+  "payoutOutcomeMaybePaid": "Pagato a questo o a un altro elencato qui",
+  "otherNodeCardLine": "Operazione sul nodo: {nodeName}",
+  "otherNodeCardOpenHint": "Questa operazione è sul nodo {nodeName}. Per gestirla, passa a quel nodo nelle Impostazioni."
 }

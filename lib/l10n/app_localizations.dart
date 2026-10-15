@@ -8055,6 +8055,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Paid to this one or another listed here'**
   String get payoutOutcomeMaybePaid;
+
+  /// Notifications (#811): amber line on a card whose trade is on a node other than the active one
+  ///
+  /// In en, this message translates to:
+  /// **'Trade on node: {nodeName}'**
+  String otherNodeCardLine(String nodeName);
+
+  /// Notifications (#811): snackbar when the user taps a card whose trade is on another node; informational only, nodes are switched in Settings
+  ///
+  /// In en, this message translates to:
+  /// **'This trade is on node {nodeName}. To act on it, switch to that node in Settings.'**
+  String otherNodeCardOpenHint(String nodeName);
 }
 
 class _AppLocalizationsDelegate

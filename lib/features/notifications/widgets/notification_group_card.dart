@@ -3,10 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mostro/core/activity_palette.dart';
 import 'package:mostro/core/app_theme.dart';
+import 'package:mostro/core/trade_node.dart';
 import 'package:mostro/features/notifications/models/notification_model.dart';
 import 'package:mostro/features/notifications/models/notification_view_rules.dart';
 import 'package:mostro/features/order/models/order_detail_rules.dart'
     show shortOrderId;
+import 'package:mostro/features/order/widgets/order_detail_cards.dart'
+    show showOrderDetailSnackBar;
+import 'package:mostro/features/settings/models/node_display.dart';
+import 'package:mostro/features/settings/providers/mostro_nodes_provider.dart';
 import 'package:mostro/features/trades/models/trades_list_rules.dart';
 import 'package:mostro/features/trades/providers/trade_rows_provider.dart';
 import 'package:mostro/features/trades/widgets/trade_card.dart';
@@ -22,6 +27,11 @@ import 'package:mostro/l10n/app_localizations.dart';
 /// action navigates to the trade (or dispute) detail screen, while there is a
 /// trade to go to. The card has no per-event menu: the screen deletes it with
 /// a swipe.
+///
+/// A card of a trade on another node (#811) says so in an amber line, and
+/// opens nothing: a tap only says that the trade is acted on from its node,
+/// switched to in Settings. Whether the node is another one is read as the
+/// card is shown, so the line leaves once the user is on that node.
 class NotificationGroupCard extends ConsumerStatefulWidget {
   const NotificationGroupCard({
     super.key,
@@ -65,6 +75,15 @@ class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
 
   int get _unreadCount => widget.notifications.where((n) => !n.isRead).length;
 
+  /// The node of the trade, as the newest card that recorded it says; null
+  /// when none did, which reads as the active node's.
+  String? get _node {
+    for (final n in widget.notifications) {
+      if (n.nodePubkey case final node?) return node;
+    }
+    return null;
+  }
+
   /// The user's side, which decides whose turn a status is; unknown without
   /// a trade row.
   bool? get _isBuyer {
@@ -86,7 +105,27 @@ class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
         !widget.isDisputeGroup &&
         row == null &&
         ref.watch(tradeRowsProvider).hasValue;
-    final onGoToTrade = tradeGone ? null : widget.onGoToTrade;
+    final node = _node;
+    final elsewhere =
+        node != null &&
+        isOnOtherNode(
+          tradeNode: node,
+          activeNode: ref.watch(mostroPubkeyProvider),
+        );
+    final nodeName =
+        elsewhere
+            ? nodeNameOf(node, ref.watch(mostroNodesProvider).valueOrNull ?? [])
+            : null;
+    void sayWhereToOpen() =>
+        showOrderDetailSnackBar(context, l10n.otherNodeCardOpenHint(nodeName!));
+    VoidCallback open(NotificationModel n) =>
+        elsewhere ? sayWhereToOpen : () => widget.onTapNotification(n);
+    final onGoToTrade =
+        tradeGone
+            ? null
+            : elsewhere
+            ? sayWhereToOpen
+            : widget.onGoToTrade;
     final needsAction = row?.state.needsAction ?? false;
     final isDispute =
         widget.isDisputeGroup ||
@@ -120,6 +159,10 @@ class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
             isDispute: isDispute,
             unreadCount: _unreadCount,
           ),
+          if (nodeName != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _OtherNodeLine(label: l10n.otherNodeCardLine(nodeName)),
+          ],
           if (needsAction && row!.state.verb != TradeRowVerb.none) ...[
             const SizedBox(height: AppSpacing.sm),
             _ActionTag(label: TradeCard.verbText(row.state.verb, l10n)),
@@ -128,7 +171,7 @@ class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
           _LatestEvent(
             notification: _latest,
             isBuyer: _isBuyer,
-            onTap: () => widget.onTapNotification(_latest),
+            onTap: open(_latest),
           ),
           if (_expanded && _earlier.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
@@ -137,7 +180,7 @@ class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
                 notification: n,
                 isBuyer: _isBuyer,
                 isLast: identical(n, _earlier.last),
-                onTap: () => widget.onTapNotification(n),
+                onTap: open(n),
               ),
           ],
           if (_earlier.isNotEmpty || onGoToTrade != null) ...[
@@ -323,6 +366,35 @@ class _ActionTag extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The amber line of a card whose trade is on another node (#811): a word
+/// and an icon, never the color alone (DS-COL-10).
+class _OtherNodeLine extends StatelessWidget {
+  const _OtherNodeLine({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = ActivityPalette.of(context);
+    return Row(
+      children: [
+        Icon(Icons.warning_amber_rounded, size: 14, color: pal.chipWaitInk),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: pal.chipWaitInk,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
