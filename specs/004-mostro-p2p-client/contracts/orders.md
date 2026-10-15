@@ -16,9 +16,13 @@ before any key is derived or anything is published: `send_invoice`,
 `send_fiat_sent`, `release_order`, `cancel_order` (the maker's bond cancel
 included), `request_bond_invoice_again`, `open_dispute`
 ([disputes](disputes.md)), `submit_rating` ([reputation](reputation.md)) and
-the Cashu `lock_escrow`. A trade on another node, on none recorded, or with no
-row fails with `TradeOnOtherNode`, publishes nothing and logs
-`trade action refused`; Dart shows a localized message (`tradeOnOtherNode`).
+the Cashu `lock_escrow`. A row on another node fails with `TradeOnOtherNode`,
+publishes nothing and logs `trade action refused`; Dart shows a localized
+message (`tradeOnOtherNode`). A row that does not know its node (one written
+before #817) goes to the active node, as it did before #810, so the trade is
+never stranded. A trade with no trade key or no row keeps its own error
+(`TradeNotFound`, `no persisted trade key …`, `TradeNotDisputable`,
+`CashuNotEnabled`), also before anything is sent.
 Acting on it means switching to its node; the Cashu escrow re-sent on
 reconnect (`resubmit_pending_escrows`) waits for that switch too. A static test in `trade_node.rs`
 fails when a new caller of a trade action builder reads the active node

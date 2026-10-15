@@ -92,11 +92,10 @@ pub(crate) fn trade(
     }
 }
 
-/// The nodes a trade action must refuse while the default node is active:
-/// another node, and none recorded (a legacy row).
-pub(crate) fn nodes_other_than_the_active_one() -> [String; 2] {
-    let other = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
-    [other, String::new()]
+/// The nodes a trade action must refuse while the default node is active.
+/// A row with none recorded is not one: it goes to the active node.
+pub(crate) fn nodes_other_than_the_active_one() -> [String; 1] {
+    [nostr_sdk::prelude::Keys::generate().public_key().to_hex()]
 }
 
 /// Store `row` in the app database with its trade-key binding, as a trade

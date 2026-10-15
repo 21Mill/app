@@ -1276,8 +1276,7 @@ mod tests {
     }
 
     /// #810: an escrow goes to the trade's own node, which must be the active
-    /// one. On another node, or on none recorded, it is refused before any
-    /// ecash is swapped.
+    /// one. On another node it is refused before any ecash is swapped.
     #[tokio::test]
     // The globals lock must span the calls it guards.
     #[allow(clippy::await_holding_lock)]

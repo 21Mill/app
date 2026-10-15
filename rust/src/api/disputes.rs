@@ -1863,8 +1863,7 @@ mod tests {
     }
 
     /// #810: a dispute goes to the trade's own node, which must be the active
-    /// one. On another node, or on none recorded, nothing is published and
-    /// no dispute is recorded.
+    /// one. On another node nothing is published and no dispute is recorded.
     #[tokio::test]
     async fn a_dispute_on_another_node_is_refused() {
         use crate::mostro::test_fixtures::{

@@ -470,8 +470,8 @@ mod tests {
     }
 
     /// #810: a rating goes to the trade's own node, which must be the active
-    /// one. On another node, or on none recorded, nothing is published and
-    /// the slot is not kept, so the rating can still be sent from its node.
+    /// one. On another node nothing is published and the slot is not kept, so
+    /// the rating can still be sent from its node.
     #[tokio::test]
     // The privacy lock must span the calls it guards.
     #[allow(clippy::await_holding_lock)]

@@ -24226,8 +24226,8 @@ mod tests {
         assert_eq!(payout_of(&order_id).await, None);
     }
     /// #810: a trade action goes to the trade's own node, which must be the
-    /// active one. A row on another node, or on none recorded, publishes
-    /// nothing: every action refuses with `TradeOnOtherNode`.
+    /// active one. A row on another node publishes nothing: every action
+    /// refuses with `TradeOnOtherNode`.
     #[tokio::test]
     async fn a_trade_action_on_another_node_is_refused() {
         use crate::api::types::{OrderStatus as S, TradeRole as R};

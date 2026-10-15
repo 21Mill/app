@@ -22,21 +22,28 @@ pub(crate) fn trade_node(trade: &TradeInfo) -> Option<&str> {
 }
 
 /// The node a step on the trade `order_id` is sent to: the trade's own,
-/// which must be the active node. A trade on another node, on none recorded,
-/// or with no row fails with `TradeOnOtherNode` and nothing is sent.
+/// which must be the active node. A row on another node fails with
+/// `TradeOnOtherNode` and nothing is sent. A row that does not know its node
+/// goes to the active one, and no row at all is refused.
 pub(crate) async fn trade_action_node(order_id: &str) -> anyhow::Result<PublicKey> {
     use crate::db::Storage as _;
     let db = crate::db::app_db::db().ok_or_else(|| anyhow::anyhow!("StorageUnavailable"))?;
     let trade = db.get_trade_by_order_id(order_id).await?;
-    let node = trade.as_ref().and_then(trade_node);
     let active = crate::config::active_mostro_pubkey();
+    // A row written before #817 may not know its node. Refusing it would
+    // strand the trade (no release, no dispute), so it goes where it went
+    // before #810: the active node, read the same way as push
+    // (`mostro/push.rs`).
+    let node = trade
+        .as_ref()
+        .map(|t| trade_node(t).unwrap_or(active.as_str()));
     action_node(node, &active).inspect_err(|_| {
         crate::api::logging::blog_warn(
             "orders",
             format!(
                 "trade action refused for order={}: trade node={} active node={}",
                 crate::api::logging::short_id(order_id),
-                node.map_or("unknown", crate::api::logging::short_id),
+                node.map_or("no row", crate::api::logging::short_id),
                 crate::api::logging::short_id(&active),
             ),
         );
@@ -83,7 +90,7 @@ mod tests {
     }
 
     #[test]
-    fn a_step_on_another_or_an_unknown_node_is_refused() {
+    fn a_step_on_another_node_or_without_a_row_is_refused() {
         let active = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
         let other = nostr_sdk::prelude::Keys::generate().public_key().to_hex();
 
@@ -91,6 +98,27 @@ mod tests {
             let err = action_node(node, &active).unwrap_err();
             assert_eq!(err.to_string(), "TradeOnOtherNode", "node {node:?}");
         }
+    }
+
+    /// A row written before #817 may not know its node: a step on it goes to
+    /// the active node, as it did before #810, rather than stranding the
+    /// trade.
+    #[tokio::test]
+    async fn a_step_on_a_row_without_a_node_goes_to_the_active_one() {
+        use crate::mostro::test_fixtures::{forget_trade_row, store_trade_row};
+        // Arrange
+        let order_id = uuid::Uuid::new_v4().to_string();
+        store_trade_row(&trade(&order_id, 7, OrderStatus::FiatSent, "")).await;
+
+        // Act
+        let node = trade_action_node(&order_id).await;
+        forget_trade_row(&order_id).await;
+
+        // Assert
+        assert_eq!(
+            node.unwrap().to_hex(),
+            crate::config::active_mostro_pubkey().to_lowercase(),
+        );
     }
 
     /// The message builders of a step on an existing trade (#810).
