@@ -11,6 +11,8 @@ String attachmentErrorMessage(AppLocalizations l10n, Object error) {
   if (raw.contains('FileTooLarge')) return l10n.attachmentTooLarge;
   if (raw.contains('UnsupportedFileType')) return l10n.attachmentUnsupported;
   if (raw.contains('InvalidImage')) return l10n.attachmentInvalidImage;
+  // The trade is on another node: its chat is sent from there (#811).
+  if (raw.contains('TradeOnOtherNode')) return l10n.tradeOnOtherNode;
   // Nobody has taken the order yet: there is no one to share a key with.
   if (raw.contains('PeerUnknown')) return l10n.attachmentPeerUnknown;
   // The dispute chat: no solver took the dispute yet, or it is over.

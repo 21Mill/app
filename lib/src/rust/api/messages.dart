@@ -17,7 +17,8 @@ import 'types.dart';
 /// (kind 14 signed with `K_sign`, inner kind 1 signed with the trade key) and
 /// publishes it. If the session, peer, or relay pool is not available the
 /// message is stored locally with a warning — same graceful degradation as
-/// before, chat never throws for transport reasons.
+/// before, chat never throws for transport reasons. A trade of another node
+/// is refused with `TradeOnOtherNode`: its chat stays on its node (#811).
 ///
 /// Returns the sent `ChatMessage` (with `is_mine: true`).
 Future<ChatMessage> sendMessage({
@@ -37,7 +38,7 @@ Future<ChatMessage> sendMessage({
 ///
 /// Returns the message with the reaction applied; the same value reaches
 /// `on_message_updated`. Errors carry a stable marker: `ReactionTooLarge`,
-/// `MessageNotFound`, `ReactionNotAllowed` or `SendFailed`.
+/// `MessageNotFound`, `ReactionNotAllowed`, `TradeOnOtherNode` or `SendFailed`.
 Future<ChatMessage> sendReaction({
   required String tradeId,
   required String messageId,
@@ -74,7 +75,8 @@ Future<int> getUnreadCount() =>
 /// reports 0.1 prepared, 0.3 encrypted, 0.9 uploaded, 1.0 sent.
 ///
 /// Errors are markers: `FileTooLarge`, `UnsupportedFileType`, `InvalidImage`,
-/// `SessionNotFound`, `PeerUnknown`, `UploadFailed`, `SendFailed`.
+/// `SessionNotFound`, `PeerUnknown`, `UploadFailed`, `SendFailed`,
+/// `TradeOnOtherNode`.
 Future<ChatMessage> sendFile({
   required String tradeId,
   required List<int> fileBytes,

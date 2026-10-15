@@ -105,6 +105,7 @@ void main() {
         'FileTooLarge: 30000000 bytes': l10n.attachmentTooLarge,
         'UnsupportedFileType: image/webp': l10n.attachmentUnsupported,
         'InvalidImage: truncated': l10n.attachmentInvalidImage,
+        'TradeOnOtherNode': l10n.tradeOnOtherNode,
         'PeerUnknown: the counterpart has not taken the order yet':
             l10n.attachmentPeerUnknown,
         'UploadFailed: every server refused': l10n.attachmentUploadFailed,

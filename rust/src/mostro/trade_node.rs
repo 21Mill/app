@@ -15,7 +15,7 @@
 //! A daemon message is heard according to who its author is to the trade it
 //! is addressed to ([`speaker`], [`heard`]): the active node, and the trade's
 //! own node whichever is active (#811), so a trade on another node moves to
-//! its real status.
+//! its real status. Its chat stays on that node: [`refuse_other_node`].
 
 use crate::api::types::TradeInfo;
 use nostr_sdk::prelude::PublicKey;
@@ -53,6 +53,38 @@ pub(crate) async fn trade_action_node(order_id: &str) -> anyhow::Result<PublicKe
             ),
         );
     })
+}
+
+/// Refuse a step on the trade `order_id` that belongs on its node without
+/// being a daemon action — its chat, peer and dispute (#811): everything
+/// about a trade happens on its own node. `TradeOnOtherNode` when the row
+/// names a node other than the active one. A row that does not know its
+/// node counts as the active node's, as for a trade action (#810), and no
+/// row is let through, leaving the caller's own error.
+pub(crate) async fn refuse_other_node(order_id: &str) -> anyhow::Result<()> {
+    use crate::db::Storage as _;
+    let Some(db) = crate::db::app_db::db() else {
+        return Ok(());
+    };
+    let Ok(Some(trade)) = db.get_trade_by_order_id(order_id).await else {
+        return Ok(());
+    };
+    let active = crate::config::active_mostro_pubkey();
+    match trade_node(&trade) {
+        Some(node) if !node.eq_ignore_ascii_case(&active) => {
+            crate::api::logging::blog_warn(
+                "orders",
+                format!(
+                    "trade step refused for order={}: trade node={} active node={}",
+                    crate::api::logging::short_id(order_id),
+                    crate::api::logging::short_id(node),
+                    crate::api::logging::short_id(&active),
+                ),
+            );
+            Err(anyhow::anyhow!("TradeOnOtherNode"))
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Who the author of a daemon message is to the trade it is addressed to.

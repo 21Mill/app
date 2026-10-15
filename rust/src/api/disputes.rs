@@ -412,7 +412,7 @@ pub async fn open_dispute(trade_id: String, reason: Option<String>) -> Result<Di
 /// Delivered as an admin-type message in the dispute chat.
 ///
 /// **Errors**: `EvidenceEmpty`, `NoOpenDispute`, `AdminNotAssigned`,
-/// `TradeNotFound`.
+/// `TradeNotFound`, `TradeOnOtherNode`.
 pub async fn submit_evidence(
     trade_id: String,
     text: String,
@@ -420,6 +420,7 @@ pub async fn submit_evidence(
     if text.trim().is_empty() {
         bail!("EvidenceEmpty: text must not be empty");
     }
+    crate::mostro::trade_node::refuse_other_node(&trade_id).await?;
     let (trade_index, admin_pubkey) = solver_conversation(&trade_id).await?;
 
     // Same envelope as the peer chat, keyed to the solver instead of the
@@ -469,10 +470,12 @@ const CHAT_KEY_PREFIX: &str = "Shared key: ";
 /// simply want it sent again. The record only tells the screen.
 ///
 /// **Errors**: `NoOpenDispute`, `AdminNotAssigned`, `TradeNotFound`,
-/// `NoSharedKey` (the counterparty is not known), `SendFailed`.
+/// `NoSharedKey` (the counterparty is not known), `SendFailed`,
+/// `TradeOnOtherNode`.
 pub async fn share_chat_key_with_solver(
     trade_id: String,
 ) -> Result<crate::api::types::ChatMessage> {
+    crate::mostro::trade_node::refuse_other_node(&trade_id).await?;
     let admin_pubkey = current_solver(&trade_id).await?;
     let trade_index = trade_key_index(&trade_id).await?;
     let peer = counterparty_pubkey(&trade_id)
@@ -610,13 +613,14 @@ async fn record_chat_key_share(trade_id: &str, solver: &nostr_sdk::prelude::Publ
 ///
 /// **Errors**: `FileTooLarge`, `UnsupportedFileType`, `InvalidImage`,
 /// `NoOpenDispute`, `AdminNotAssigned`, `TradeNotFound`, `UploadFailed`,
-/// `SendFailed`.
+/// `SendFailed`, `TradeOnOtherNode`.
 pub async fn send_dispute_file(
     trade_id: String,
     file_bytes: Vec<u8>,
     file_name: String,
     upload_id: String,
 ) -> Result<crate::api::types::ChatMessage> {
+    crate::mostro::trade_node::refuse_other_node(&trade_id).await?;
     let target = async {
         let (trade_key_index, admin_pubkey) = solver_conversation(&trade_id).await?;
         Ok(crate::api::messages::AttachmentTarget {
