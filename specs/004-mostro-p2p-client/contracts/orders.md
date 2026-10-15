@@ -169,6 +169,23 @@ from relay.
 
 ---
 
+### payout_destinations(order_id: String) → [PayoutDestination]
+Every destination this device sent the buyer's sats of the order to, oldest
+first, and what became of each (#823): the destination (address or bolt11,
+with its amount and payment hash when an invoice), how it was chosen, the
+NWC wallet's name, and its outcome. The node never says where it paid, so
+this is the only record, kept per order and trade key generation (a later
+take starts over), cleared with the row and when a maker's order goes back
+to the book, and with the identity. The node's messages mark the latest
+open destination (`Submitted` or `Retrying`): its `payment-failed` →
+`Retrying` with the attempt count it announces (retries + 1), an
+`add-invoice` reading `settled-hold-invoice` → `Failed`, and
+`purchase-completed` → `Paid`. `Failed`, `Rejected` and `Paid` never change
+again, and each mark passes the status cursor first, so a replay moves
+nothing. Empty for a trade whose destinations were sent from another device.
+
+---
+
 ### payout_amount(order_id: String) → u64?
 The sats the node pays the buyer: `amount - fee`, the amount the payout
 invoice must carry. Only `add-invoice` (the take reply included) and the
@@ -267,9 +284,19 @@ in this window waits for the daemon's answer (see *Maker's bond window* under
 
 ---
 
-### take_order(order_id: String, role: TradeRole, fiat_amount: f64?) → TradeInfo
+### take_order(order_id: String, role: TradeRole, fiat_amount: f64?, payout: TakePayout?) → TradeInfo
 Take an existing order, starting a trade. `fiat_amount` is required for
 range orders and must fall within `[fiat_amount_min, fiat_amount_max]`.
+
+`payout` says where a buyer's sats go (#823): `DefaultAddress` (also when
+`None`) sends the default Lightning address from Settings with the take, as
+before; `Address { address }` sends another one for this trade only, and is
+refused with `InvalidLightningAddress` before a trade key is spent when it is
+not one; `AskForInvoice` sends none, so the node asks for an invoice. Ignored
+for a seller. What the take sent is recorded in the trade's payout record
+(`payout_destinations`) once it is on the wire, and dropped again if the node
+refuses the take; a bond re-request (`request_bond_invoice_again`) repeats it
+instead of reading Settings again.
 
 **Validation**:
 - Order MUST exist in the book, not be own (`CannotTakeOwnOrder`) and be
@@ -434,11 +461,19 @@ the maker's bond window (`BondAlreadyLocked`, `MakerCancelRefused`,
 
 ---
 
-### send_invoice(order_id: String, invoice_or_address: String, amount_sats: u64) → ()
+### send_invoice(order_id: String, invoice_or_address: String, amount_sats: u64, source: PayoutSource, wallet_name: String?) → ()
 For sell orders: buyer submits a bolt11 invoice or a Lightning Address for
 receiving payment. For LN addresses (`user@domain`) `amount_sats` is
 required so the daemon can resolve the address; bolt11 invoices encode
 their own amount.
+
+`source` says how the destination was chosen (`NwcWallet` when the
+connected wallet generated it and the screen sent it on its own,
+`DefaultLightningAddress` when it is the Settings address unchanged,
+`Entered` otherwise) and `wallet_name` names the NWC wallet that made it.
+Both go to the trade's payout record with the node's verdict: `Rejected`
+when it refused the destination, sent otherwise (an unanswered submission
+included: a late acceptance pays it).
 
 **Side effects**: Sends `AddInvoice` (with the correlation nonce) and waits
 for the daemon's acknowledgement — its reply (`waiting-seller-to-pay`,
