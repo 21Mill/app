@@ -74,7 +74,6 @@ void main() {
     for (final status in [
       OrderStatus.pending,
       OrderStatus.inProgress,
-      OrderStatus.waitingPayment,
       OrderStatus.waitingBuyerInvoice,
       // A failed payout asks for a new invoice while the order reads settled.
       OrderStatus.settledHoldInvoice,
@@ -82,6 +81,10 @@ void main() {
       expect(invoiceStepIsOver(status), isFalse, reason: '$status');
     }
     for (final status in [
+      // How a sell order's buyer gets past it (#711): the invoice comes
+      // before the seller's payment, so its acceptance reads
+      // waiting-payment, not active.
+      OrderStatus.waitingPayment,
       OrderStatus.active,
       OrderStatus.fiatSent,
       OrderStatus.dispute,
@@ -111,6 +114,40 @@ void main() {
 
     // Act
     statuses.add(OrderStatus.active);
+    await tester.pumpAndSettle();
+
+    // Assert
+    expect(find.text('trade-detail'), findsOneWidget);
+  });
+
+  // #711: the buyer of a sell order sends the invoice before the seller
+  // pays, so the daemon's acceptance moves the order to waiting-payment.
+  // When that acceptance outran the 10 s wait, the form kept saying the
+  // node had not answered, although it promised to move on by itself.
+  testWidgets('a late acceptance on a sell order leaves for the trade', (
+    tester,
+  ) async {
+    // Arrange: the node does not answer the submission within the wait.
+    final statuses = StreamController<OrderStatus>();
+    addTearDown(statuses.close);
+    await _pumpScreen(
+      tester,
+      statuses: statuses.stream,
+      submitInvoice: (_, __, ___) async {
+        throw Exception('AnyhowException(InvoiceAwaitingDaemon)');
+      },
+    );
+    statuses.add(OrderStatus.waitingBuyerInvoice);
+    await tester.enterText(find.byType(TextField), 'lnbc1short');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+    await tester.tap(_semantics('invoice.submit'));
+    await tester.pump();
+    await tester.pump();
+    expect(_semantics('invoice.awaiting'), findsOneWidget);
+
+    // Act: the acceptance arrives late; the seller now has to pay.
+    statuses.add(OrderStatus.waitingPayment);
     await tester.pumpAndSettle();
 
     // Assert
