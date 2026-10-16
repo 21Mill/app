@@ -4926,4 +4926,17 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get payoutOutcomeMaybePaid =>
       'An diesen oder einen anderen hier gelisteten bezahlt';
+
+  @override
+  String otherNodeCardLine(String nodeName) {
+    return 'Handel auf Node: $nodeName';
+  }
+
+  @override
+  String get otherNodeCardDialogTitle => 'Handel auf einem anderen Node';
+
+  @override
+  String otherNodeCardOpenHint(String nodeName) {
+    return 'Dieser Handel ist auf Node $nodeName. Um ihn zu bearbeiten, wechsle in den Einstellungen zu diesem Node.';
+  }
 }

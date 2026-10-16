@@ -64,9 +64,12 @@ applies the first two before recording the event, and
   sweep, the payout check). What arrives only that way is corrected on return
   to the trade's node.
 - Dart learns a trade's node from `trade_node_of(order_id)` (empty when
-  unknown). A trade on another node raises no status card and never opens a
-  step by itself (`TradeActionListener`); a row without a node counts as the
-  active node's.
+  unknown). A row wiped on purpose — a trade canceled before it went active —
+  is read from its tombstone, since its update is emitted after the row is
+  gone. A trade on another node never opens a step by itself
+  (`TradeActionListener`); its Notifications cards carry an amber node line
+  and open nothing (`docs/PUSH_NOTIFICATIONS.md` §9.2). A row without a node
+  counts as the active node's.
 - A trade's chat stays on its node: see [messages](messages.md) and
   [disputes](disputes.md).
 
@@ -1035,7 +1038,9 @@ Invariants:
 - Every such wipe — the daemon's `Canceled`, the public `canceled` and the
   stale sweep — goes through `wipe_never_active_trade` → `wipe_trade_row`,
   which leaves a tombstone (`trade_wiped:<order_id>` =
-  `<wiped_at>:<trade_key_index>`, #394). The order's replayed messages for
+  `<wiped_at>:<trade_key_index>`, #394, then `:<node>` when the row knew its
+  node, #811; `tombstone_covers` reads the index alone, so both forms hold).
+  The order's replayed messages for
   that generation are then dropped whole, so on the next start neither the
   DM rebuild nor `adopt_range_remainder` brings the row back. A retake of the
   order is a later generation and lifts it (`persist_trade_row`).

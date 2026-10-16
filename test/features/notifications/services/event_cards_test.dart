@@ -150,21 +150,105 @@ void main() {
       expect(stateOf(notifier).map((n) => n.id), ['trade-order-1-active']);
     });
 
-    test('a trade on another node raises no card yet', () async {
-      // #811: its history is heard whichever node is active; without the
-      // cutoff of the cards to come, the first run would turn it into cards.
-      final elsewhere = EventCards(
-        notifications: () => notifier,
-        isEnabled: (_) => true,
-        identityCreatedAt: () async => null,
-        currentLocation: () => null,
-        isOnOtherNode: (orderId) async => orderId == 'order-1',
-      );
+    // #811: cards of a trade on another node.
+    const nodeA = 'aa11';
+    const nodeB = 'bb22';
+    final cutoff = DateTime.fromMillisecondsSinceEpoch(5000 * 1000);
+    EventCards onNode(String active, {bool rowKept = false}) => EventCards(
+      notifications: () => notifier,
+      isEnabled: (_) => true,
+      identityCreatedAt: () async => null,
+      currentLocation: () => null,
+      tradeNodeOf: (orderId) async => nodeA,
+      activeNode: () => active,
+      otherNodeCardsSince: () => cutoff,
+      tradeExists: (orderId) async => rowKept,
+    );
 
-      await elsewhere.onTradeUpdate(update(OrderStatus.waitingPayment));
+    test('a card records the node of its trade', () async {
+      await onNode(nodeA).onTradeUpdate(update(OrderStatus.active, at: 6000));
+
+      expect(stateOf(notifier).single.nodePubkey, nodeA);
+    });
+
+    test(
+      'another node raises a card, with its node, after the cutoff',
+      () async {
+        await onNode(
+          nodeB,
+        ).onTradeUpdate(update(OrderStatus.waitingPayment, at: 6000));
+
+        final card = stateOf(notifier).single;
+        expect(card.id, 'trade-order-1-waitingPayment');
+        expect(card.nodePubkey, nodeA);
+      },
+    );
+
+    test('what another node did before the cutoff raises no card', () async {
+      // Its history replays whichever node is active: the first run with
+      // other nodes heard must not turn it into cards.
+      await onNode(
+        nodeB,
+      ).onTradeUpdate(update(OrderStatus.waitingPayment, at: 4000));
 
       expect(stateOf(notifier), isEmpty);
     });
+
+    test('the active node is not held to the cutoff', () async {
+      await onNode(nodeA).onTradeUpdate(update(OrderStatus.active, at: 4000));
+
+      expect(stateOf(notifier), hasLength(1));
+    });
+
+    test('a trade on another node that never started raises no card', () async {
+      // canceled without a row / expired: an order nobody took, a bond left
+      // unpaid, a take not completed in time.
+      final elsewhere = onNode(nodeB);
+      await elsewhere.onTradeUpdate(update(OrderStatus.canceled, at: 6000));
+      await elsewhere.onTradeUpdate(update(OrderStatus.expired, at: 6000));
+      expect(stateOf(notifier), isEmpty);
+
+      await elsewhere.onTradeUpdate(
+        update(OrderStatus.cooperativelyCanceled, at: 6000),
+      );
+      expect(
+        stateOf(notifier).single.id,
+        'trade-order-1-cooperativelyCanceled',
+      );
+    });
+
+    test('a started trade canceled on another node raises its card', () async {
+      // The escrow deadline or a hold invoice canceled while active: the
+      // trade went active, so it kept its row.
+      await onNode(
+        nodeB,
+        rowKept: true,
+      ).onTradeUpdate(update(OrderStatus.canceled, at: 6000));
+
+      final card = stateOf(notifier).single;
+      expect(card.id, 'trade-order-1-canceled');
+      expect(card.nodePubkey, nodeA);
+    });
+
+    test('on its own node a canceled trade still raises its card', () async {
+      await onNode(nodeA).onTradeUpdate(update(OrderStatus.canceled, at: 6000));
+
+      expect(stateOf(notifier), hasLength(1));
+    });
+
+    test(
+      'a chat card records its node, and another node waits for the cutoff',
+      () async {
+        final elsewhere = onNode(nodeB);
+        await elsewhere.onChatMessage(message('m1', at: 4000));
+        expect(stateOf(notifier), isEmpty, reason: 'before the cutoff');
+
+        await elsewhere.onChatMessage(message('m2', at: 6000));
+        final card = stateOf(notifier).single;
+        expect(card.id, 'chat-order-1');
+        expect(card.nodePubkey, nodeA);
+      },
+    );
 
     test('a later status on the same order adds its own card', () async {
       await cards.onTradeUpdate(update(OrderStatus.active));

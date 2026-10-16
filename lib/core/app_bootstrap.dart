@@ -15,7 +15,6 @@ import 'package:mostro/core/mostro_defaults.dart';
 import 'package:mostro/core/startup_sequence.dart';
 import 'package:mostro/core/services/identity_service.dart';
 import 'package:mostro/core/test_environment.dart';
-import 'package:mostro/core/trade_node.dart';
 import 'package:mostro/core/lifecycle/app_lifecycle_service.dart';
 import 'package:mostro/core/lifecycle/resume_resync.dart';
 import 'package:mostro/core/web/attachment_probe.dart';
@@ -352,6 +351,19 @@ Future<void> _startup(
     final claims = bondClaimStream;
     if (claims != null) _consumeBondClaims(claims, container);
 
+    // The first run that hears other nodes keeps its date for good: what
+    // they did before it is history, not news (#811).
+    final storedCutoff = prefs.getInt(kOtherNodeCardsSinceKey);
+    final otherNodeCardsSince =
+        storedCutoff != null
+            ? DateTime.fromMillisecondsSinceEpoch(storedCutoff)
+            : DateTime.now();
+    if (storedCutoff == null) {
+      await prefs.setInt(
+        kOtherNodeCardsSinceKey,
+        otherNodeCardsSince.millisecondsSinceEpoch,
+      );
+    }
     final eventCards = EventCards(
       notifications: () => container.read(notificationsProvider.notifier),
       // Read from disk, not the prefs provider: its first load is async, and
@@ -361,11 +373,12 @@ Future<void> _startup(
       currentLocation: _currentLocation,
       disputeIdForTrade:
           (tradeId) => container.read(disputeByTradeIdProvider(tradeId))?.id,
-      isOnOtherNode:
-          (orderId) async => isOnOtherNode(
-            tradeNode: await orders_api.tradeNodeOf(orderId: orderId),
-            activeNode: container.read(mostroPubkeyProvider),
-          ),
+      tradeNodeOf: (orderId) => orders_api.tradeNodeOf(orderId: orderId),
+      tradeExists:
+          (orderId) async =>
+              await orders_api.getTradeRole(orderId: orderId) != null,
+      activeNode: () => container.read(mostroPubkeyProvider),
+      otherNodeCardsSince: () => otherNodeCardsSince,
     );
     final trades = tradeUpdateStream;
     if (trades != null) {
