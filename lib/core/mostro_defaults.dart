@@ -10,5 +10,6 @@ const defaultMostroPubkey =
 /// Default Nostr relay URLs used by the Mostro daemon.
 const defaultMostroRelays = [
   'wss://relay.mostro.network',
-  'wss://nos.lol',
+  'wss://mostro-p2p.tech',
+  'wss://relay.shadowbip.com',
 ];

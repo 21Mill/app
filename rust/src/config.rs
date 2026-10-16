@@ -7,14 +7,16 @@ use std::sync::RwLock;
 
 /// Default relay URLs seeded on first launch.
 ///
-/// These are the four relays the default Mostro node lists in its kind 10002
-/// relay list (and in the `source` tag of its Kind 38383 events). Public
-/// relays rate-limit and cap replays differently — `relay.mostro.network`
-/// stops at 300 events, `nos.lol` at 500 — so covering the node's whole set
-/// keeps the book reachable when one of them is throttling us.
+/// These are the three relays the default Mostro node lists in its kind
+/// 10002 relay list (and in the `source` tag of its Kind 38383 events).
+/// Public relays rate-limit and cap replays differently (`relay.mostro.network`
+/// stops at 300 events per REQ), so covering the node's whole set keeps the
+/// book reachable when one of them is throttling us. `nos.lol` was dropped
+/// when the node stopped publishing there: a relay the node does not write
+/// to only ever serves stale events, and it caps concurrent REQs per
+/// connection (#523).
 pub const DEFAULT_RELAYS: &[&str] = &[
     "wss://relay.mostro.network",
-    "wss://nos.lol",
     "wss://mostro-p2p.tech",
     "wss://relay.shadowbip.com",
 ];
@@ -147,4 +149,25 @@ pub fn set_order_expiry_override(secs: Option<u64>) {
 /// before swapping the override.
 pub fn set_active_mostro_pubkey(pubkey: Option<String>) {
     *ACTIVE_MOSTRO_PUBKEY.write().unwrap() = pubkey;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The seeded relays are exactly the ones the default node announces in
+    /// its kind 10002 list, in its order. A relay the node dropped must go
+    /// too: the node no longer publishes there, so the client would only
+    /// read stale events from it.
+    #[test]
+    fn default_relays_are_the_default_node_relay_list() {
+        assert_eq!(
+            DEFAULT_RELAYS,
+            &[
+                "wss://relay.mostro.network",
+                "wss://mostro-p2p.tech",
+                "wss://relay.shadowbip.com",
+            ]
+        );
+    }
 }
