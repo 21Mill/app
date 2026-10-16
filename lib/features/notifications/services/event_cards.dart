@@ -24,10 +24,13 @@
 /// - only what happened after [otherNodeCardsSince] raises one: the kind-14
 ///   feed replays every history, and the first run with other nodes heard
 ///   would turn weeks of it into cards;
-/// - `canceled` and `expired` raise none: a trade that started never ends
-///   that way (it ends cooperatively or by the admin), so it is one that
-///   never did — an order nobody took, a bond left unpaid, a take not
-///   completed in time — with nothing at stake.
+/// - a trade that never started raises nothing for its end: `expired`
+///   (an order nobody took), and `canceled` once its row is gone — a trade
+///   canceled before it went active loses its row before its update is
+///   emitted (an order nobody took, a bond left unpaid, a take not
+///   completed in time). A trade that started keeps its row, and its cancel
+///   (the escrow deadline, a hold invoice canceled while active) raises its
+///   card.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -77,6 +80,7 @@ class EventCards {
     this.tradeNodeOf = _unknownNode,
     this.activeNode = _noActiveNode,
     this.otherNodeCardsSince = _noCutoff,
+    this.tradeExists = _noRow,
   });
 
   final NotificationsNotifier Function() notifications;
@@ -113,6 +117,12 @@ class EventCards {
 
   static DateTime? _noCutoff() => null;
 
+  /// Whether the trade still has its row: a trade that went active keeps it
+  /// once canceled, one that never did loses it (#811).
+  final Future<bool> Function(String orderId) tradeExists;
+
+  static Future<bool> _noRow(String orderId) async => false;
+
   /// Whether [node] is another node than the active one.
   bool _otherNode(String node) =>
       isOnOtherNode(tradeNode: node, activeNode: activeNode());
@@ -135,8 +145,9 @@ class EventCards {
     if (await _predatesIdentity(at)) return;
     final node = await tradeNodeOf(update.orderId);
     if (_otherNode(node)) {
-      if (update.status == OrderStatus.canceled ||
-          update.status == OrderStatus.expired) {
+      if (update.status == OrderStatus.expired) return;
+      if (update.status == OrderStatus.canceled &&
+          !await tradeExists(update.orderId)) {
         return;
       }
       if (_predatesCutoff(at)) return;

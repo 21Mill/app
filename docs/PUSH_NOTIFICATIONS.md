@@ -907,13 +907,15 @@ The trade and chat cards come from `lib/features/notifications/services/event_ca
   trade on another node raises its usual cards with two more filters: nothing from
   before `otherNodeCardsSince`, the date the first run with other nodes heard stored in
   `SharedPreferences` (the kind-14 feed replays every history, and without it that run
-  would turn weeks of it into cards), and nothing for `canceled` or `expired` (a trade
-  that started never ends that way, so it is one that never did, with nothing at
-  stake). On screen, a group card whose node is not the active one shows an amber line
-  naming it, read as the card is shown, so it leaves once the user is on that node.
-  Tapping it opens nothing: an informative dialog, answered only with OK, says the trade
-  is acted on from its node, switched to in Settings (`NotificationGroupCard`). A card that recorded no
-  node reads as the active node's.
+  would turn weeks of it into cards), and nothing for the end of a trade that never
+  started: `expired`, and `canceled` once its row is gone (a trade canceled before it
+  went active loses its row before its update is emitted). A trade that went active
+  keeps its row, and its cancel (the escrow deadline, a hold invoice canceled while
+  active) raises its card. On screen, a group card whose node is not the active one
+  shows an amber line naming it, read as the card is shown, so it leaves once the user
+  is on that node. Tapping it opens nothing: an informative dialog, answered only with
+  OK, says the trade is acted on from its node, switched to in Settings
+  (`NotificationGroupCard`). A card that recorded no node reads as the active node's.
 
 ### 9.3 The OS notification
 

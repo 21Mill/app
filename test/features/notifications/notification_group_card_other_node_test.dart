@@ -9,12 +9,14 @@ import 'package:mostro/features/settings/providers/mostro_nodes_provider.dart';
 import 'package:mostro/features/trades/models/trades_list_rules.dart';
 import 'package:mostro/features/trades/providers/trade_rows_provider.dart';
 import 'package:mostro/l10n/app_localizations.dart';
+import 'package:mostro/l10n/app_localizations_de.dart';
 import 'package:mostro/l10n/app_localizations_en.dart';
 import 'package:mostro/src/rust/api/types.dart';
 
 /// #811: a card of a trade on another node says so, and opens nothing.
 
 final _en = AppLocalizationsEn();
+final _de = AppLocalizationsDe();
 
 const _nodeA =
     'aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111';
@@ -80,6 +82,7 @@ void main() {
     WidgetTester tester, {
     required String active,
     required List<NotificationModel> cards,
+    Locale locale = const Locale('en'),
   }) async {
     tapped = [];
     wentToTrade = 0;
@@ -92,7 +95,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: buildDarkTheme(),
-          locale: const Locale('en'),
+          locale: locale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
@@ -142,6 +145,36 @@ void main() {
 
     expect(tapped, isEmpty, reason: 'no event opens on another node');
     expect(wentToTrade, 0, reason: 'nor does Go to trade');
+  });
+
+  // DS-A11Y-4: the card's line and the dialog at 320 dp, 2× text, German.
+  testWidgets('the line and the dialog fit 320 dp at 2× text in German', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    await pump(
+      tester,
+      active: _nodeB,
+      cards: [_card('fiatSent', 2, node: _nodeA)],
+      locale: const Locale('de'),
+    );
+    expect(find.text(_de.otherNodeCardLine('Node A')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text(_de.goToTrade));
+    await tester.pumpAndSettle();
+    expect(find.text(_de.otherNodeCardDialogTitle), findsOneWidget);
+    expect(find.text(_de.otherNodeCardOpenHint('Node A')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text(_de.okButtonLabel));
+    await tester.pumpAndSettle();
+    expect(find.text(_de.otherNodeCardDialogTitle), findsNothing);
   });
 
   testWidgets('on its own node the card has no line and opens as usual', (

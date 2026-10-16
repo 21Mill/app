@@ -7352,12 +7352,21 @@ async fn wipe_trade_row(
     wiped_at: i64,
     wiped_index: u32,
 ) -> Result<()> {
-    let node = db
-        .get_trade_by_order_id(order_id)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|t| crate::mostro::trade_node::trade_node(&t).map(str::to_owned));
+    // A row that cannot be read is still wiped: the delete matches the order
+    // id alone, and a row that no longer decodes would otherwise never go.
+    // Its tombstone then names no node, and the trade reads as the active
+    // node's.
+    let node = match db.get_trade_by_order_id(order_id).await {
+        Ok(trade) => trade
+            .and_then(|t| crate::mostro::trade_node::trade_node(&t).map(str::to_owned)),
+        Err(e) => {
+            crate::api::logging::blog_warn(
+                "orders",
+                format!("wipe: row not read for order={order_id}, tombstone without its node: {e}"),
+            );
+            None
+        }
+    };
     db.delete_trade_by_order_id(order_id).await?;
     crate::api::trade_touch::touch_trade(order_id);
     let tombstone = match node {

@@ -374,6 +374,9 @@ Future<void> _startup(
       disputeIdForTrade:
           (tradeId) => container.read(disputeByTradeIdProvider(tradeId))?.id,
       tradeNodeOf: (orderId) => orders_api.tradeNodeOf(orderId: orderId),
+      tradeExists:
+          (orderId) async =>
+              await orders_api.getTradeRole(orderId: orderId) != null,
       activeNode: () => container.read(mostroPubkeyProvider),
       otherNodeCardsSince: () => otherNodeCardsSince,
     );

@@ -154,7 +154,7 @@ void main() {
     const nodeA = 'aa11';
     const nodeB = 'bb22';
     final cutoff = DateTime.fromMillisecondsSinceEpoch(5000 * 1000);
-    EventCards onNode(String active) => EventCards(
+    EventCards onNode(String active, {bool rowKept = false}) => EventCards(
       notifications: () => notifier,
       isEnabled: (_) => true,
       identityCreatedAt: () async => null,
@@ -162,6 +162,7 @@ void main() {
       tradeNodeOf: (orderId) async => nodeA,
       activeNode: () => active,
       otherNodeCardsSince: () => cutoff,
+      tradeExists: (orderId) async => rowKept,
     );
 
     test('a card records the node of its trade', () async {
@@ -200,8 +201,8 @@ void main() {
     });
 
     test('a trade on another node that never started raises no card', () async {
-      // canceled / expired: an order nobody took, a bond left unpaid, a take
-      // not completed in time. A trade that started ends otherwise.
+      // canceled without a row / expired: an order nobody took, a bond left
+      // unpaid, a take not completed in time.
       final elsewhere = onNode(nodeB);
       await elsewhere.onTradeUpdate(update(OrderStatus.canceled, at: 6000));
       await elsewhere.onTradeUpdate(update(OrderStatus.expired, at: 6000));
@@ -214,6 +215,19 @@ void main() {
         stateOf(notifier).single.id,
         'trade-order-1-cooperativelyCanceled',
       );
+    });
+
+    test('a started trade canceled on another node raises its card', () async {
+      // The escrow deadline or a hold invoice canceled while active: the
+      // trade went active, so it kept its row.
+      await onNode(
+        nodeB,
+        rowKept: true,
+      ).onTradeUpdate(update(OrderStatus.canceled, at: 6000));
+
+      final card = stateOf(notifier).single;
+      expect(card.id, 'trade-order-1-canceled');
+      expect(card.nodePubkey, nodeA);
     });
 
     test('on its own node a canceled trade still raises its card', () async {
