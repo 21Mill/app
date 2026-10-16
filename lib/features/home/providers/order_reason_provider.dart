@@ -30,7 +30,8 @@ enum OrderReason {
 ///   Buy BTC, the best-paying buy order on Sell BTC. Ties are broken by list
 ///   position (first wins). Awarded only when that order beats at least one
 ///   other: a lone order, or a list where every premium is equal, has no
-///   "best".
+///   "best". Fixed-sats orders have no premium, so they neither win it nor
+///   count as beaten.
 /// - Most reputable: the order with the highest rating (must be > 0), ties
 ///   broken by higher tradeCount, then list position. Skips the card that
 ///   already won "best premium".
@@ -44,18 +45,25 @@ Map<String, OrderReason> computeOrderReasons(List<OrderItem> book) {
   if (orders.isEmpty) return const {};
   final reasons = <String, OrderReason>{};
 
-  // Best premium — most in the taker's favour, if it beats anything.
-  var best = orders.first;
-  var beatsAnother = false;
-  for (final o in orders.skip(1)) {
-    if (o.takerPremiumAdvantage > best.takerPremiumAdvantage) {
-      best = o;
-      beatsAnother = true;
-    } else if (o.takerPremiumAdvantage < best.takerPremiumAdvantage) {
-      beatsAnother = true;
+  // Best premium — most in the taker's favour, if it beats anything. Only
+  // market-price orders carry a premium.
+  final priced = [
+    for (final o in orders)
+      if (!o.hasFixedSats) o,
+  ];
+  if (priced.isNotEmpty) {
+    var best = priced.first;
+    var beatsAnother = false;
+    for (final o in priced.skip(1)) {
+      if (o.takerPremiumAdvantage > best.takerPremiumAdvantage) {
+        best = o;
+        beatsAnother = true;
+      } else if (o.takerPremiumAdvantage < best.takerPremiumAdvantage) {
+        beatsAnother = true;
+      }
     }
+    if (beatsAnother) reasons[best.id] = OrderReason.bestPremium;
   }
-  if (beatsAnother) reasons[best.id] = OrderReason.bestPremium;
 
   // Most reputable — highest rating (> 0), ties broken by tradeCount.
   OrderItem? reputable;

@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mostro/features/home/widgets/order_list_item.dart';
 
+import '../../support/fake_orders.dart';
+
 void main() {
   group('OrderCardFormats', () {
     test('reuses one set of formatters per locale', () {
@@ -28,6 +30,46 @@ void main() {
 
       expect(formats.premium.format(2.5), '+2.5');
       expect(formats.premium.format(-2.5), '-2.5');
+    });
+
+    group('fixedPricePerBtc', () {
+      test('abbreviates the price per BTC of a fixed-sats order', () {
+        final order = fakeOrder(
+          fiatAmount: 100,
+          fiatCode: 'EUR',
+          amountSats: BigInt.from(163400),
+        );
+
+        expect(OrderCardFormats.of('en').fixedPricePerBtc(order), '61.2k');
+        expect(OrderCardFormats.of('es').fixedPricePerBtc(order), '61,2k');
+        expect(OrderCardFormats.of('de').fixedPricePerBtc(order), '61,2k');
+      });
+
+      test('keeps the order currency magnitude readable', () {
+        final order = fakeOrder(
+          fiatAmount: 1000000,
+          fiatCode: 'ARS',
+          amountSats: BigInt.from(892857),
+        );
+
+        expect(OrderCardFormats.of('en').fixedPricePerBtc(order), '112M');
+        expect(OrderCardFormats.of('es').fixedPricePerBtc(order), '112M');
+      });
+
+      test('reads billions as B, the way a fiat figure is read', () {
+        final order = fakeOrder(
+          fiatAmount: 1000000,
+          fiatCode: 'LBP',
+          amountSats: BigInt.from(10000),
+        );
+
+        expect(OrderCardFormats.of('en').fixedPricePerBtc(order), '10B');
+        expect(OrderCardFormats.of('es').fixedPricePerBtc(order), '10B');
+      });
+
+      test('is null for a market-price order', () {
+        expect(OrderCardFormats.of('en').fixedPricePerBtc(fakeOrder()), isNull);
+      });
     });
   });
 }

@@ -140,6 +140,17 @@ void main() {
       expect(helper.ids(), ['pricey']);
     });
 
+    test('premium range never hides a fixed-sats order', () async {
+      final helper = await bookWith([
+        fakeOrder(id: 'cheap', kind: 'sell', premium: -5.0),
+        fakeOrder(id: 'fixed', kind: 'sell', amountSats: BigInt.from(4000)),
+      ]);
+      helper.setTab(OrderType.buy);
+      await helper.filter(const OrderFilters(premium: (min: 5.0, max: 10.0)));
+
+      expect(helper.ids(), ['fixed']);
+    });
+
     test('results are sorted newest-first by createdAt', () async {
       final helper = await bookWith([
         fakeOrder(id: 'older', kind: 'sell', minutesAgo: 30),

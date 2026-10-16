@@ -2049,6 +2049,9 @@ class AppLocalizationsNl extends AppLocalizations {
   String get orderCardPremiumCaption => 'premie';
 
   @override
+  String get orderCardPriceCaption => 'prijs';
+
+  @override
   String orderFixedAmount(String sats) {
     return 'Vast bedrag · voor $sats';
   }

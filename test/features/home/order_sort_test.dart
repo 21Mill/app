@@ -42,6 +42,25 @@ void main() {
       expect(helper.ids(), ['minus2', 'zero', 'plus5']);
     });
 
+    test('best premium lists fixed-sats orders after market ones', () async {
+      final helper = await bookWith([
+        fakeOrder(
+          id: 'fixed',
+          kind: 'sell',
+          amountSats: BigInt.from(4000),
+          minutesAgo: 1,
+        ),
+        fakeOrder(id: 'plus5', kind: 'sell', premium: 5, minutesAgo: 2),
+        fakeOrder(id: 'plus2', kind: 'sell', premium: 2, minutesAgo: 3),
+      ]);
+      helper.setTab(OrderType.buy);
+
+      helper.container.read(orderSortProvider.notifier).state =
+          OrderSort.bestPremium;
+
+      expect(helper.ids(), ['plus2', 'plus5', 'fixed']);
+    });
+
     test('best premium on Sell BTC lists the best-paying buy order first',
         () async {
       final helper = await bookWith([

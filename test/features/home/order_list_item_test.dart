@@ -116,6 +116,24 @@ void main() {
       );
       expect(find.text('Market price'), findsNothing);
     });
+
+    testWidgets('fixed-sats orders show their price per BTC, not a premium', (
+      tester,
+    ) async {
+      await _pumpCard(
+        tester,
+        fakeOrder(
+          fiatAmount: 100,
+          fiatCode: 'EUR',
+          amountSats: BigInt.from(163400),
+        ),
+      );
+
+      expect(find.text('61.2k EUR/BTC'), findsOneWidget);
+      expect(find.text('price'), findsOneWidget);
+      expect(find.text('premium'), findsNothing);
+      expect(find.textContaining('%'), findsNothing);
+    });
   });
 
   group('OrderListItem rows', () {
@@ -250,4 +268,30 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  for (final (fiatCode, fiatAmount, sats) in [
+    ('EUR', 100.0, 163400),
+    ('ARS', 1000000.0, 892857),
+    ('LBP', 1000000.0, 10000),
+  ]) {
+    testWidgets('a fixed $fiatCode price per BTC does not overflow on a '
+        '320-wide phone with 2x text', (tester) async {
+      await _pumpCard(
+        tester,
+        fakeOrder(
+          fiatAmount: fiatAmount,
+          fiatCode: fiatCode,
+          amountSats: BigInt.from(sats),
+          paymentMethod: 'SPEI, Retiro Cajero BBVA, Transferencia Banorte',
+          rating: 4.78,
+          tradeCount: 1600,
+          daysActive: 2190,
+        ),
+        width: 320,
+        textScale: 2,
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

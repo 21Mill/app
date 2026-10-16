@@ -3568,6 +3568,12 @@ abstract class AppLocalizations {
   /// **'premium'**
   String get orderCardPremiumCaption;
 
+  /// Small caption under the price per BTC of a fixed-sats order on an order-book card, where a market-price order shows its premium
+  ///
+  /// In en, this message translates to:
+  /// **'price'**
+  String get orderCardPriceCaption;
+
   /// Caption under a fixed-sats order amount. {sats} is the already formatted figure with its unit (satsAmount); place it wherever the language needs it
   ///
   /// In en, this message translates to:

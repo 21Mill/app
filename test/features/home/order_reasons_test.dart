@@ -23,6 +23,21 @@ void main() {
       expect(reasons, {'a': OrderReason.bestPremium});
     });
 
+    test('a fixed-sats order never wins best premium', () {
+      final reasons = computeOrderReasons([
+        fakeOrder(
+          id: 'fixed',
+          kind: 'sell',
+          amountSats: BigInt.from(4000),
+          rating: 0,
+        ),
+        fakeOrder(id: 'plus3', kind: 'sell', premium: 3, rating: 0),
+        fakeOrder(id: 'plus2', kind: 'sell', premium: 2, rating: 0),
+      ]);
+
+      expect(reasons, {'plus2': OrderReason.bestPremium});
+    });
+
     test('nothing is "best premium" when no order beats another', () {
       expect(
         computeOrderReasons([fakeOrder(id: 'lone', premium: 2, rating: 0)]),

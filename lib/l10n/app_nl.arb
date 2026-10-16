@@ -578,6 +578,7 @@
   "sortBestReputation": "Beste reputatie",
   "sortSheetTitle": "Sorteren op",
   "orderCardPremiumCaption": "premie",
+  "orderCardPriceCaption": "prijs",
   "orderFixedAmount": "Vast bedrag · voor {sats}",
   "reputationNew": "Nieuw",
   "reputationNoTrades": "geen trades",

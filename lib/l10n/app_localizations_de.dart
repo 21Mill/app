@@ -2064,6 +2064,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get orderCardPremiumCaption => 'Prämie';
 
   @override
+  String get orderCardPriceCaption => 'Preis';
+
+  @override
   String orderFixedAmount(String sats) {
     return 'Fester Betrag · für $sats';
   }
