@@ -148,3 +148,24 @@ pub fn set_order_expiry_override(secs: Option<u64>) {
 pub fn set_active_mostro_pubkey(pubkey: Option<String>) {
     *ACTIVE_MOSTRO_PUBKEY.write().unwrap() = pubkey;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The seeded relays are exactly the ones the default node announces in
+    /// its kind 10002 list, in its order. A relay the node dropped must go
+    /// too: the node no longer publishes there, so the client would only
+    /// read stale events from it.
+    #[test]
+    fn default_relays_are_the_default_node_relay_list() {
+        assert_eq!(
+            DEFAULT_RELAYS,
+            &[
+                "wss://relay.mostro.network",
+                "wss://mostro-p2p.tech",
+                "wss://relay.shadowbip.com",
+            ]
+        );
+    }
+}
