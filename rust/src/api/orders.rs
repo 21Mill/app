@@ -7222,19 +7222,19 @@ impl RowState {
     }
 }
 
-/// Whether a wipe tombstone covers a message decrypted with `trade_index`'s
-/// key. The tombstone records the generation it wiped
-/// (`<wiped_at>:<trade_index>`): a message on a LATER index belongs to a new
-/// take of the same order — a different trade, possibly one whose
-/// confirmation timed out — and must stay classified `NeverWritten` so the
-/// DM rebuild can recover it (review round 2, probe P5). A tombstone whose
-/// index does not parse covers every generation, degrading to the
-/// pre-generation behavior: replays dropped, recovery muted.
 /// The node a wipe tombstone keeps, if the wiped row knew it.
 fn tombstone_node(value: &str) -> Option<&str> {
     value.split(':').nth(2).filter(|node| !node.is_empty())
 }
 
+/// Whether a wipe tombstone covers a message decrypted with `trade_index`'s
+/// key. The tombstone records the generation it wiped
+/// (`<wiped_at>:<trade_index>`, then `:<node>` since #811): a message on a
+/// LATER index belongs to a new take of the same order — a different trade,
+/// possibly one whose confirmation timed out — and must stay classified
+/// `NeverWritten` so the DM rebuild can recover it (review round 2, probe
+/// P5). A tombstone whose index does not parse covers every generation,
+/// degrading to the pre-generation behavior: replays dropped, recovery muted.
 fn tombstone_covers(value: &str, trade_index: u32) -> bool {
     let wiped_index = value
         .split(':')

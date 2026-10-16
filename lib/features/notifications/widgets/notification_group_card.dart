@@ -115,13 +115,13 @@ class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
         elsewhere
             ? nodeNameOf(node, ref.watch(mostroNodesProvider).valueOrNull ?? [])
             : null;
-    void sayWhereToOpen() => showMostroDialog<void>(
+    void sayWhereToOpen(String name) => showMostroDialog<void>(
       context: context,
       builder:
           (dialogContext) => MostroDialog(
             icon: Icons.swap_horiz_rounded,
             title: l10n.otherNodeCardDialogTitle,
-            body: l10n.otherNodeCardOpenHint(nodeName!),
+            body: l10n.otherNodeCardOpenHint(name),
             primary: ModalAction(
               label: l10n.okButtonLabel,
               onPressed: () => Navigator.of(dialogContext).pop(),
@@ -129,12 +129,14 @@ class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
           ),
     );
     VoidCallback open(NotificationModel n) =>
-        elsewhere ? sayWhereToOpen : () => widget.onTapNotification(n);
+        nodeName != null
+            ? () => sayWhereToOpen(nodeName)
+            : () => widget.onTapNotification(n);
     final onGoToTrade =
         tradeGone
             ? null
-            : elsewhere
-            ? sayWhereToOpen
+            : nodeName != null
+            ? () => sayWhereToOpen(nodeName)
             : widget.onGoToTrade;
     final needsAction = row?.state.needsAction ?? false;
     final isDispute =
