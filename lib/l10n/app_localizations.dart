@@ -8062,7 +8062,13 @@ abstract class AppLocalizations {
   /// **'Trade on node: {nodeName}'**
   String otherNodeCardLine(String nodeName);
 
-  /// Notifications (#811): snackbar when the user taps a card whose trade is on another node; informational only, nodes are switched in Settings
+  /// Notifications (#811): title of the dialog shown when the user taps a card whose trade is on another node
+  ///
+  /// In en, this message translates to:
+  /// **'Trade on another node'**
+  String get otherNodeCardDialogTitle;
+
+  /// Notifications (#811): body of the dialog shown when the user taps a card whose trade is on another node; informational only, nodes are switched in Settings
   ///
   /// In en, this message translates to:
   /// **'This trade is on node {nodeName}. To act on it, switch to that node in Settings.'**

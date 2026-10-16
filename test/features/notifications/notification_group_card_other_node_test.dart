@@ -123,12 +123,22 @@ void main() {
     expect(find.text(_en.otherNodeCardLine('Node A')), findsOneWidget);
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
 
-    await tester.tap(find.text(_en.tradeCardFiatSentTitle));
-    await tester.pump();
-    expect(find.text(_en.otherNodeCardOpenHint('Node A')), findsOneWidget);
+    // Each way into the trade says where it lives instead, in a dialog.
+    Future<void> tapAndDismiss(Finder target) async {
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+      expect(find.text(_en.otherNodeCardDialogTitle), findsOneWidget);
+      expect(find.text(_en.otherNodeCardOpenHint('Node A')), findsOneWidget);
+      await tester.tap(find.text(_en.okButtonLabel));
+      await tester.pumpAndSettle();
+      expect(find.text(_en.otherNodeCardDialogTitle), findsNothing);
+    }
 
-    await tester.tap(find.text(_en.goToTrade));
-    await tester.pump();
+    await tapAndDismiss(find.text(_en.tradeCardFiatSentTitle));
+    await tapAndDismiss(find.text(_en.goToTrade));
+    await tester.tap(find.byIcon(Icons.keyboard_arrow_down));
+    await tester.pumpAndSettle();
+    await tapAndDismiss(find.text(_en.tradeCardActiveTitle));
 
     expect(tapped, isEmpty, reason: 'no event opens on another node');
     expect(wentToTrade, 0, reason: 'nor does Go to trade');

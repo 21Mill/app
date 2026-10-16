@@ -4938,6 +4938,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get otherNodeCardDialogTitle => 'Opération sur un autre nœud';
+
+  @override
   String otherNodeCardOpenHint(String nodeName) {
     return 'Cette opération est sur le nœud $nodeName. Pour agir dessus, passez à ce nœud dans les Paramètres.';
   }

@@ -1475,5 +1475,6 @@
   "payoutOutcomeReplaced": "Reemplazado por uno posterior",
   "payoutOutcomeMaybePaid": "Pagado a este o a otro de los listados aquí",
   "otherNodeCardLine": "Operación en el nodo: {nodeName}",
+  "otherNodeCardDialogTitle": "Operación en otro nodo",
   "otherNodeCardOpenHint": "Esta operación es del nodo {nodeName}. Para operarla, cambia a ese nodo en Configuración."
 }

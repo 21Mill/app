@@ -1475,5 +1475,6 @@
   "payoutOutcomeReplaced": "Vervangen door een latere",
   "payoutOutcomeMaybePaid": "Betaald aan deze of een andere die hier staat",
   "otherNodeCardLine": "Trade op node: {nodeName}",
+  "otherNodeCardDialogTitle": "Trade op een andere node",
   "otherNodeCardOpenHint": "Deze trade staat op node {nodeName}. Schakel in Instellingen over naar die node om ermee verder te gaan."
 }

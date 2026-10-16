@@ -4908,6 +4908,9 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
+  String get otherNodeCardDialogTitle => 'Trade op een andere node';
+
+  @override
   String otherNodeCardOpenHint(String nodeName) {
     return 'Deze trade staat op node $nodeName. Schakel in Instellingen over naar die node om ermee verder te gaan.';
   }

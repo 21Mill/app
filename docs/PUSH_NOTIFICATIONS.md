@@ -911,8 +911,8 @@ The trade and chat cards come from `lib/features/notifications/services/event_ca
   that started never ends that way, so it is one that never did, with nothing at
   stake). On screen, a group card whose node is not the active one shows an amber line
   naming it, read as the card is shown, so it leaves once the user is on that node.
-  Tapping it opens nothing: a snackbar, with no button, says the trade is acted on from
-  its node, switched to in Settings (`NotificationGroupCard`). A card that recorded no
+  Tapping it opens nothing: an informative dialog, answered only with OK, says the trade
+  is acted on from its node, switched to in Settings (`NotificationGroupCard`). A card that recorded no
   node reads as the active node's.
 
 ### 9.3 The OS notification

@@ -8,14 +8,13 @@ import 'package:mostro/features/notifications/models/notification_model.dart';
 import 'package:mostro/features/notifications/models/notification_view_rules.dart';
 import 'package:mostro/features/order/models/order_detail_rules.dart'
     show shortOrderId;
-import 'package:mostro/features/order/widgets/order_detail_cards.dart'
-    show showOrderDetailSnackBar;
 import 'package:mostro/features/settings/models/node_display.dart';
 import 'package:mostro/features/settings/providers/mostro_nodes_provider.dart';
 import 'package:mostro/features/trades/models/trades_list_rules.dart';
 import 'package:mostro/features/trades/providers/trade_rows_provider.dart';
 import 'package:mostro/features/trades/widgets/trade_card.dart';
 import 'package:mostro/l10n/app_localizations.dart';
+import 'package:mostro/shared/widgets/mostro_modal.dart';
 
 /// Collapsible card grouping all notifications that reference the same
 /// trade (order id) or dispute (issue #610).
@@ -116,8 +115,19 @@ class _NotificationGroupCardState extends ConsumerState<NotificationGroupCard> {
         elsewhere
             ? nodeNameOf(node, ref.watch(mostroNodesProvider).valueOrNull ?? [])
             : null;
-    void sayWhereToOpen() =>
-        showOrderDetailSnackBar(context, l10n.otherNodeCardOpenHint(nodeName!));
+    void sayWhereToOpen() => showMostroDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => MostroDialog(
+            icon: Icons.swap_horiz_rounded,
+            title: l10n.otherNodeCardDialogTitle,
+            body: l10n.otherNodeCardOpenHint(nodeName!),
+            primary: ModalAction(
+              label: l10n.okButtonLabel,
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ),
+    );
     VoidCallback open(NotificationModel n) =>
         elsewhere ? sayWhereToOpen : () => widget.onTapNotification(n);
     final onGoToTrade =

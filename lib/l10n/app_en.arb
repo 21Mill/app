@@ -5131,9 +5131,13 @@
       }
     }
   },
+  "otherNodeCardDialogTitle": "Trade on another node",
+  "@otherNodeCardDialogTitle": {
+    "description": "Notifications (#811): title of the dialog shown when the user taps a card whose trade is on another node"
+  },
   "otherNodeCardOpenHint": "This trade is on node {nodeName}. To act on it, switch to that node in Settings.",
   "@otherNodeCardOpenHint": {
-    "description": "Notifications (#811): snackbar when the user taps a card whose trade is on another node; informational only, nodes are switched in Settings",
+    "description": "Notifications (#811): body of the dialog shown when the user taps a card whose trade is on another node; informational only, nodes are switched in Settings",
     "placeholders": {
       "nodeName": {
         "type": "String"

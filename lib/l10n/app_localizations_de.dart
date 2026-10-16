@@ -4933,6 +4933,9 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get otherNodeCardDialogTitle => 'Handel auf einem anderen Node';
+
+  @override
   String otherNodeCardOpenHint(String nodeName) {
     return 'Dieser Handel ist auf Node $nodeName. Um ihn zu bearbeiten, wechsle in den Einstellungen zu diesem Node.';
   }
