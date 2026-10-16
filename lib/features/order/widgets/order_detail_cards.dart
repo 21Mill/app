@@ -1,5 +1,6 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'package:mostro/core/app_theme.dart';
@@ -276,34 +277,100 @@ class OrderDataValue extends StatelessWidget {
 // ── Payment methods row ───────────────────────────────────────────────────────
 
 /// `Mercado Pago, Transferencia`, or `Mercado Pago +2` when the order
-/// accepts more than two — tapping the row then lists them in a sheet.
-class OrderPaymentMethodsRow extends StatelessWidget {
+/// accepts more than two. Tapping the row lists them in a sheet whenever the
+/// row cannot show them whole: more than two, or one or two that do not fit
+/// its single line (a long custom method).
+///
+/// [lead], when set, goes before the methods (`312 ARS · Mercado Pago`).
+class OrderPaymentMethodsRow extends StatefulWidget {
   const OrderPaymentMethodsRow({
     super.key,
     required this.label,
     required this.paymentMethod,
+    this.icon = Icons.credit_card_outlined,
+    this.lead,
+    this.figures = false,
   });
 
   final String label;
   final String paymentMethod;
+  final IconData icon;
+  final String? lead;
+  final bool figures;
+
+  @override
+  State<OrderPaymentMethodsRow> createState() => _OrderPaymentMethodsRowState();
+}
+
+class _OrderPaymentMethodsRowState extends State<OrderPaymentMethodsRow> {
+  final _valueKey = GlobalKey();
+
+  /// Whether the value was cut at the last layout; known only after one.
+  bool _truncated = false;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final summary = paymentMethodsSummary(paymentMethod);
-    final text =
+    final summary = paymentMethodsSummary(widget.paymentMethod);
+    final methods =
         summary.hidden > 0
             ? l10n.paymentMethodsMore(summary.shown.first, summary.hidden)
             : summary.shown.join(', ');
+    final lead = widget.lead;
+    final text = switch ((lead, methods.isEmpty)) {
+      (null, _) => methods,
+      (final String fiat, true) => fiat,
+      (final String fiat, false) => '$fiat · $methods',
+    };
+    WidgetsBinding.instance.addPostFrameCallback((_) => _noteTruncation());
     return OrderDataRow(
-      icon: Icons.credit_card_outlined,
-      label: label,
-      value: OrderDataValue(text),
+      icon: widget.icon,
+      label: widget.label,
+      // A later width change (rotation, split screen, a resized window, a
+      // new text scale) rebuilds nothing here, so re-read after any layout
+      // that resizes the value. The notifier is a proxy box, so intrinsic
+      // sizing still passes through, and it skips the first layout, which
+      // the callback above already covers.
+      value: NotificationListener<SizeChangedLayoutNotification>(
+        onNotification: (_) {
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _noteTruncation(),
+          );
+          return true;
+        },
+        child: SizeChangedLayoutNotifier(
+          child: KeyedSubtree(
+            key: _valueKey,
+            child: OrderDataValue(text, figures: widget.figures),
+          ),
+        ),
+      ),
       onTap:
-          summary.hidden > 0
+          summary.hidden > 0 || (_truncated && summary.all.isNotEmpty)
               ? () => _showMethodsSheet(context, summary.all)
               : null,
     );
+  }
+
+  /// Reads whether the laid-out value was cut and, when that changed,
+  /// rebuilds so the row's tap follows it. Read after layout rather than
+  /// measured during it, so the row still answers intrinsic sizing.
+  void _noteTruncation() {
+    if (!mounted) return;
+    final truncated =
+        _firstParagraph(
+          _valueKey.currentContext?.findRenderObject(),
+        )?.didExceedMaxLines;
+    if (truncated == null || truncated == _truncated) return;
+    setState(() => _truncated = truncated);
+  }
+
+  static RenderParagraph? _firstParagraph(RenderObject? node) {
+    if (node == null) return null;
+    if (node is RenderParagraph) return node;
+    RenderParagraph? found;
+    node.visitChildren((child) => found ??= _firstParagraph(child));
+    return found;
   }
 
   Future<void> _showMethodsSheet(BuildContext context, List<String> methods) {

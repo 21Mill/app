@@ -27,8 +27,9 @@ Future<void> _pump(
   required OrderItem order,
   OrderStatus liveStatus = OrderStatus.pending,
   Future<void> Function(String)? cancelOrder,
+  Size size = const Size(360, 760),
 }) async {
-  tester.view.physicalSize = const Size(360, 760);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   final container = createContainer(
@@ -194,6 +195,97 @@ void main() {
         expect(find.text('Payment methods'), findsOneWidget);
         expect(find.text('Brubank'), findsOneWidget);
         expect(find.text('Uala'), findsOneWidget);
+      });
+    });
+
+    testWidgets('lists one or two methods in a sheet when they do not fit', (
+      tester,
+    ) async {
+      const long =
+          'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do '
+          'eiusmod tempor incididunt ut labore et dolore magna aliqua';
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order(paymentMethod: 'Cash,$long'));
+
+        await tester.tap(find.text('Cash, $long'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('Payment methods'), findsOneWidget);
+        expect(find.text('Cash'), findsOneWidget);
+        expect(find.text(long), findsOneWidget);
+      });
+    });
+
+    testWidgets('lists a single long custom method in a sheet', (tester) async {
+      const long =
+          'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do '
+          'eiusmod tempor incididunt ut labore et dolore magna aliqua';
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order(paymentMethod: long));
+
+        await tester.tap(find.text(long));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('Payment methods'), findsOneWidget);
+        expect(find.text(long), findsNWidgets(2));
+      });
+    });
+
+    testWidgets('opens the sheet once a narrower width cuts the methods', (
+      tester,
+    ) async {
+      const long =
+          'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do '
+          'eiusmod tempor incididunt ut labore et dolore magna aliqua';
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(
+          tester,
+          order: _order(paymentMethod: 'Cash,$long'),
+          size: const Size(2600, 760),
+        );
+        tester.view.physicalSize = const Size(360, 760);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.tap(find.text('Cash, $long'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('Payment methods'), findsOneWidget);
+      });
+    });
+
+    testWidgets('stops opening the sheet once a wider width fits them', (
+      tester,
+    ) async {
+      const long =
+          'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do '
+          'eiusmod tempor incididunt ut labore et dolore magna aliqua';
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order(paymentMethod: 'Cash,$long'));
+        tester.view.physicalSize = const Size(2600, 760);
+        await tester.pump();
+        await tester.pump();
+
+        await tester.tap(find.text('Cash, $long'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('Payment methods'), findsNothing);
+      });
+    });
+
+    testWidgets('keeps one short method that fits a plain row', (tester) async {
+      await withClock(Clock.fixed(kFakeNow), () async {
+        await _pump(tester, order: _order(paymentMethod: 'Zelle'));
+
+        await tester.tap(find.text('Zelle'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('Payment methods'), findsNothing);
       });
     });
 

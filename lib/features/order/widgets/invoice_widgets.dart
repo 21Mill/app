@@ -61,17 +61,15 @@ Widget invoiceCounterpartRow(
 }
 
 /// The fiat side of the trade as a data row: `312 ARS · Mercado Pago`.
-Widget invoiceFiatRow(String label, String fiat, String paymentMethod) {
-  final method = paymentMethod.trim();
-  return OrderDataRow(
-    icon: Icons.payments_outlined,
-    label: label,
-    value: OrderDataValue(
-      method.isEmpty ? fiat : '$fiat · $method',
+/// Methods the row cannot show whole open in a sheet, as on the order.
+Widget invoiceFiatRow(String label, String fiat, String paymentMethod) =>
+    OrderPaymentMethodsRow(
+      icon: Icons.payments_outlined,
+      label: label,
+      paymentMethod: paymentMethod,
+      lead: fiat,
       figures: true,
-    ),
-  );
-}
+    );
 
 /// Side margin and bottom padding of both screens.
 const kInvoiceGutter = 18.0;
