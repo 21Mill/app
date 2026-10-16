@@ -4,6 +4,62 @@ All notable changes to Mostro are documented here, newest first. This file is
 written by the release workflow (docs/RELEASING.md) — do not edit it by hand.
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [2.0.17] - 2026-10-16
+
+### ✨ Features
+
+- **trades:** notify trades on other nodes (phase 3b of 5) ([#831](https://github.com/MostroP2P/app/pull/831)) by @Catrya
+- **relays:** accept ws:// relays in debug builds ([#833](https://github.com/MostroP2P/app/pull/833)) by @grunch
+- **trades:** hear trades on other nodes (phase 3a of 5) ([#830](https://github.com/MostroP2P/app/pull/830)) by @Catrya
+- show the buyer where their sats were sent ([#824](https://github.com/MostroP2P/app/pull/824)) by @grunch
+- **reputation:** add the reputation settings screen ([#827](https://github.com/MostroP2P/app/pull/827)) by @grunch
+- **reputation:** import reputation from lnp2pBot ([#676](https://github.com/MostroP2P/app/pull/676)) by @grunch
+- **reputation:** export and import reputation in the core ([#675](https://github.com/MostroP2P/app/pull/675)) by @grunch
+- **nodes:** add Mostro Ecuador to the trusted node registry ([#819](https://github.com/MostroP2P/app/pull/819)) by @grunch
+- **order-link:** open mostro: links from the OS on every native platform ([#808](https://github.com/MostroP2P/app/pull/808)) by @grunch
+- **order-link:** the screen a mostro: order link opens ([#807](https://github.com/MostroP2P/app/pull/807)) by @grunch
+- **trades:** count down to the escrow deadline on active and fiat-sent trades ([#796](https://github.com/MostroP2P/app/pull/796)) by @Catrya
+- **about:** show where the node takes its prices from in the technical data ([#769](https://github.com/MostroP2P/app/pull/769)) by @Catrya
+- **order-link:** find the order a mostro: link points at ([#805](https://github.com/MostroP2P/app/pull/805)) by @grunch
+- **chat:** open the peer chat with the cursor in the composer ([#802](https://github.com/MostroP2P/app/pull/802)) by @grunch
+- **trades:** chat card names who you chat with and says it opens (21a) ([#791](https://github.com/MostroP2P/app/pull/791)) by @grunch
+
+### 🐛 Bug Fixes
+
+- **settings:** migrate the Relays screen to the design guide ([#835](https://github.com/MostroP2P/app/pull/835)) by @grunch
+- **order:** show payment methods whole when one or two do not fit ([#814](https://github.com/MostroP2P/app/pull/814)) by @21Mill
+- **trades:** keep the order id above the buyer's payout card ([#828](https://github.com/MostroP2P/app/pull/828)) by @grunch
+- **identity:** a failed identity wipe leaves a trace and retries ([#573](https://github.com/MostroP2P/app/pull/573)) by @Forte11Cuba
+- **trades:** send trade actions only to the trade's own node (phase 2 of 5) ([#822](https://github.com/MostroP2P/app/pull/822)) by @Catrya
+- **orders:** leave the invoice form on a late acceptance of a sell order ([#825](https://github.com/MostroP2P/app/pull/825)) by @grunch
+- **trades:** record the issuing node on every trade row (phase 1 of 5) ([#817](https://github.com/MostroP2P/app/pull/817)) by @Catrya
+- **orders:** an order past its take window is not offered for taking ([#821](https://github.com/MostroP2P/app/pull/821)) by @grunch
+- **order-link:** ask a relay again when it drops before answering ([#820](https://github.com/MostroP2P/app/pull/820)) by @grunch
+- **orders:** reconcile a take reply that arrives after the 10 s timeout ([#570](https://github.com/MostroP2P/app/pull/570)) by @Forte11Cuba
+- **trades:** a maker's canceled order opens on its outcome, and its notice stops pointing at a gone trade ([#818](https://github.com/MostroP2P/app/pull/818)) by @grunch
+- **orders:** the payout screen asks for the payout amount, not the order amount ([#788](https://github.com/MostroP2P/app/pull/788)) by @Catrya
+- **orders:** date a rebuilt taker row by its message (#592) ([#629](https://github.com/MostroP2P/app/pull/629)) by @Forte11Cuba
+- **nav:** back ends on Book, and a notification tap starts a fresh stack ([#803](https://github.com/MostroP2P/app/pull/803)) by @grunch
+- **disputes:** say once that a resolved dispute's chat is closed ([#800](https://github.com/MostroP2P/app/pull/800)) by @grunch
+- **bond:** keep the QR when the explainer is open, and lead with Copy on web ([#792](https://github.com/MostroP2P/app/pull/792)) by @Catrya
+- **disputes:** read the Serbero label from the cached info event first ([#793](https://github.com/MostroP2P/app/pull/793)) by @grunch
+
+### ♻️ Refactoring
+
+- **settings:** share what a node switch asks before it happens ([#806](https://github.com/MostroP2P/app/pull/806)) by @grunch
+
+### 👷 Build & CI
+
+- **ios:** restore the newest pods cache when the key misses ([#801](https://github.com/MostroP2P/app/pull/801)) by @grunch
+
+### 🧹 Chores
+
+- **relays:** drop nos.lol from the default relays ([#832](https://github.com/MostroP2P/app/pull/832)) by @grunch
+
+### 🔧 Other Changes
+
+- Fix/cashu non sat token message ([#798](https://github.com/MostroP2P/app/pull/798)) by @Forte11Cuba
+
 ## [2.0.16] - 2026-10-09
 
 ### ✨ Features
