@@ -29,8 +29,11 @@ void main() {
         expect(id, isNot(contains(' ')), reason: '$id contains whitespace');
         expect(id, equals(id.trim()));
       }
-      expect(seen, hasLength(greaterThan(40)),
-          reason: 'the parser found almost nothing — has the file moved?');
+      expect(
+        seen,
+        hasLength(greaterThan(40)),
+        reason: 'the parser found almost nothing — has the file moved?',
+      );
     });
 
     test('every declared identifier is attached to a control', () {
@@ -54,9 +57,10 @@ void main() {
   // two are read apart: a reader that counted prose or text would restore the
   // false negative the whole group exists to prevent.
   group('what counts as a use', () {
-    List<String> unattachedIn(String body,
-            [List<String> members = const ['tradeRate']]) =>
-        _unattached(members, ['void f() {\n$body\n}']);
+    List<String> unattachedIn(
+      String body, [
+      List<String> members = const ['tradeRate'],
+    ]) => _unattached(members, ['void f() {\n$body\n}']);
 
     test('a member reference or helper call in code', () {
       expect(unattachedIn('tag(AutomationIds.tradeRate);'), isEmpty);
@@ -69,8 +73,10 @@ void main() {
 
     test('a longer member is not a use of a name it starts with', () {
       expect(
-        unattachedIn('tag(AutomationIds.tradeRateSubmit);',
-            ['tradeRate', 'tradeRateSubmit']),
+        unattachedIn('tag(AutomationIds.tradeRateSubmit);', [
+          'tradeRate',
+          'tradeRateSubmit',
+        ]),
         ['tradeRate'],
       );
     });
@@ -98,16 +104,19 @@ void main() {
 
     test('a url is not a comment, and neither is the code after it', () {
       expect(
-        unattachedIn("connect('wss://relay.mostro.network'); "
-            'tag(AutomationIds.tradeRate);'),
+        unattachedIn(
+          "connect('wss://relay.mostro.network'); "
+          'tag(AutomationIds.tradeRate);',
+        ),
         isEmpty,
       );
     });
   });
 
   group('AutomationId', () {
-    testWidgets('exposes the identifier and merges the control it names',
-        (tester) async {
+    testWidgets('exposes the identifier and merges the control it names', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -134,8 +143,7 @@ void main() {
       );
     });
 
-    testWidgets('an explicit label overrides the visible copy',
-        (tester) async {
+    testWidgets('an explicit label overrides the visible copy', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -158,8 +166,9 @@ void main() {
       );
     });
 
-    testWidgets('merge: false keeps nested controls addressable',
-        (tester) async {
+    testWidgets('merge: false keeps nested controls addressable', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -186,8 +195,7 @@ void main() {
       expect(
         tester.getSemantics(find.byType(IconButton)),
         isSemantics(
-          identifier:
-              AutomationIds.settingsRelayDelete('ws://10.0.2.2:7000'),
+          identifier: AutomationIds.settingsRelayDelete('ws://10.0.2.2:7000'),
           hasTapAction: true,
         ),
       );
@@ -216,8 +224,11 @@ void main() {
         'ws://10.0.2.2:7000//',
         '  ws://10.0.2.2:7000/  ',
       ]) {
-        expect(AutomationIds.settingsRelayItem(written), canonical,
-            reason: written);
+        expect(
+          AutomationIds.settingsRelayItem(written),
+          canonical,
+          reason: written,
+        );
       }
     });
   });
@@ -247,14 +258,50 @@ void main() {
     test('stays disabled unless the build carries the define', () {
       TestEnvironment.arm();
       expect(TestEnvironment.enabled, TestEnvironment.defineEnabled);
-      expect(TestEnvironment.allowInsecureRelays, TestEnvironment.enabled);
     });
 
     test('is disabled for a build that never armed it', () {
       expect(TestEnvironment.enabled, isFalse);
       expect(TestEnvironment.seedRelays, isEmpty);
-      expect(TestEnvironment.allowInsecureRelays, isFalse);
     });
+
+    // `flutter test` runs as a debug build, so the environment is not what
+    // lets ws:// through here; the debug build is.
+    test('a debug build accepts ws:// relays without the test environment', () {
+      expect(TestEnvironment.enabled, isFalse);
+      expect(TestEnvironment.allowInsecureRelays, isTrue);
+    });
+
+    test(
+      'ws:// relays are allowed by the test environment or a debug build',
+      () {
+        expect(
+          TestEnvironment.insecureRelaysAllowed(
+            testEnvironment: false,
+            debugBuild: false,
+          ),
+          isFalse,
+          reason:
+              'a release build outside the test environment requires wss://',
+        );
+        expect(
+          TestEnvironment.insecureRelaysAllowed(
+            testEnvironment: true,
+            debugBuild: false,
+          ),
+          isTrue,
+          reason: 'a Mortsom release build still accepts its local ws:// relay',
+        );
+        expect(
+          TestEnvironment.insecureRelaysAllowed(
+            testEnvironment: false,
+            debugBuild: true,
+          ),
+          isTrue,
+          reason: 'a developer running a debug build can add a local relay',
+        );
+      },
+    );
 
     test('asks for an order expiry only when the define is set', () {
       // The define is absent in this test build, so nothing is asked for
@@ -266,26 +313,22 @@ void main() {
     });
 
     test('parses a relay seed list, trimming and dropping blanks', () {
-      expect(
-        TestEnvironment.parseRelays(' ws://a:1 , ,ws://b:2, '),
-        ['ws://a:1', 'ws://b:2'],
-      );
+      expect(TestEnvironment.parseRelays(' ws://a:1 , ,ws://b:2, '), [
+        'ws://a:1',
+        'ws://b:2',
+      ]);
       expect(TestEnvironment.parseRelays(''), isEmpty);
     });
 
-    testWidgets('the banner renders nothing outside the test environment',
-        (tester) async {
+    testWidgets('the banner renders nothing outside the test environment', (
+      tester,
+    ) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: TestEnvironmentBanner(child: Text('app')),
-        ),
+        const MaterialApp(home: TestEnvironmentBanner(child: Text('app'))),
       );
 
       expect(find.text(TestEnvironment.markerLabel), findsNothing);
-      expect(
-        find.bySemanticsLabel(TestEnvironment.markerLabel),
-        findsNothing,
-      );
+      expect(find.bySemanticsLabel(TestEnvironment.markerLabel), findsNothing);
       expect(find.text('app'), findsOneWidget);
     });
   });
@@ -303,9 +346,9 @@ const _registryPath = 'lib/core/automation/automation_ids.dart';
 /// Member names declared in the registry (constants and helper methods).
 List<String> _declaredMembers() {
   final source = File(_registryPath).readAsStringSync();
-  final constants = RegExp(r'static const String (\w+) =')
-      .allMatches(source)
-      .map((m) => m.group(1)!);
+  final constants = RegExp(
+    r'static const String (\w+) =',
+  ).allMatches(source).map((m) => m.group(1)!);
   final helpers = RegExp(r'static String (\w+)\(')
       .allMatches(source)
       .map((m) => m.group(1)!)
@@ -351,9 +394,10 @@ List<String> _unattached(Iterable<String> members, Iterable<String> sources) {
 /// search once let `trade.rate` outlive the button it named.
 Set<String> _attachedMembers(String source) {
   final references = _RegistryReferences();
-  parseString(content: source, throwIfDiagnostics: false)
-      .unit
-      .accept(references);
+  parseString(
+    content: source,
+    throwIfDiagnostics: false,
+  ).unit.accept(references);
   return references.members;
 }
 
