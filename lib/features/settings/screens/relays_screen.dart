@@ -90,15 +90,40 @@ class RelaysScreen extends ConsumerWidget {
           (ctx) => StatefulBuilder(
             builder: (ctx, setDialogState) {
               final l10n = AppLocalizations.of(ctx);
+              final book = OrderBookPalette.of(ctx);
+              final pal = SettingsPalette.of(ctx);
               return MostroDialog(
                 title: l10n.addRelayDialogTitle,
                 content: TextField(
                   controller: controller,
                   autocorrect: false,
                   enableSuggestions: false,
+                  keyboardType: TextInputType.url,
+                  style: TextStyle(fontSize: 14, color: book.textPrimary),
+                  // An underline field (DS-CMP-10), every state set here as
+                  // `InvoiceInputField` does (DS-CMP-19): left to the theme,
+                  // the field would paint v1's filled underline.
                   decoration: InputDecoration(
                     hintText: l10n.relayHintText,
+                    hintStyle: TextStyle(fontSize: 14, color: pal.placeholder),
                     errorText: errorText,
+                    errorStyle: TextStyle(fontSize: 12, color: pal.danger),
+                    filled: false,
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: pal.fieldUnderline),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: pal.fieldUnderlineFocus,
+                        width: 1.5,
+                      ),
+                    ),
+                    errorBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: pal.danger),
+                    ),
+                    focusedErrorBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: pal.danger, width: 1.5),
+                    ),
                   ),
                   onChanged: (_) {
                     if (errorText != null) {
@@ -270,7 +295,10 @@ class _RelayRow extends ConsumerWidget {
     };
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: AppSpacing.md,
+      ),
       child: Row(
         children: [
           // The dot and label crossfade as the connection changes; the row
@@ -282,7 +310,7 @@ class _RelayRow extends ConsumerWidget {
             height: 7,
             decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 11),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,7 +339,7 @@ class _RelayRow extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(width: 11),
+          const SizedBox(width: AppSpacing.md),
           MostroToggle(
             value: relay.isActive,
             semanticLabel:
