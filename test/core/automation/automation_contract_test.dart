@@ -272,6 +272,37 @@ void main() {
       expect(TestEnvironment.allowInsecureRelays, isTrue);
     });
 
+    test(
+      'ws:// relays are allowed by the test environment or a debug build',
+      () {
+        expect(
+          TestEnvironment.insecureRelaysAllowed(
+            testEnvironment: false,
+            debugBuild: false,
+          ),
+          isFalse,
+          reason:
+              'a release build outside the test environment requires wss://',
+        );
+        expect(
+          TestEnvironment.insecureRelaysAllowed(
+            testEnvironment: true,
+            debugBuild: false,
+          ),
+          isTrue,
+          reason: 'a Mortsom release build still accepts its local ws:// relay',
+        );
+        expect(
+          TestEnvironment.insecureRelaysAllowed(
+            testEnvironment: false,
+            debugBuild: true,
+          ),
+          isTrue,
+          reason: 'a developer running a debug build can add a local relay',
+        );
+      },
+    );
+
     test('asks for an order expiry only when the define is set', () {
       // The define is absent in this test build, so nothing is asked for
       // whether or not the environment is armed.

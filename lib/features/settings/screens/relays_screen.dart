@@ -150,8 +150,8 @@ class RelaysScreen extends ConsumerWidget {
     AppLocalizations l10n,
   ) {
     // A Mortsom run points the app at a local relay, which is plain ws:// on
-    // a private address. Outside the test environment the wss:// requirement
-    // is unchanged.
+    // a private address, and a developer on a debug build does the same by
+    // hand. A release build outside the test environment requires wss://.
     final schemeOk =
         url.startsWith('wss://') ||
         (TestEnvironment.allowInsecureRelays && url.startsWith('ws://'));

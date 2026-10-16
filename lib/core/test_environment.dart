@@ -102,8 +102,19 @@ class TestEnvironment {
 
   /// Local test relays are plain `ws://` on a private address (for example
   /// `ws://10.0.2.2:7000`), so the test environment accepts them where the
-  /// app otherwise requires `wss://`.
-  static bool get allowInsecureRelays => enabled;
+  /// app otherwise requires `wss://`. A debug build accepts them too, so a
+  /// developer running against a local daemon can add its relay by hand;
+  /// a release build outside the test environment keeps requiring `wss://`.
+  static bool get allowInsecureRelays =>
+      insecureRelaysAllowed(testEnvironment: enabled, debugBuild: kDebugMode);
+
+  /// The rule behind [allowInsecureRelays], with both inputs explicit so a
+  /// test can cover the release case (`flutter test` always runs in debug).
+  @visibleForTesting
+  static bool insecureRelaysAllowed({
+    required bool testEnvironment,
+    required bool debugBuild,
+  }) => testEnvironment || debugBuild;
 
   /// Copy of the visible environment marker.
   static const String markerLabel = 'TEST ENVIRONMENT · Mortsom';
