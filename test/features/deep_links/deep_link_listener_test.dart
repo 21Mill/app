@@ -20,6 +20,7 @@ Future<(StreamController<String>, ProviderContainer)> _pump(
   WidgetTester tester,
   List<String> opened, {
   bool firstRunDone = true,
+  String? launchLink,
 }) async {
   final links = StreamController<String>();
   addTearDown(links.close);
@@ -36,6 +37,7 @@ Future<(StreamController<String>, ProviderContainer)> _pump(
       child: DeepLinkListener(
         links: links.stream,
         open: opened.add,
+        launchLink: launchLink,
         child: const SizedBox.shrink(),
       ),
     ),
@@ -115,5 +117,62 @@ void main() {
 
     // Assert
     expect(opened, [AppRoute.orderLinkPath(_link)]);
+  });
+
+  testWidgets('the link the web was opened with waits for the first run', (
+    tester,
+  ) async {
+    // Arrange
+    SharedPreferences.setMockInitialValues({});
+    final opened = <String>[];
+    final (_, container) = await _pump(
+      tester,
+      opened,
+      firstRunDone: false,
+      launchLink: _link,
+    );
+    expect(opened, isEmpty, reason: 'the walkthrough is on screen');
+
+    // Act
+    await container.read(firstRunProvider.notifier).markFirstRunComplete();
+    await tester.pump();
+
+    // Assert
+    expect(opened, [AppRoute.orderLinkPath(_link)]);
+  });
+
+  testWidgets('a launch link is left to the router after the first run', (
+    tester,
+  ) async {
+    // Arrange
+    final opened = <String>[];
+
+    // Act
+    await _pump(tester, opened, launchLink: _link);
+
+    // Assert: the address the app was opened with is the router's own first
+    // location, so opening it again would only redo the order lookup.
+    expect(opened, isEmpty);
+  });
+
+  testWidgets('a launch link that is not an order link is left alone', (
+    tester,
+  ) async {
+    // Arrange
+    SharedPreferences.setMockInitialValues({});
+    final opened = <String>[];
+    final (_, container) = await _pump(
+      tester,
+      opened,
+      firstRunDone: false,
+      launchLink: 'https://mostro.network/app/',
+    );
+
+    // Act
+    await container.read(firstRunProvider.notifier).markFirstRunComplete();
+    await tester.pump();
+
+    // Assert
+    expect(opened, isEmpty);
   });
 }
