@@ -64,6 +64,10 @@ class _DeepLinkListenerState extends ConsumerState<DeepLinkListener> {
   /// A link that arrived before the first run ended.
   String? _waiting;
 
+  /// Whether the first run's state has been known once. Until it is, nothing
+  /// says yet whether [DeepLinkListener.launchLink] has to be kept.
+  bool _firstRunSettled = false;
+
   String? _lastLink;
   DateTime? _lastAt;
 
@@ -78,7 +82,24 @@ class _DeepLinkListenerState extends ConsumerState<DeepLinkListener> {
         _onLink,
         onError: (Object e) => debugPrint('[deep-link] link stream failed: $e'),
       );
+      _settleFirstRun(ref.read(firstRunProvider));
     });
+  }
+
+  /// Decides, the first time the first run's state is known, whether the link
+  /// the app was opened with has to be kept.
+  ///
+  /// Only an unfinished first run takes that address away: the router sends
+  /// the order link screen to the walkthrough and drops the link, which is
+  /// what [_waiting] exists for. A first run already complete served the
+  /// address itself, so opening it again would only look the order up twice.
+  void _settleFirstRun(AsyncValue<bool> firstRun) {
+    final done = firstRun.valueOrNull;
+    if (done == null || _firstRunSettled) return;
+    _firstRunSettled = true;
+    final link = widget.launchLink?.trim();
+    if (done || link == null || !isOrderLink(link)) return;
+    _waiting = link;
   }
 
   static Stream<String> _osLinks() =>
@@ -127,6 +148,7 @@ class _DeepLinkListenerState extends ConsumerState<DeepLinkListener> {
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<bool>>(firstRunProvider, (_, next) {
+      _settleFirstRun(next);
       final link = _waiting;
       if (link == null || next.valueOrNull != true) return;
       _waiting = null;

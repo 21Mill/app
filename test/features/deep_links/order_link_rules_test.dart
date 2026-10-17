@@ -149,4 +149,52 @@ void main() {
       }
     });
   });
+
+  group('orderLinkFromAppUrl', () {
+    // What a node writes into an order's `source` tag, and what the web
+    // client's address carries percent-encoded in its `link` parameter.
+    const node =
+        '0000cc02101ec29eea9ce623258752b9d7da66c27845ed26846dd0b0fc736b40';
+    const link =
+        'mostro:$_id?relays=wss://relay.mostro.network,wss://nos.lol'
+        '&mostro=$node';
+    const encoded =
+        'mostro%3A$_id%3Frelays%3Dwss%3A%2F%2Frelay.mostro.network%2C'
+        'wss%3A%2F%2Fnos.lol%26mostro%3D$node';
+    const address = 'https://mostro.network/app/#/order_link?link=$encoded';
+
+    test('reads the link the web client was opened on', () {
+      expect(orderLinkFromAppUrl(address), link);
+    });
+
+    test('keeps a link whole past its own separators', () {
+      // The link carries a query of its own: its `&` arrives as `%26` and
+      // must stay inside the value, not cut it short before `mostro=`.
+      final read = orderLinkFromAppUrl(address);
+      expect(read, contains('&mostro='));
+      expect(read, contains('relay.mostro.network,wss://nos.lol'));
+    });
+
+    test('survives the round trip the browser address makes through Uri', () {
+      // Production reads `Uri.base.toString()`, not the raw href. Percent
+      // escapes of reserved characters must come back out as they went in:
+      // a `%26` normalized to `&` would end the `link` parameter early and
+      // hand the core a link without its node.
+      expect(orderLinkFromAppUrl(Uri.parse(address).toString()), link);
+    });
+
+    test('leaves every other address alone', () {
+      for (final url in [
+        'https://mostro.network/app/',
+        'https://mostro.network/app/#/',
+        'https://mostro.network/app/#/order_book',
+        'https://mostro.network/app/#/order_link',
+        'https://mostro.network/app/#/order_link?link=',
+        'https://mostro.network/app/#/order_link?link=nostr%3Anpub1abc',
+        'https://mostro.network/app/#/order_link?order=$encoded',
+      ]) {
+        expect(orderLinkFromAppUrl(url), isNull, reason: url);
+      }
+    });
+  });
 }

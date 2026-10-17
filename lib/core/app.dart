@@ -17,7 +17,12 @@ import 'package:mostro/shared/widgets/trade_action_listener.dart';
 /// localisation. RustLib initialisation is deferred to Phase 3 (US1)
 /// when the identity API is ready.
 class MostroApp extends ConsumerStatefulWidget {
-  const MostroApp({super.key});
+  const MostroApp({super.key, this.launchLink});
+
+  /// The order link the app was opened with, when the OS did not hand it over.
+  /// Read before the router's first decision; see
+  /// [DeepLinkListener.launchLink].
+  final String? launchLink;
 
   @override
   ConsumerState<MostroApp> createState() => _MostroAppState();
@@ -70,7 +75,10 @@ class _MostroAppState extends ConsumerState<MostroApp> {
       builder:
           (context, child) => TestEnvironmentBanner(
             child: TradeActionListener(
-              child: DeepLinkListener(child: child ?? const SizedBox.shrink()),
+              child: DeepLinkListener(
+                launchLink: widget.launchLink,
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
     );

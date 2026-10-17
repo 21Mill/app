@@ -41,6 +41,8 @@ import 'package:mostro/shared/utils/platform_int64.dart';
 import 'package:mostro/src/rust/api/types.dart'
     show BondClaimPhase, BondClaimUpdate, BondSlashedEvent, SlashCause;
 import 'package:mostro/features/disputes/providers/disputes_providers.dart';
+import 'package:mostro/features/deep_links/models/order_link_rules.dart'
+    show orderLinkFromAppUrl;
 import 'package:mostro/features/notifications/models/notification_model.dart';
 import 'package:mostro/features/trades/providers/trades_providers.dart'
     show rawTradesProvider;
@@ -67,12 +69,23 @@ Future<void> bootstrapAndRun({List<String> seedRelays = const []}) async {
   // render a screen that cannot render, so this one is honestly unguarded.
   WidgetsFlutterBinding.ensureInitialized();
 
-  await runGuarded((startup) => _startup(startup, seedRelays: seedRelays));
+  // Read before anything can navigate: on the web the order link the visitor
+  // followed is the app's own address, and the router's first decision
+  // rewrites it to the walkthrough while the first run is unfinished. Off the
+  // web `Uri.base` is the current directory, and the OS hands links over
+  // through `app_links` instead.
+  final launchLink = kIsWeb ? orderLinkFromAppUrl(Uri.base.toString()) : null;
+
+  await runGuarded(
+    (startup) =>
+        _startup(startup, seedRelays: seedRelays, launchLink: launchLink),
+  );
 }
 
 Future<void> _startup(
   StartupSequence startup, {
   List<String> seedRelays = const [],
+  String? launchLink,
 }) async {
   // The three platform round trips of startup — push notifications, the Rust
   // engine and the saved preferences — started together rather than one after
@@ -411,7 +424,10 @@ Future<void> _startup(
   ).attach();
 
   runApp(
-    UncontrolledProviderScope(container: container, child: const MostroApp()),
+    UncontrolledProviderScope(
+      container: container,
+      child: MostroApp(launchLink: launchLink),
+    ),
   );
   // Last, not at the first Rust call: the smoke test stops watching once this
   // is set, so anything that failed after it went unseen. A

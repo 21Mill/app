@@ -46,6 +46,20 @@ setup) is still found through the pool's relays.
    over the screens the user had open. A link that arrives during the first run
    waits for it to end, and the same link twice within two seconds opens once. Flutter's own deep linking is off on Android
    and iOS, so go_router never receives the URI as a route.
+1a. **On the web the link arrives as the app's own address.** A page cannot be
+   the handler of a `mostro:` link, so a link shared for the web client is
+   `https://<host>/app/#/order_link?link=<the link, percent-encoded>` and
+   go_router serves that route itself. `orderLinkFromAppUrl`
+   (`models/order_link_rules.dart`) reads it out of the address in
+   `bootstrapAndRun`, **before the router's first decision**, and hands it to
+   `DeepLinkListener` as `launchLink`. That timing is the whole point: while
+   the first run is unfinished the router sends every other route to the
+   walkthrough and keeps no destination, so by the time the listener exists the
+   address is already `#/walkthrough` and the link is gone (issue #839). The
+   listener keeps it exactly as it keeps an OS link that arrives too early, and
+   opens it once the node choice is done. A first run already complete needs
+   none of this — the router served the address — so the link is dropped
+   instead of opened a second time.
 2. **The order is looked up** (`resolve_order_link`, `rust/src/api/order_link.rs`):
    the newest revision of the Kind 38383 event the node signed for exactly that
    id, from the pool and the link's relays at once. Author, kind and `d` tag are
@@ -92,7 +106,7 @@ deliver it.
 | macOS | `CFBundleURLTypes` | |
 | Linux | `MimeType=x-scheme-handler/mostro;` and `Exec=… %u` in the desktop entry `install.sh` adds, which also makes Mostro the scheme's default (`xdg-mime default`) | A release or profile build is single-instance: a link opened while it runs goes to the running window, and launching it again brings that window forward. |
 | Windows | A release or profile build registers `HKCU\Software\Classes\mostro` at every start: the release is a zip with no installer | Single-instance too: `SendAppLink` hands the link to the running window. |
-| Web | none | A page cannot handle `mostro:`: browsers let a page register `web+` schemes only. |
+| Web | none | A page cannot handle `mostro:`: browsers let a page register `web+` schemes only. A link reaches the web client as its own address instead, `#/order_link?link=…`, read at startup (step 1a). |
 
 A **debug** build on Linux and Windows takes no part in that: it is never
 single-instance, so `flutter run` keeps working next to an open release build,
@@ -116,6 +130,9 @@ shows Kind 38383 events has it — then:
   running.
 - Windows: start a release build once, so it registers the scheme, then
   `start "" "<link>"` from `cmd`.
+- Web: percent-encode the link and open
+  `https://<host>/app/#/order_link?link=<encoded>`. To see the first-run path,
+  use a profile that has never opened the client, or clear its site data.
 
 ## The `app_links` version
 

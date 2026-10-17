@@ -14,6 +14,26 @@ const orderLinkScheme = 'mostro';
 bool isOrderLink(String raw) =>
     raw.trim().toLowerCase().startsWith('$orderLinkScheme:');
 
+/// The order link [appUrl] carries, or `null` when it carries none.
+///
+/// This is how a link reaches the web: a page cannot be the handler of a
+/// `mostro:` link, so whoever shares one shares the address of the web client
+/// with the link in its query, and that address is the app's own. The web
+/// build uses the hash strategy — there is no `usePathUrlStrategy` call — so
+/// the route lives in the fragment: `https://host/app/#/order_link?link=...`.
+///
+/// Parsed from the raw text, after the `#`, and never from `Uri.fragment`,
+/// which is already decoded: a link's own `&` would come back as a separator
+/// and cut the link short at the first relay.
+String? orderLinkFromAppUrl(String appUrl) {
+  final hash = appUrl.indexOf('#');
+  if (hash < 0) return null;
+  final route = Uri.tryParse(appUrl.substring(hash + 1));
+  if (route == null || route.path != AppRoute.orderLink) return null;
+  final link = route.queryParameters['link']?.trim();
+  return link != null && isOrderLink(link) ? link : null;
+}
+
 /// Why an order link did not lead to an order.
 enum OrderLinkFailure {
   /// The link cannot be read: not an order link, or part of it is missing.
