@@ -152,7 +152,13 @@ class _DeepLinkListenerState extends ConsumerState<DeepLinkListener> {
       final link = _waiting;
       if (link == null || next.valueOrNull != true) return;
       _waiting = null;
-      _openLink(link);
+      // On the next frame, not now: Riverpod notifies while the screen that
+      // ended the first run is still in its own handler, and the node choice
+      // goes home right after awaiting `markFirstRunComplete` — navigating
+      // here would be overwritten by that `go` a line later.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openLink(link);
+      });
     });
     return widget.child;
   }
