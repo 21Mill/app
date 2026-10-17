@@ -31,6 +31,7 @@ class DeepLinkListener extends ConsumerStatefulWidget {
     required this.child,
     this.links,
     this.open,
+    this.launchLink,
   });
 
   final Widget child;
@@ -42,6 +43,14 @@ class DeepLinkListener extends ConsumerStatefulWidget {
   /// Test seam — production goes to the destination on the global
   /// [appRouter].
   final void Function(String destination)? open;
+
+  /// The order link the app was opened with, when it did not come from the OS.
+  ///
+  /// The web has no OS link stream ([links] is empty there): a page cannot be
+  /// the handler of a `mostro:` link, so the link reaches the app as its own
+  /// address. Whoever starts the app reads it before the router's first
+  /// decision and hands it over here.
+  final String? launchLink;
 
   static const duplicateWindow = Duration(seconds: 2);
 
